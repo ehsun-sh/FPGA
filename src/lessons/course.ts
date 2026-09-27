@@ -28,9 +28,8 @@ export const CHAPTERS: Chapter[] = [
   { title: { fa: 'حافظه', en: 'Memory' }, lessons: pick('ram') },
   {
     title: { fa: 'ورودی/خروجی و ارتباط با دنیای بیرون', en: 'I/O and peripherals' },
-    lessons: pick('pwm', 'uart', 'uart_rx'),
+    lessons: pick('pwm', 'uart', 'uart_rx', 'spi', 'i2c'),
     soon: [
-      { fa: 'SPI و I²C: ارتباط با سنسورها', en: 'SPI and I²C: talking to sensors' },
       { fa: 'صفحه‌کلید PS/2', en: 'PS/2 keyboard' },
       { fa: 'تصویر VGA', en: 'VGA video' },
       { fa: 'پردازنده نرم‌افزاری (Soft-core)', en: 'Soft-core processor' },

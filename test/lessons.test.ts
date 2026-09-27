@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { BOARDS, DEFAULT_BOARD } from '../src/boards';
 import { mapPorts } from '../src/boards/mapping';
 import { compileDesign, synthesize } from '../src/hdl';
-import { Acquisition } from '../src/la/capture';
-import { decodeUart } from '../src/la/decode';
+import { Acquisition, Recorder } from '../src/la/capture';
+import { decodeI2c, decodeSpi, decodeUart } from '../src/la/decode';
 import { ADVANCED } from '../src/lessons/advanced';
 import { ALL_LESSONS } from '../src/lessons/course';
 import { LESSONS, PLAYGROUND } from '../src/lessons/lessons';
@@ -65,6 +65,26 @@ function harness(src: string, lang: 'verilog' | 'vhdl', xdc: string) {
 }
 
 const HEX = [0x40, 0x79, 0x24, 0x30, 0x19, 0x12, 0x02, 0x78, 0x00, 0x10, 0x08, 0x03, 0x46, 0x21, 0x06, 0x0e];
+
+// record the given package pins cycle by cycle, starting with `stimulus`
+function capture(h: Harness, pins: string[], cycles: number, stimulus: () => void) {
+  const r = new Recorder(1 << 16);
+  r.setSources(
+    pins.map((p) => {
+      const b = h.map.bindings.find((x) => x.pin === p)!;
+      return { sig: b.sig, bit: b.bit };
+    }),
+  );
+  let t = 0;
+  r.sample(0, h.sim.v);
+  stimulus();
+  r.sample(0, h.sim.v);
+  for (let i = 0; i < cycles; i++) {
+    h.sim.run(1);
+    r.sample(++t, h.sim.v);
+  }
+  return r.extract(0, t);
+}
 
 const checks: Record<string, (h: Harness) => void> = {
   intro(h) {
@@ -369,6 +389,31 @@ const checks: Record<string, (h: Harness) => void> = {
     const anns = decodeUart(acq.rec.extract(0, t), { ch: 0, baud: 115200, bits: 8, parity: 'none', stop: 1 }, 100e6);
     expect(anns.map((a) => a.short).join('')).toBe("'H''I''!'");
     expect(h.led()).toBe((3 << 8) | 0x21);
+  },
+  spi(h) {
+    const tr = capture(h, ['C17', 'D18', 'E18', 'G17'], 3000, () => {
+      h.sw(0x3c);
+      h.btn('BTNC', 1);
+    });
+    const a = decodeSpi(tr, { clk: 3, mosi: 1, miso: 2, cs: 0, mode: 0, bits: 8, msbFirst: true });
+    expect(a.map((x) => x.short)).toEqual(['0x3C', '0xA5']);
+    expect(h.led()).toBe(0x3ca5);
+  },
+  i2c(h) {
+    let tr = capture(h, ['G16', 'H14'], 60_000, () => {
+      h.sw(0x5a);
+      h.btn('BTNC', 1);
+    });
+    expect(decodeI2c(tr, { scl: 0, sda: 1 }).map((x) => x.short).join(' ')).toBe('S 0x48 W A 0x01 A 0x5A A P S 0x48 R A 0x5A N P');
+    expect(h.led()).toBe(0x5a);
+    tr = capture(h, ['G16', 'H14'], 20_000, () => {
+      h.btn('BTNC', 0);
+      h.sim.run(2);
+      h.sw(0x4000 | 0x33);
+      h.btn('BTNC', 1);
+    });
+    expect(decodeI2c(tr, { scl: 0, sda: 1 }).map((x) => x.short).join(' ')).toBe('S 0x49 W N P');
+    expect(h.led() >> 15).toBe(1);
   },
   playground(h) {
     h.sw(0x00ff);

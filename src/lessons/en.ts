@@ -284,6 +284,53 @@ ${truth(
     tryIt: `<p>Run the design and open the <b>serial console</b> (the <span class="kbd">⌨ Serial Console</span> button or Ctrl+M). The speed should be 115200 and the format 8N1. Type some text and press Enter: the FPGA sends it back in upper case. You can also click the black console area and type directly, so each key is sent at once. The LEDs show the ASCII code of the last character and the character count. The logic analyzer is also set up for this lesson and decodes both lines.</p>`,
     exercise: `<p>Set the console to 9600 baud but leave the design at 115200. What comes back, and why? Then fix <code>CLKS_PER_BIT</code> for 9600.</p>`,
   },
+  spi: {
+    title: 'The SPI protocol',
+    summary: 'An SPI master talking to an 8-bit shift register on Pmod JA, watched with the logic analyzer.',
+    body: `
+<p><b>SPI</b> (Serial Peripheral Interface) is a <b>synchronous</b> serial protocol: unlike UART, the clock travels on its own wire, so the two sides do not need to agree on a speed in advance. Many sensors, flash memories, ADCs/DACs and displays use SPI, and so do most Pmod modules.</p>
+<h3>Four wires</h3>
+${truth(
+  ['Signal', 'Direction', 'Purpose', 'Pin'],
+  [
+    ['CS (active low)', 'master → slave', 'selects the device; the whole transfer happens while it is 0', 'JA1'],
+    ['MOSI', 'master → slave', 'data from the master to the device', 'JA2'],
+    ['MISO', 'slave → master', 'data from the device to the master', 'JA3'],
+    ['SCLK', 'master → slave', 'the clock, 1 MHz here', 'JA4'],
+  ],
+)}
+<h3>Mode 0</h3>
+<p>In mode 0 (CPOL=0, CPHA=0) the clock idles low. Both sides sample on the <b>rising edge</b> of SCLK and put out the next bit on the falling edge. The most significant bit goes first.</p>
+<p>A neat property of SPI is that every transfer is <b>two-way</b>: each clock sends one bit and brings one back. In this lesson the device is an 8-bit shift register, so each transfer returns the byte of the previous transfer (it starts out holding A5).</p>
+<ul>
+  <li>SW7..SW0: the byte to send; BTNC: send once; SW15: send continuously (every 100 µs)</li>
+  <li>LD7..LD0: the byte the master received; LD15..LD8: the byte the device received</li>
+</ul>`,
+    tryIt: `<p>Run the design and open the logic analyzer: four channels on JA1 to JA4 and an SPI decoder are already set up, and the probe wires show on the 3D board. Press <b>Run</b> in the analyzer window, set a byte with SW7..SW0 and press BTNC. The MOSI row shows your byte and the MISO row shows the previous one. Measure the SCLK frequency with two cursors.</p>`,
+    exercise: `<p>Lower <code>DIV</code> so SCLK reaches 10 MHz and look at it in the logic analyzer. Then implement mode 3 (CPOL=1) and change the decoder setting to match.</p>`,
+  },
+  i2c: {
+    title: 'The I²C protocol',
+    summary: 'Write and read back a register in a simulated sensor at address 0x48, on Pmod JB.',
+    body: `
+<p><b>I²C</b> has only <b>two wires</b>, and several devices share them, told apart by a 7-bit <b>address</b>. Temperature sensors, accelerometers, EEPROMs and real-time clocks usually speak I²C.</p>
+<h3>Open drain</h3>
+<p>Nobody drives the line to 1: each device can only pull it to 0 or let go, and a pull-up resistor brings it back to 1. So the line is the AND of all devices: <code>sda = !(m_low || d_low)</code>. That is how the master and the device can take turns on the same wire.</p>
+<h3>An I²C frame</h3>
+<ul>
+  <li><b>START</b>: SDA falls while SCL is high. <b>STOP</b>: SDA rises while SCL is high. At all other times SDA changes only while SCL is low.</li>
+  <li>First byte: the 7-bit address plus an R/W bit (0 = write, 1 = read)</li>
+  <li>After every byte the receiver sends an <b>ACK</b> bit (0). If nobody answers, the line stays 1: a <b>NAK</b>.</li>
+</ul>
+<h3>This lesson</h3>
+<p>The master runs a small program: <code>S, 0x48+W, 0x01, data, P, S, 0x48+R, read, P</code>. It writes the switch value into the device's register and then reads it back. SCL runs at the standard 100 kHz.</p>
+<ul>
+  <li>SW7..SW0: data; BTNC: one transaction; SW15: repeat every 1 ms; SW14: wrong address (0x49) to see a NAK</li>
+  <li>LD7..LD0: the byte read from the device; LD15: the device did not answer</li>
+</ul>`,
+    tryIt: `<p>Run the design, open the logic analyzer and press <b>Run</b>. Set a number with SW7..SW0 and press BTNC: the I²C decoder shows start and stop, the address, the ACKs and the data, and the same number comes back on LD7..LD0. Now turn on SW14 and press BTNC again: this time no device answers, and you see a <b>NAK</b> and LD15 lights.</p>`,
+    exercise: `<p>Connect a second device with address 0x49 to the same two wires (another <code>i2c_device</code> instance, OR its <code>sda_low</code> into the bus). SW14 should now select the second device.</p>`,
+  },
   playground: {
     title: 'Playground',
     summary: 'Write any design you like and run it on the board.',

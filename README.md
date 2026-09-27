@@ -30,7 +30,7 @@ and watch it run on an interactive 3D Digilent Nexys A7-100T on the right.
   4. FSM: traffic light, button debouncing (with an optional contact-bounce simulation)
   5. FSMD: binary to BCD (double dabble)
   6. Memory: synchronous RAM
-  7. I/O: PWM, UART transmitter with the logic analyzer, UART receiver with the serial console (SPI/I²C, PS/2, VGA and a soft-core processor are planned)
+  7. I/O: PWM, UART transmitter with the logic analyzer, UART receiver with the serial console, SPI master and slave, I²C write and read back (PS/2, VGA and a soft-core processor are planned)
   8. Playground
 
 Real Vivado cannot run in a browser; this project imitates its look and workflow. The lesson code and XDC files are

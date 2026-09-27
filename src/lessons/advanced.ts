@@ -1704,4 +1704,838 @@ end rtl;
       trig: { ch: 0, edge: 'fall' },
     },
   },
+
+  {
+    id: 'spi',
+    title: 'پروتکل SPI',
+    summary: 'یک SPI master که با یک شیفت رجیستر ۸ بیتی صحبت می‌کند، روی Pmod JA و با Logic Analyzer.',
+    body: `
+<p><b>SPI</b> (Serial Peripheral Interface) یک پروتکل سریال <b>هم‌زمان</b> است: برخلاف UART، کلاک هم روی یک سیم جدا فرستاده می‌شود، پس سرعت دو طرف لازم نیست از قبل توافق شود. خیلی از سنسورها، حافظه‌های فلش، مبدل‌های ADC/DAC و نمایشگرها SPI دارند و بیشتر ماژول‌های Pmod هم SPI هستند.</p>
+<h3>چهار سیم</h3>
+${truth(
+  ['سیگنال', 'جهت', 'کار', 'پایه'],
+  [
+    ['CS (فعال با صفر)', 'master → slave', 'انتخاب دستگاه؛ کل انتقال در حالت صفر انجام می‌شود', 'JA1'],
+    ['MOSI', 'master → slave', 'داده از master به دستگاه', 'JA2'],
+    ['MISO', 'slave → master', 'داده از دستگاه به master', 'JA3'],
+    ['SCLK', 'master → slave', 'کلاک؛ اینجا 1MHz', 'JA4'],
+  ],
+)}
+<h3>Mode 0</h3>
+<p>در Mode 0 (CPOL=0، CPHA=0) کلاک در حالت بیکار صفر است. هر دو طرف روی <b>لبه بالارونده</b> SCLK نمونه برمی‌دارند و روی لبه پایین‌رونده بیت بعدی را می‌گذارند. اول پرارزش‌ترین بیت (MSB first) فرستاده می‌شود.</p>
+<p>نکته جالب SPI این است که انتقال همیشه <b>دوطرفه</b> است: در هر کلاک یک بیت می‌رود و یک بیت برمی‌گردد. در این درس دستگاه یک شیفت رجیستر ۸ بیتی است، پس در هر انتقال بایت انتقال قبلی را پس می‌دهد (مقدار اولیه‌اش A5 است).</p>
+<ul>
+  <li>SW7..SW0: بایتی که فرستاده می‌شود؛ BTNC: یک بار ارسال؛ SW15: ارسال پشت‌سرهم (هر ۱۰۰µs)</li>
+  <li>LD7..LD0: بایتی که master دریافت کرد؛ LD15..LD8: بایتی که دستگاه دریافت کرد</li>
+</ul>`,
+    verilog: `// SPI master (mode 0, MSB first) talking to an 8-bit shift-register slave, bus on Pmod JA
+module spi_master #(parameter DIV = 50) (      // SCLK = 100 MHz / (2*DIV) = 1 MHz
+    input  wire       clk,
+    input  wire       start,                   // one-clock pulse: send \`tx\`
+    input  wire [7:0] tx,
+    input  wire       miso,
+    output reg        cs_n = 1'b1,
+    output reg        sclk = 1'b0,
+    output reg        mosi = 1'b0,
+    output reg  [7:0] rx = 0,                  // byte received from the slave
+    output wire       busy
+);
+    localparam [1:0] IDLE = 2'd0, LEAD = 2'd1, XFER = 2'd2, TAIL = 2'd3;
+    reg [1:0]  state = IDLE;
+    reg [15:0] cnt   = 0;
+    reg [2:0]  n     = 0;
+    reg [7:0]  sh    = 0;      // bits still to send
+    reg [7:0]  rsh   = 0;      // bits received so far
+    wire       half  = (cnt == DIV - 1);
+
+    always @(posedge clk) begin
+        cnt <= (state == IDLE || half) ? 16'd0 : cnt + 1;
+        case (state)
+            IDLE:
+                if (start) begin
+                    cs_n  <= 1'b0;
+                    sh    <= tx;
+                    mosi  <= tx[7];            // first bit must be ready before the first rising edge
+                    n     <= 0;
+                    state <= LEAD;
+                end
+            LEAD:
+                if (half) state <= XFER;
+            XFER:
+                if (half) begin
+                    if (!sclk) begin           // rising edge: both sides sample
+                        sclk <= 1'b1;
+                        rsh  <= {rsh[6:0], miso};
+                    end else begin             // falling edge: put out the next bit
+                        sclk <= 1'b0;
+                        if (n == 3'd7) state <= TAIL;
+                        else begin
+                            n    <= n + 1;
+                            sh   <= {sh[6:0], 1'b0};
+                            mosi <= sh[6];
+                        end
+                    end
+                end
+            default:                           // TAIL: hold CS a little, then release it
+                if (half) begin
+                    cs_n  <= 1'b1;
+                    rx    <= rsh;
+                    state <= IDLE;
+                end
+        endcase
+    end
+
+    assign busy = (state != IDLE);
+endmodule
+
+// A simple SPI device: an 8-bit shift register. It answers every transfer with the byte it received last time.
+module spi_shift_slave (
+    input  wire       clk,
+    input  wire       cs_n,
+    input  wire       sclk,
+    input  wire       mosi,
+    output wire       miso,
+    output reg  [7:0] last = 0
+);
+    reg [7:0] sr     = 8'hA5;      // power-up contents
+    reg       sclk_d = 1'b0;
+    reg       cs_d   = 1'b1;
+    always @(posedge clk) begin
+        sclk_d <= sclk;
+        cs_d   <= cs_n;
+        if (!cs_n && sclk && !sclk_d)  // rising SCLK edge
+            sr <= {sr[6:0], mosi};
+        if (cs_n && !cs_d)             // end of a transfer
+            last <= sr;
+    end
+    assign miso = sr[7];
+endmodule
+
+module top (
+    input  wire        CLK100MHZ,
+    input  wire        BTNC,           // send SW[7:0] once
+    input  wire [15:0] SW,             // SW[15] = send every 100 us
+    output wire [4:1]  JA,             // JA1 = CS, JA2 = MOSI, JA3 = MISO, JA4 = SCLK
+    output wire [15:0] LED
+);
+    wire       cs_n, sclk, mosi, miso, busy;
+    wire [7:0] rx, last;
+
+    // start on a BTNC press, or every 100 us while SW[15] is on
+    reg        btn_d = 1'b0;
+    reg [13:0] timer = 0;
+    always @(posedge CLK100MHZ) begin
+        btn_d <= BTNC;
+        timer <= (timer == 14'd9999) ? 14'd0 : timer + 1;
+    end
+    wire start = !busy && ((BTNC && !btn_d) || (SW[15] && timer == 14'd0));
+
+    spi_master      master (.clk(CLK100MHZ), .start(start), .tx(SW[7:0]), .miso(miso),
+                             .cs_n(cs_n), .sclk(sclk), .mosi(mosi), .rx(rx), .busy(busy));
+    spi_shift_slave slave  (.clk(CLK100MHZ), .cs_n(cs_n), .sclk(sclk), .mosi(mosi), .miso(miso), .last(last));
+
+    assign JA  = {sclk, miso, mosi, cs_n};
+    assign LED = {last, rx};           // LD15..8: what the slave got, LD7..0: what the master got back
+endmodule
+`,
+    vhdl: `library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+-- SPI master (mode 0, MSB first)
+entity spi_master is
+    generic (DIV : integer := 50);                -- SCLK = 100 MHz / (2*DIV) = 1 MHz
+    port (
+        clk   : in  std_logic;
+        start : in  std_logic;                    -- one-clock pulse: send tx
+        tx    : in  std_logic_vector(7 downto 0);
+        miso  : in  std_logic;
+        cs_n  : out std_logic;
+        sclk  : out std_logic;
+        mosi  : out std_logic;
+        rx    : out std_logic_vector(7 downto 0); -- byte received from the slave
+        busy  : out std_logic
+    );
+end spi_master;
+
+architecture rtl of spi_master is
+    type state_t is (IDLE, LEAD, XFER, TAIL);
+    signal state          : state_t := IDLE;
+    signal cnt            : unsigned(15 downto 0) := (others => '0');
+    signal n              : unsigned(2 downto 0) := (others => '0');
+    signal sh, rsh, rxr   : std_logic_vector(7 downto 0) := (others => '0');
+    signal csr            : std_logic := '1';
+    signal sclkr, mosir   : std_logic := '0';
+    signal half           : std_logic;
+begin
+    half <= '1' when cnt = DIV - 1 else '0';
+
+    process(clk)
+    begin
+        if rising_edge(clk) then
+            if state = IDLE or half = '1' then
+                cnt <= (others => '0');
+            else
+                cnt <= cnt + 1;
+            end if;
+            case state is
+                when IDLE =>
+                    if start = '1' then
+                        csr   <= '0';
+                        sh    <= tx;
+                        mosir <= tx(7);          -- first bit must be ready before the first rising edge
+                        n     <= (others => '0');
+                        state <= LEAD;
+                    end if;
+                when LEAD =>
+                    if half = '1' then
+                        state <= XFER;
+                    end if;
+                when XFER =>
+                    if half = '1' then
+                        if sclkr = '0' then      -- rising edge: both sides sample
+                            sclkr <= '1';
+                            rsh   <= rsh(6 downto 0) & miso;
+                        else                     -- falling edge: put out the next bit
+                            sclkr <= '0';
+                            if n = 7 then
+                                state <= TAIL;
+                            else
+                                n     <= n + 1;
+                                sh    <= sh(6 downto 0) & '0';
+                                mosir <= sh(6);
+                            end if;
+                        end if;
+                    end if;
+                when TAIL =>                     -- hold CS a little, then release it
+                    if half = '1' then
+                        csr   <= '1';
+                        rxr   <= rsh;
+                        state <= IDLE;
+                    end if;
+            end case;
+        end if;
+    end process;
+
+    cs_n <= csr;
+    sclk <= sclkr;
+    mosi <= mosir;
+    rx   <= rxr;
+    busy <= '0' when state = IDLE else '1';
+end rtl;
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+-- A simple SPI device: an 8-bit shift register. It answers every transfer with the byte it received last time.
+entity spi_shift_slave is
+    port (
+        clk  : in  std_logic;
+        cs_n : in  std_logic;
+        sclk : in  std_logic;
+        mosi : in  std_logic;
+        miso : out std_logic;
+        last : out std_logic_vector(7 downto 0)
+    );
+end spi_shift_slave;
+
+architecture rtl of spi_shift_slave is
+    signal sr     : std_logic_vector(7 downto 0) := x"A5";   -- power-up contents
+    signal lastr  : std_logic_vector(7 downto 0) := (others => '0');
+    signal sclk_d : std_logic := '0';
+    signal cs_d   : std_logic := '1';
+begin
+    process(clk)
+    begin
+        if rising_edge(clk) then
+            sclk_d <= sclk;
+            cs_d   <= cs_n;
+            if cs_n = '0' and sclk = '1' and sclk_d = '0' then   -- rising SCLK edge
+                sr <= sr(6 downto 0) & mosi;
+            end if;
+            if cs_n = '1' and cs_d = '0' then                    -- end of a transfer
+                lastr <= sr;
+            end if;
+        end if;
+    end process;
+
+    miso <= sr(7);
+    last <= lastr;
+end rtl;
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity top is
+    port (
+        CLK100MHZ : in  std_logic;
+        BTNC      : in  std_logic;                      -- send SW(7 downto 0) once
+        SW        : in  std_logic_vector(15 downto 0);  -- SW(15) = send every 100 us
+        JA        : out std_logic_vector(4 downto 1);   -- JA1 = CS, JA2 = MOSI, JA3 = MISO, JA4 = SCLK
+        LED       : out std_logic_vector(15 downto 0)
+    );
+end top;
+
+architecture rtl of top is
+    signal cs_n, sclk, mosi, miso, busy, start : std_logic;
+    signal rx, last : std_logic_vector(7 downto 0);
+    signal btn_d    : std_logic := '0';
+    signal timer    : unsigned(13 downto 0) := (others => '0');
+begin
+    -- start on a BTNC press, or every 100 us while SW(15) is on
+    process(CLK100MHZ)
+    begin
+        if rising_edge(CLK100MHZ) then
+            btn_d <= BTNC;
+            if timer = 9999 then
+                timer <= (others => '0');
+            else
+                timer <= timer + 1;
+            end if;
+        end if;
+    end process;
+    start <= '1' when busy = '0' and ((BTNC = '1' and btn_d = '0') or (SW(15) = '1' and timer = 0)) else '0';
+
+    master : entity work.spi_master
+        port map (clk => CLK100MHZ, start => start, tx => SW(7 downto 0), miso => miso,
+                  cs_n => cs_n, sclk => sclk, mosi => mosi, rx => rx, busy => busy);
+    slave : entity work.spi_shift_slave
+        port map (clk => CLK100MHZ, cs_n => cs_n, sclk => sclk, mosi => mosi, miso => miso, last => last);
+
+    JA  <= sclk & miso & mosi & cs_n;
+    LED <= last & rx;              -- LD15..8: what the slave got, LD7..0: what the master got back
+end rtl;
+`,
+    xdc: { clk: true, sw: true, led: true, btn: true, pmod: true },
+    tryIt: `<p>طرح را اجرا کنید و Logic Analyzer را باز کنید؛ چهار کانال روی JA1 تا JA4 و دیکودر SPI از قبل آماده‌اند و روی سیم‌های پراب روی برد سه‌بعدی هم دیده می‌شوند. در پنجره Logic Analyzer دکمه <b>Run</b> را بزنید، با SW7..SW0 یک بایت بسازید و BTNC را فشار دهید. در ردیف MOSI بایت شما و در ردیف MISO بایت قبلی دیده می‌شود. با دو نشانگر فرکانس SCLK را اندازه بگیرید.</p>`,
+    exercise: `<p>مقدار <code>DIV</code> را کم کنید تا SCLK به 10MHz برسد و در Logic Analyzer ببینید. بعد Mode 3 (CPOL=1) را پیاده کنید و تنظیم دیکودر را هم عوض کنید.</p>`,
+    la: {
+      chans: [
+        { name: 'CS', probe: 'pin:C17' },
+        { name: 'MOSI', probe: 'pin:D18' },
+        { name: 'MISO', probe: 'pin:E18' },
+        { name: 'SCLK', probe: 'pin:G17' },
+      ],
+      decs: [{ type: 'spi', name: 'SPI', clk: 3, mosi: 1, miso: 2, cs: 0, mode: 0, bits: 8, msbFirst: true }],
+      base: 1e-6,
+      pos: 4,
+      trig: { ch: 0, edge: 'fall' },
+    },
+  },
+  {
+    id: 'i2c',
+    title: 'پروتکل I²C',
+    summary: 'نوشتن و خواندن یک رجیستر در یک سنسور شبیه‌سازی‌شده با آدرس 0x48، روی Pmod JB.',
+    body: `
+<p><b>I²C</b> فقط <b>دو سیم</b> دارد و چند دستگاه روی همان دو سیم با <b>آدرس</b> ۷ بیتی از هم جدا می‌شوند. سنسورهای دما، شتاب‌سنج‌ها، EEPROMها و ساعت‌های RTC معمولاً I²C هستند.</p>
+<h3>Open-drain</h3>
+<p>هیچ‌کس خط را به 1 «هل» نمی‌دهد: هر دستگاه فقط می‌تواند خط را به صفر بکشد یا رها کند و یک مقاومت pull-up آن را به 1 برمی‌گرداند. پس خط برابر است با AND همه دستگاه‌ها: <code>sda = !(m_low || d_low)</code>. به همین دلیل master و دستگاه می‌توانند نوبتی روی یک سیم حرف بزنند.</p>
+<h3>قاب I²C</h3>
+<ul>
+  <li><b>START</b>: SDA در حالی که SCL یک است صفر می‌شود. <b>STOP</b>: SDA در حالی که SCL یک است یک می‌شود. در بقیه زمان SDA فقط وقتی SCL صفر است عوض می‌شود.</li>
+  <li>بایت اول: آدرس ۷ بیتی + بیت R/W (0 = نوشتن، 1 = خواندن)</li>
+  <li>بعد از هر بایت گیرنده یک بیت <b>ACK</b> (صفر) می‌فرستد. اگر کسی جواب ندهد خط 1 می‌ماند: <b>NAK</b>.</li>
+</ul>
+<h3>این درس</h3>
+<p>master یک برنامه کوچک اجرا می‌کند: <code>S, 0x48+W, 0x01, data, P, S, 0x48+R, read, P</code>؛ یعنی مقدار کلیدها را در رجیستر دستگاه می‌نویسد و بعد دوباره می‌خواند. SCL با سرعت استاندارد 100kHz است.</p>
+<ul>
+  <li>SW7..SW0: داده؛ BTNC: یک تراکنش؛ SW15: تکرار هر ۱ms؛ SW14: آدرس اشتباه (0x49) برای دیدن NAK</li>
+  <li>LD7..LD0: بایتی که از دستگاه خوانده شد؛ LD15: دستگاه جواب نداد</li>
+</ul>`,
+    verilog: `// I2C master writing to and reading back from a simulated sensor at address 0x48, bus on Pmod JB
+module i2c_master #(parameter Q = 250) (       // a quarter of an SCL period: 100 kHz
+    input  wire       clk,
+    input  wire       go,                      // one-clock pulse: run the transaction
+    input  wire [6:0] addr,
+    input  wire [7:0] wdata,
+    input  wire       sda_in,                  // the bus as it really is
+    output reg        scl = 1'b1,
+    output reg        sda_low = 1'b0,          // open drain: 1 pulls SDA low, 0 releases it
+    output reg  [7:0] rdata = 0,
+    output reg        nack = 1'b0,             // the device did not answer
+    output reg        busy = 1'b0
+);
+    // the transaction as a small program:
+    // START, addr+W, 0x01 (register), wdata, STOP, START, addr+R, read one byte, STOP
+    localparam [2:0] OP_START = 3'd0, OP_WRITE = 3'd1, OP_READ = 3'd2, OP_STOP = 3'd3, OP_END = 3'd4;
+    reg [3:0] pc = 0;
+    reg [2:0] op;
+    reg [7:0] obyte;
+    always @(*) begin
+        obyte = 8'h00;
+        case (pc)
+            4'd0:    op = OP_START;
+            4'd1:    begin op = OP_WRITE; obyte = {addr, 1'b0}; end
+            4'd2:    begin op = OP_WRITE; obyte = 8'h01; end
+            4'd3:    begin op = OP_WRITE; obyte = wdata; end
+            4'd4:    op = OP_STOP;
+            4'd5:    op = OP_START;
+            4'd6:    begin op = OP_WRITE; obyte = {addr, 1'b1}; end
+            4'd7:    op = OP_READ;
+            4'd8:    op = OP_STOP;
+            default: op = OP_END;
+        endcase
+    end
+
+    reg [15:0] cnt  = 0;
+    reg [1:0]  ph   = 0;       // quarter of the current bit
+    reg [3:0]  bitn = 0;       // 0..7 data, 8 = acknowledge
+    reg [7:0]  sh   = 0;
+
+    always @(posedge clk) begin
+        if (!busy) begin
+            scl     <= 1'b1;
+            sda_low <= 1'b0;
+            if (go) begin
+                busy <= 1'b1;
+                pc   <= 0;
+                ph   <= 0;
+                bitn <= 0;
+                cnt  <= 0;
+                nack <= 1'b0;
+            end
+        end else if (cnt != Q - 1) begin
+            cnt <= cnt + 1;
+        end else begin
+            cnt <= 0;
+            ph  <= ph + 1;
+            case (op)
+                OP_START:                      // SDA falls while SCL is high
+                    case (ph)
+                        2'd0: begin sda_low <= 1'b0; scl <= 1'b1; end
+                        2'd1: sda_low <= 1'b1;
+                        2'd2: scl <= 1'b0;
+                        default: pc <= pc + 1;
+                    endcase
+                OP_WRITE, OP_READ:
+                    case (ph)
+                        2'd0:                  // SCL low: change SDA
+                            if (op == OP_WRITE && bitn < 8) sda_low <= ~obyte[7 - bitn];
+                            else                            sda_low <= 1'b0;   // release (ACK slot, read, NACK)
+                        2'd1: scl <= 1'b1;
+                        2'd2:                  // middle of SCL high: sample
+                            if (op == OP_READ && bitn < 8) sh <= {sh[6:0], sda_in};
+                            else if (op == OP_WRITE && bitn == 8 && sda_in) nack <= 1'b1;
+                        default: begin
+                            scl <= 1'b0;
+                            if (bitn == 8) begin
+                                bitn <= 0;
+                                if (op == OP_READ) rdata <= sh;
+                                pc <= (nack && op == OP_WRITE) ? 4'd8 : pc + 1;   // no answer: stop
+                            end else
+                                bitn <= bitn + 1;
+                        end
+                    endcase
+                OP_STOP:                       // SDA rises while SCL is high
+                    case (ph)
+                        2'd0: sda_low <= 1'b1;
+                        2'd1: scl <= 1'b1;
+                        2'd2: sda_low <= 1'b0;
+                        default: pc <= pc + 1;
+                    endcase
+                default:
+                    busy <= 1'b0;
+            endcase
+        end
+    end
+endmodule
+
+// A simulated I2C device with one data register (like a small sensor or EEPROM).
+module i2c_device #(parameter [6:0] ADDR = 7'h48) (
+    input  wire       clk,
+    input  wire       scl,
+    input  wire       sda,
+    output reg        sda_low = 1'b0,
+    output reg  [7:0] data = 8'h00
+);
+    reg       scl_d = 1'b1, sda_d = 1'b1;
+    wire      rise  = scl && !scl_d;
+    wire      fall  = !scl && scl_d;
+    wire      start = scl && scl_d && sda_d && !sda;
+    wire      stop  = scl && scl_d && !sda_d && sda;
+    reg       active = 1'b0;
+    reg [3:0] bitn   = 0;
+    reg [1:0] byten  = 0;
+    reg       rw     = 1'b0;
+    reg [7:0] sh     = 0;
+    reg [7:0] tsh    = 0;      // byte being sent back
+    reg       clocked = 1'b0;  // an SCL rise since the last fall (the fall right after START is not a bit)
+
+    always @(posedge clk) begin
+        scl_d <= scl;
+        sda_d <= sda;
+        if (start) begin
+            active  <= 1'b1;
+            clocked <= 1'b0;
+            rw      <= 1'b0;
+            bitn    <= 0;
+            byten   <= 0;
+            sda_low <= 1'b0;
+        end else if (stop) begin
+            active  <= 1'b0;
+            sda_low <= 1'b0;
+        end else if (active) begin
+            if (rise) begin
+                clocked <= 1'b1;
+                if (bitn < 8) sh <= {sh[6:0], sda};
+                if (bitn == 8 && rw && byten != 0 && sda) active <= 1'b0;   // master said NACK: stop sending
+            end
+            if (fall && clocked) begin
+                clocked <= 1'b0;
+                if (bitn == 7) begin           // a byte is complete: acknowledge it?
+                    bitn <= 8;
+                    if (byten == 0) begin
+                        rw      <= sh[0];
+                        sda_low <= (sh[7:1] == ADDR);
+                        if (sh[7:1] != ADDR) active <= 1'b0;   // not for us
+                    end else if (!rw) begin
+                        if (byten >= 2) data <= sh;
+                        sda_low <= 1'b1;
+                    end else
+                        sda_low <= 1'b0;       // reading: the master acknowledges
+                end else if (bitn == 8) begin  // acknowledge done: next byte
+                    bitn  <= 0;
+                    byten <= (byten == 2'd3) ? byten : byten + 1;
+                    if (rw) begin
+                        tsh     <= {data[6:0], 1'b0};
+                        sda_low <= ~data[7];
+                    end else
+                        sda_low <= 1'b0;
+                end else begin
+                    bitn <= bitn + 1;
+                    if (rw) begin
+                        sda_low <= ~tsh[7];
+                        tsh     <= {tsh[6:0], 1'b0};
+                    end
+                end
+            end
+        end
+    end
+endmodule
+
+module top (
+    input  wire        CLK100MHZ,
+    input  wire        BTNC,           // run one transaction
+    input  wire [15:0] SW,             // SW[7:0] = data, SW[14] = wrong address, SW[15] = repeat every 1 ms
+    output wire [4:3]  JB,             // JB3 = SCL, JB4 = SDA
+    output wire [15:0] LED
+);
+    wire       scl, m_low, d_low, nack, busy;
+    wire [7:0] rdata, stored;
+    wire       sda = !(m_low || d_low);     // open-drain bus with a pull-up
+
+    reg        btn_d = 1'b0;
+    reg [16:0] timer = 0;
+    always @(posedge CLK100MHZ) begin
+        btn_d <= BTNC;
+        timer <= (timer == 17'd99999) ? 17'd0 : timer + 1;
+    end
+    wire go = !busy && ((BTNC && !btn_d) || (SW[15] && timer == 17'd0));
+
+    i2c_master master (.clk(CLK100MHZ), .go(go), .addr(SW[14] ? 7'h49 : 7'h48), .wdata(SW[7:0]), .sda_in(sda),
+                       .scl(scl), .sda_low(m_low), .rdata(rdata), .nack(nack), .busy(busy));
+    i2c_device #(.ADDR(7'h48)) sensor (.clk(CLK100MHZ), .scl(scl), .sda(sda), .sda_low(d_low), .data(stored));
+
+    assign JB  = {sda, scl};
+    assign LED = {nack, 7'b0000000, rdata};   // LD15 = no answer, LD7..0 = byte read back
+endmodule
+`,
+    vhdl: `library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+-- I2C master: START, addr+W, 0x01 (register), wdata, STOP, START, addr+R, read one byte, STOP
+entity i2c_master is
+    generic (Q : integer := 250);                 -- a quarter of an SCL period: 100 kHz
+    port (
+        clk     : in  std_logic;
+        go      : in  std_logic;                  -- one-clock pulse: run the transaction
+        addr    : in  std_logic_vector(6 downto 0);
+        wdata   : in  std_logic_vector(7 downto 0);
+        sda_in  : in  std_logic;                  -- the bus as it really is
+        scl     : out std_logic;
+        sda_low : out std_logic;                  -- open drain: '1' pulls SDA low, '0' releases it
+        rdata   : out std_logic_vector(7 downto 0);
+        nack    : out std_logic;                  -- the device did not answer
+        busy    : out std_logic
+    );
+end i2c_master;
+
+architecture rtl of i2c_master is
+    type op_t is (OP_START, OP_WRITE, OP_READ, OP_STOP, OP_END);
+    signal op     : op_t;
+    signal obyte  : std_logic_vector(7 downto 0);
+    signal pc     : unsigned(3 downto 0) := (others => '0');
+    signal cnt    : unsigned(15 downto 0) := (others => '0');
+    signal ph     : unsigned(1 downto 0) := (others => '0');   -- quarter of the current bit
+    signal bitn   : unsigned(3 downto 0) := (others => '0');   -- 0..7 data, 8 = acknowledge
+    signal sh, rd : std_logic_vector(7 downto 0) := (others => '0');
+    signal sclr   : std_logic := '1';
+    signal low    : std_logic := '0';
+    signal nk, bz : std_logic := '0';
+begin
+    -- the transaction as a small program
+    process(pc, addr, wdata)
+    begin
+        obyte <= x"00";
+        case pc is
+            when "0000" => op <= OP_START;
+            when "0001" => op <= OP_WRITE; obyte <= addr & '0';
+            when "0010" => op <= OP_WRITE; obyte <= x"01";
+            when "0011" => op <= OP_WRITE; obyte <= wdata;
+            when "0100" => op <= OP_STOP;
+            when "0101" => op <= OP_START;
+            when "0110" => op <= OP_WRITE; obyte <= addr & '1';
+            when "0111" => op <= OP_READ;
+            when "1000" => op <= OP_STOP;
+            when others => op <= OP_END;
+        end case;
+    end process;
+
+    process(clk)
+    begin
+        if rising_edge(clk) then
+            if bz = '0' then
+                sclr <= '1';
+                low  <= '0';
+                if go = '1' then
+                    bz   <= '1';
+                    pc   <= (others => '0');
+                    ph   <= (others => '0');
+                    bitn <= (others => '0');
+                    cnt  <= (others => '0');
+                    nk   <= '0';
+                end if;
+            elsif cnt /= Q - 1 then
+                cnt <= cnt + 1;
+            else
+                cnt <= (others => '0');
+                ph  <= ph + 1;
+                case op is
+                    when OP_START =>                     -- SDA falls while SCL is high
+                        case ph is
+                            when "00" => low <= '0'; sclr <= '1';
+                            when "01" => low <= '1';
+                            when "10" => sclr <= '0';
+                            when others => pc <= pc + 1;
+                        end case;
+                    when OP_WRITE | OP_READ =>
+                        case ph is
+                            when "00" =>                 -- SCL low: change SDA
+                                if op = OP_WRITE and bitn < 8 then
+                                    low <= not obyte(7 - to_integer(bitn));
+                                else
+                                    low <= '0';          -- release (ACK slot, read, NACK)
+                                end if;
+                            when "01" => sclr <= '1';
+                            when "10" =>                 -- middle of SCL high: sample
+                                if op = OP_READ and bitn < 8 then
+                                    sh <= sh(6 downto 0) & sda_in;
+                                elsif op = OP_WRITE and bitn = 8 and sda_in = '1' then
+                                    nk <= '1';
+                                end if;
+                            when others =>
+                                sclr <= '0';
+                                if bitn = 8 then
+                                    bitn <= (others => '0');
+                                    if op = OP_READ then
+                                        rd <= sh;
+                                    end if;
+                                    if nk = '1' and op = OP_WRITE then
+                                        pc <= to_unsigned(8, 4);   -- no answer: stop
+                                    else
+                                        pc <= pc + 1;
+                                    end if;
+                                else
+                                    bitn <= bitn + 1;
+                                end if;
+                        end case;
+                    when OP_STOP =>                      -- SDA rises while SCL is high
+                        case ph is
+                            when "00" => low <= '1';
+                            when "01" => sclr <= '1';
+                            when "10" => low <= '0';
+                            when others => pc <= pc + 1;
+                        end case;
+                    when OP_END =>
+                        bz <= '0';
+                end case;
+            end if;
+        end if;
+    end process;
+
+    scl     <= sclr;
+    sda_low <= low;
+    rdata   <= rd;
+    nack    <= nk;
+    busy    <= bz;
+end rtl;
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+-- A simulated I2C device with one data register (like a small sensor or EEPROM).
+entity i2c_device is
+    generic (ADDR : std_logic_vector(6 downto 0) := "1001000");   -- 0x48
+    port (
+        clk     : in  std_logic;
+        scl     : in  std_logic;
+        sda     : in  std_logic;
+        sda_low : out std_logic;
+        data    : out std_logic_vector(7 downto 0)
+    );
+end i2c_device;
+
+architecture rtl of i2c_device is
+    signal scl_d, sda_d        : std_logic := '1';
+    signal rise, fall          : std_logic;
+    signal start, stop         : std_logic;
+    signal active, rw, clocked : std_logic := '0';
+    signal low                 : std_logic := '0';
+    signal bitn                : unsigned(3 downto 0) := (others => '0');
+    signal byten               : unsigned(1 downto 0) := (others => '0');
+    signal sh, tsh, reg        : std_logic_vector(7 downto 0) := (others => '0');
+begin
+    rise  <= scl and not scl_d;
+    fall  <= scl_d and not scl;
+    start <= scl and scl_d and sda_d and not sda;
+    stop  <= scl and scl_d and sda and not sda_d;
+
+    process(clk)
+    begin
+        if rising_edge(clk) then
+            scl_d <= scl;
+            sda_d <= sda;
+            if start = '1' then
+                active  <= '1';
+                clocked <= '0';
+                rw      <= '0';
+                bitn    <= (others => '0');
+                byten   <= (others => '0');
+                low     <= '0';
+            elsif stop = '1' then
+                active <= '0';
+                low    <= '0';
+            elsif active = '1' then
+                if rise = '1' then
+                    clocked <= '1';
+                    if bitn < 8 then
+                        sh <= sh(6 downto 0) & sda;
+                    end if;
+                    if bitn = 8 and rw = '1' and byten /= 0 and sda = '1' then
+                        active <= '0';                   -- master said NACK: stop sending
+                    end if;
+                end if;
+                if fall = '1' and clocked = '1' then     -- the fall right after START is not a bit
+                    clocked <= '0';
+                    if bitn = 7 then                     -- a byte is complete: acknowledge it?
+                        bitn <= to_unsigned(8, 4);
+                        if byten = 0 then
+                            rw <= sh(0);
+                            if sh(7 downto 1) = ADDR then
+                                low <= '1';
+                            else
+                                low    <= '0';
+                                active <= '0';           -- not for us
+                            end if;
+                        elsif rw = '0' then
+                            if byten >= 2 then
+                                reg <= sh;
+                            end if;
+                            low <= '1';
+                        else
+                            low <= '0';                  -- reading: the master acknowledges
+                        end if;
+                    elsif bitn = 8 then                  -- acknowledge done: next byte
+                        bitn <= (others => '0');
+                        if byten /= 3 then
+                            byten <= byten + 1;
+                        end if;
+                        if rw = '1' then
+                            tsh <= reg(6 downto 0) & '0';
+                            low <= not reg(7);
+                        else
+                            low <= '0';
+                        end if;
+                    else
+                        bitn <= bitn + 1;
+                        if rw = '1' then
+                            low <= not tsh(7);
+                            tsh <= tsh(6 downto 0) & '0';
+                        end if;
+                    end if;
+                end if;
+            end if;
+        end if;
+    end process;
+
+    sda_low <= low;
+    data    <= reg;
+end rtl;
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity top is
+    port (
+        CLK100MHZ : in  std_logic;
+        BTNC      : in  std_logic;                      -- run one transaction
+        SW        : in  std_logic_vector(15 downto 0);  -- SW(7..0) = data, SW(14) = wrong address, SW(15) = repeat
+        JB        : out std_logic_vector(4 downto 3);   -- JB3 = SCL, JB4 = SDA
+        LED       : out std_logic_vector(15 downto 0)
+    );
+end top;
+
+architecture rtl of top is
+    signal scl, sda, m_low, d_low, nack, busy, go : std_logic;
+    signal rdata, stored : std_logic_vector(7 downto 0);
+    signal addr          : std_logic_vector(6 downto 0);
+    signal btn_d         : std_logic := '0';
+    signal timer         : unsigned(16 downto 0) := (others => '0');
+begin
+    sda <= not (m_low or d_low);            -- open-drain bus with a pull-up
+
+    process(CLK100MHZ)
+    begin
+        if rising_edge(CLK100MHZ) then
+            btn_d <= BTNC;
+            if timer = 99999 then
+                timer <= (others => '0');
+            else
+                timer <= timer + 1;
+            end if;
+        end if;
+    end process;
+    go   <= '1' when busy = '0' and ((BTNC = '1' and btn_d = '0') or (SW(15) = '1' and timer = 0)) else '0';
+    addr <= "1001001" when SW(14) = '1' else "1001000";   -- 0x49 (nobody) or 0x48
+
+    master : entity work.i2c_master
+        port map (clk => CLK100MHZ, go => go, addr => addr, wdata => SW(7 downto 0), sda_in => sda,
+                  scl => scl, sda_low => m_low, rdata => rdata, nack => nack, busy => busy);
+    sensor : entity work.i2c_device
+        generic map (ADDR => "1001000")
+        port map (clk => CLK100MHZ, scl => scl, sda => sda, sda_low => d_low, data => stored);
+
+    JB  <= sda & scl;
+    LED <= nack & "0000000" & rdata;        -- LD15 = no answer, LD7..0 = byte read back
+end rtl;
+`,
+    xdc: { clk: true, sw: true, led: true, btn: true, pmod: true },
+    tryIt: `<p>طرح را اجرا کنید، Logic Analyzer را باز کنید و <b>Run</b> را بزنید. با SW7..SW0 یک عدد بسازید و BTNC را بزنید: دیکودر I²C شروع و پایان، آدرس، ACKها و داده را نشان می‌دهد و همان عدد روی LD7..LD0 برمی‌گردد. حالا SW14 را روشن کنید و دوباره BTNC را بزنید: این بار دستگاهی جواب نمی‌دهد و <b>NAK</b> و LD15 را می‌بینید.</p>`,
+    exercise: `<p>یک دستگاه دوم با آدرس 0x49 به همان دو سیم وصل کنید (یک نمونه دیگر از <code>i2c_device</code> و OR کردن <code>sda_low</code>ها). حالا SW14 باید دستگاه دوم را انتخاب کند.</p>`,
+    la: {
+      chans: [
+        { name: 'SCL', probe: 'pin:G16' },
+        { name: 'SDA', probe: 'pin:H14' },
+      ],
+      decs: [{ type: 'i2c', name: 'I2C', scl: 0, sda: 1 }],
+      base: 1e-4,
+      pos: 4,
+      trig: { ch: 1, edge: 'fall' },
+    },
+  },
 ];
