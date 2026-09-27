@@ -5,6 +5,8 @@ import { mapPorts, type Binding, type Mapping } from '../boards/mapping';
 import { compileDesign, type CompiledSim, type Design } from '../hdl';
 import { Recorder, type Trace } from '../la/capture';
 import { decodeUart } from '../la/decode';
+import { PinBus, type ModuleInst } from '../modules/bus';
+import { moduleDef, type ModuleDef } from '../modules/library';
 import { hTotal, vgaTap, vTotal, VgaMonitor } from '../vga/monitor';
 
 // active-low segment patterns {g..a} for 0..F
@@ -21,6 +23,10 @@ export class BoardHarness {
   sim: CompiledSim;
   cycles = 0;
   maxCycles = Infinity;
+  // modules attached to the board's pins
+  bus: PinBus;
+  private extra: { sigs: number[]; fn: (t: number) => void }[] = [];
+  private base = 0;
 
   constructor(
     public design: Design,
@@ -32,8 +38,48 @@ export class BoardHarness {
     if (errors.length) throw new Error(errors.map((e) => e.msg).join('\n'));
     this.sim = compileDesign(design, { clock: this.map.clock });
     this.sim.reset();
+    this.bus = new PinBus(board.clockHz, () => this.sim);
+    this.bus.setDesign(design, this.map);
     // board inputs start released / off; the reset button is not pressed (high)
     this.set((b) => b.device.kind === 'reset', 1);
+  }
+
+  // attaches a module (by type) to package pins; on-board modules use their own pins
+  attach(type: string | ModuleDef, pins?: Record<string, string>, values: Record<string, number> = {}): ModuleInst {
+    const def = typeof type === 'string' ? moduleDef(type) : type;
+    if (!def) throw new Error(`unknown module ${type}`);
+    const p = pins ?? def.onboard;
+    if (!p) throw new Error(`module ${def.type} needs pins`);
+    const vals = Object.fromEntries(def.controls.filter((c) => c.kind === 'slider').map((c) => [c.key, (c as { def: number }).def]));
+    const inst = this.bus.attach({
+      pins: p,
+      io: Object.fromEntries(def.roles.map((r) => [r.role, r.io])),
+      timed: def.timed,
+      create: (ctx) => def.create(ctx, { ...vals, ...values }),
+    });
+    this.recompile();
+    this.bus.now = this.cycles;
+    inst.reset?.();
+    return inst;
+  }
+
+  // recompiles with the signals the bus and the instruments watch, keeping the design's state
+  private recompile() {
+    const sigs = [...new Set([...this.bus.sigs(), ...this.extra.flatMap((e) => e.sigs)])].sort((a, b) => a - b);
+    const old = this.sim;
+    const sim = compileDesign(this.design, {
+      clock: this.map.clock,
+      probe: sigs,
+      onProbe: (c) => {
+        const t = this.base + c + 1;
+        this.bus.refresh(t);
+        for (const e of this.extra) e.fn(t);
+      },
+    });
+    sim.v.set(old.v);
+    old.mems.forEach((m, i) => sim.mems[i].set(m));
+    sim.sync();
+    this.sim = sim;
   }
 
   private bind(pred: (b: Binding) => boolean) {
@@ -46,6 +92,9 @@ export class BoardHarness {
       this.sim.v[b.sig] = val ? (this.sim.v[b.sig] | m) >>> 0 : (this.sim.v[b.sig] & ~m) >>> 0;
     }
     this.sim.settle();
+    // outputs changed between clock runs are not reported by the simulator: tell the watchers now
+    this.bus?.refresh(this.cycles);
+    for (const e of this.extra) e.fn(this.cycles);
   }
 
   has(kind: string, name?: string): boolean {
@@ -61,8 +110,17 @@ export class BoardHarness {
   run(n: number) {
     n = Math.max(0, Math.round(n));
     if (this.cycles + n > this.maxCycles) throw new Error('time budget');
-    if (this.clocked) this.sim.run(n);
-    this.cycles += n;
+    const end = this.cycles + n;
+    while (this.cycles < end) {
+      this.bus.runDue(this.cycles);
+      let step = Math.min(end - this.cycles, Math.max(1, this.bus.nextAt - this.cycles));
+      if (this.bus.timed) step = Math.min(step, 1000);
+      this.base = this.cycles;
+      if (this.clocked) this.sim.run(step);
+      this.cycles += step;
+      this.bus.now = this.cycles;
+    }
+    this.bus.runDue(this.cycles);
   }
 
   sw(v: number) {
@@ -166,27 +224,23 @@ export class BoardHarness {
     const tap = vgaTap(this.map.bindings);
     if (!tap || !this.clocked) return null;
     const mon = new VgaMonitor(this.board.clockHz);
-    let base = 0;
-    const feed = (t: number) => {
-      const l = tap.read(this.sim.v);
-      mon.feed(t, l.hs, l.vs, l.color);
+    const probe = {
+      sigs: tap.sigs,
+      fn: (t: number) => {
+        const l = tap.read(this.sim.v);
+        mon.feed(t, l.hs, l.vs, l.color);
+      },
     };
-    const old = this.sim;
-    const sim = compileDesign(this.design, { clock: this.map.clock, probe: tap.sigs, onProbe: (c) => feed(base + c + 1) });
-    sim.v.set(old.v);
-    old.mems.forEach((m, i) => sim.mems[i].set(m));
-    sim.sync();
-    this.sim = sim;
-    const l = tap.read(sim.v);
-    mon.reset(0, l.hs, l.vs, l.color);
+    this.extra.push(probe);
+    this.recompile();
+    const l = tap.read(this.sim.v);
+    mon.reset(this.cycles, l.hs, l.vs, l.color);
     const frame = Math.round((this.board.clockHz / 25.175e6) * hTotal(mon.mode) * vTotal(mon.mode));
-    const want = mon.frames + frames + 1;
-    const step = 1 << 16;
-    const limit = frame * (frames + 3);
-    while (mon.frames < want && base < limit) {
-      this.run(step);
-      base += step;
-    }
+    const want = frames + 1;
+    const limit = this.cycles + frame * (frames + 3);
+    while (mon.frames < want && this.cycles < limit) this.run(1 << 16);
+    this.extra = this.extra.filter((e) => e !== probe);
+    this.recompile();
     return mon;
   }
 

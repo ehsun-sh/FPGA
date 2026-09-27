@@ -601,6 +601,22 @@ ${truth(
     tryIt: `<p>Turn on SW7 (duty = 128, i.e. 50%) and then try SW0 to SW6: LD0 and LD16's red glow at different strengths. Add green with SW15..SW8 to make orange or yellow.</p>`,
     exercise: `<p>Build a "breathing LED": a slow counter raises the duty value gradually and then lowers it again.</p>`,
   },
+  sensors: {
+    title: 'The on-board temperature sensor (ADT7420) and modules',
+    summary: 'Read the temperature from the on-board I²C sensor through tri-state (open-drain) pins and show it on the display; meet the Modules panel.',
+    body: `
+<p>The Nexys A7 has two sensors: the <b>ADT7420</b> temperature sensor, which talks <b>I²C</b>, and the <b>ADXL362</b> accelerometer, which talks <b>SPI</b>. Both are listed in the <span class="kbd">🧩 Modules</span> panel next to the board, where sliders change the temperature or the acceleration. In the same panel, <b>Add Module</b> connects other modules to the Pmod headers, such as an HC-SR04 distance sensor, buttons, LEDs, a rotary encoder or a servo, and you choose which pin each of their lines is wired to.</p>
+<h3>Open-drain pins and the value 'z'</h3>
+<p>In I²C both sides talk on the same wire. Nobody drives it to 1: anyone may pull it to 0, or <b>let go</b> so a pull-up resistor makes it 1. To let go, the output takes the third state, <b>high impedance</b> (<code>z</code>). That is why the ports are <code>inout</code>:</p>
+<pre class="formula" dir="ltr">assign TMP_SDA = sda_low ? 1'b0 : 1'bz;     // Verilog
+TMP_SDA <= '0' when sda_low = '1' else 'Z';  -- VHDL</pre>
+<p>When the design <b>reads</b> <code>TMP_SDA</code> it sees the real level on the wire. If the sensor pulls it low (for an ACK, say), it reads 0 even though the FPGA itself let go.</p>
+<h3>Reading the temperature</h3>
+<p>The sensor's address is <code>0x4B</code>. After power-up its register pointer is 0x00, so a plain read is enough: <b>START</b>, the address with the read bit (<code>0x97</code>), the first byte with ACK, the second with NACK, and <b>STOP</b>. Together the two bytes form a 16-bit number whose bits 15 to 3 hold the temperature as a signed number in 1/16 degree steps. For example 24.5 degrees is <code>392 = 0x188</code>, i.e. the register <code>0x0C40</code>.</p>
+<p>This lesson's design reads the temperature every 0.25 s and shows it on the display (for example <b>24.5</b>). The raw value is on the LEDs, and LD15 lights up if the sensor does not answer.</p>`,
+    tryIt: `<p>Press <span class="kbd">▶ Run</span>, then open <span class="kbd">🧩 Modules</span> in the corner of the board. Move the ADT7420 temperature slider; a moment later the display follows. Try below zero too.</p>
+<p>In the logic analyzer, look at <code>TMP_SCL</code> (C14) and <code>TMP_SDA</code> (C15) with the I²C decoder: <b>S 0x4B R A 0x0C A 0x40 N P</b>.</p>`,
+  },
   vga: {
     title: 'VGA video on a monitor',
     summary: 'Build the VGA sync signals from two counters and draw colour bars on a 640×480 monitor.',

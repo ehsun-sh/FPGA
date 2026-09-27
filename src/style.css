@@ -1517,3 +1517,237 @@ dialog button {
 .la-ico.vga {
   background: linear-gradient(135deg, #2d56b3, #5ad1f0);
 }
+
+/* modules drawer (board area) */
+.mod-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(330px, 92%);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  background: rgba(22, 25, 30, 0.96);
+  border-inline-start: 1px solid #3a414b;
+  color: #dfe5ec;
+  font: 12px var(--ui);
+}
+.mod-drawer[hidden] {
+  display: none;
+}
+.mod-drawer[dir='rtl'] {
+  font-family: var(--fa);
+}
+.mod-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  background: #0f1317;
+}
+.mod-top .grow {
+  flex: 1;
+}
+.mod-top button {
+  background: #313842;
+  color: #e3e8ee;
+  border: 1px solid #454e59;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font: inherit;
+  cursor: pointer;
+}
+.mod-top .mod-x {
+  background: none;
+  border: 0;
+}
+.mod-addw {
+  position: relative;
+}
+.mod-menu {
+  position: absolute;
+  top: 100%;
+  inset-inline-end: 0;
+  margin-top: 4px;
+  width: 280px;
+  background: #242a31;
+  border: 1px solid #454e59;
+  border-radius: 6px;
+  padding: 4px;
+  z-index: 5;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+.mod-menu button {
+  display: block;
+  width: 100%;
+  text-align: start;
+  background: none;
+  border: 0;
+  color: #e3e8ee;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font: inherit;
+  cursor: pointer;
+}
+.mod-menu button:hover {
+  background: #343c46;
+}
+.mod-drawer .dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-inline-end: 6px;
+  vertical-align: middle;
+}
+.mod-drawer .dim {
+  color: #8d98a5;
+}
+.mod-list {
+  flex: 1;
+  overflow: auto;
+  padding: 8px;
+}
+.mod-card {
+  background: #1f242b;
+  border: 1px solid #353c46;
+  border-radius: 7px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+.mod-h {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+.mod-h .grow {
+  flex: 1;
+}
+.mod-badge {
+  font-size: 10px;
+  background: #2f4a33;
+  color: #9fe0a8;
+  border-radius: 8px;
+  padding: 0 6px;
+  margin-inline-start: 6px;
+}
+.mod-rm {
+  background: none;
+  border: 0;
+  color: #9aa5b1;
+  cursor: pointer;
+}
+.mod-rm:hover {
+  color: #ff8a8a;
+}
+.mod-desc {
+  color: #aab4bf;
+  margin: 4px 0 6px;
+  line-height: 1.5;
+}
+.mod-desc code,
+.mod-pin code {
+  background: #2b323b;
+  border-radius: 3px;
+  padding: 0 3px;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.mod-plug {
+  margin: 4px 0;
+}
+.mod-plug button,
+.mod-xdc,
+.mod-btn {
+  background: #313842;
+  color: #e3e8ee;
+  border: 1px solid #454e59;
+  border-radius: 4px;
+  padding: 2px 8px;
+  margin-inline-end: 4px;
+  font: inherit;
+  cursor: pointer;
+}
+.mod-btn {
+  padding: 4px 12px;
+  margin-bottom: 4px;
+  user-select: none;
+}
+.mod-btn.down {
+  background: #4b8bd6;
+}
+.mod-pin {
+  direction: ltr;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 3px 0;
+}
+.mod-pin .role {
+  font-weight: 600;
+  direction: ltr;
+}
+.mod-pin .io {
+  color: #7f8b98;
+  font-weight: 400;
+  font-size: 10px;
+}
+.mod-pin select {
+  background: #313842;
+  color: #e3e8ee;
+  border: 1px solid #454e59;
+  border-radius: 3px;
+  font: 11px var(--mono, monospace);
+  direction: ltr;
+}
+.mod-warn {
+  color: #ffb35c;
+  font-size: 11px;
+}
+.mod-ctls {
+  margin: 6px 0;
+}
+.mod-slider {
+  display: grid;
+  grid-template-columns: 70px 1fr 64px;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0;
+}
+.mod-slider output {
+  text-align: end;
+  direction: ltr;
+  font-variant-numeric: tabular-nums;
+}
+.mod-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-inline-end: 10px;
+}
+.mod-leds {
+  display: flex;
+  gap: 6px;
+  direction: ltr;
+  margin: 4px 0;
+}
+.mod-leds span {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffcf3a;
+  box-shadow: 0 0 6px #ffcf3a;
+  opacity: 0.15;
+}
+.mod-read b {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.mod-empty {
+  color: #8d98a5;
+  line-height: 1.6;
+  padding: 0 4px;
+}

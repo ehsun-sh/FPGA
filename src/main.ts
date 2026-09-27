@@ -12,6 +12,7 @@ import { generateTestbench } from './sim/tbgen';
 import { formatTime, TbSim } from './sim/tbsim';
 import { WaveView } from './wave/view';
 import { VgaScreen } from './vga/screen';
+import { ModulePanel, type SavedModule } from './modules/panel';
 import { EXERCISES } from './grade/exercises';
 import { gradeExercise } from './grade/grade';
 import { CodeEditor } from './ui/editor';
@@ -181,6 +182,7 @@ app.innerHTML = `
       <div class="board-tools">
         <button data-act="view-reset" title="Perspective view">⟲ 3D</button>
         <button data-act="view-top" title="Top view">⊤ Top</button>
+        <button data-act="modules" id="mod-btn" title="Sensors and Pmod modules connected to the board">🧩 Modules</button>
       </div>
       <div class="board-hint">Click the switches and buttons · drag to rotate · scroll to zoom</div>
     </div>
@@ -282,6 +284,19 @@ try {
 }
 serial.onSettings = (st) => store.set('serial', JSON.stringify(st));
 const vga = new VgaScreen(document.body, boardDef, board, runner);
+const modules = new ModulePanel($('#board'), boardDef, runner, board, () => uiLang);
+modules.onSave = (m) => store.set('modules', JSON.stringify(m));
+modules.onXdc = (lines) => {
+  const t = xdcEditor.text.replace(/\s*$/, '\n\n') + lines + '\n';
+  xdcEditor.setText(t, 'xdc');
+  store.set(xdcKey(lesson), t);
+  log(`# add_constraints: ${lines.split('\n')[0].replace(/^## /, '')} (${xdcName})`, 'cmd');
+};
+try {
+  modules.load(JSON.parse(store.get('modules') ?? '[]') as SavedModule[]);
+} catch {
+  modules.load([]);
+}
 function loadLa() {
   let cfg: LaConfig | null = null;
   try {
@@ -776,6 +791,7 @@ function setUiLang(l: UiLang) {
   applyUiLang();
   renderLessonList();
   renderLesson();
+  modules.render();
 }
 
 function applyUiLang() {
@@ -842,6 +858,10 @@ function act(name: string) {
     case 'vga':
       if (vga.open) vga.hide();
       else vga.show();
+      break;
+    case 'modules':
+      if (modules.open) modules.hide();
+      else modules.show();
       break;
     case 'reset':
       if (runner.sim) {
@@ -1010,6 +1030,7 @@ let statTimer = 0;
 const laBtn = $('#la-btn');
 const serialBtn = $('#serial-btn');
 const vgaBtn = $('#vga-btn');
+const modBtn = $('#mod-btn');
 board.onFrame = (dt) => {
   const out = runner.frame(dt);
   board.setOutputs(out);
@@ -1017,6 +1038,8 @@ board.onFrame = (dt) => {
   serial.frame();
   vga.frame();
   vgaBtn.classList.toggle('active', vga.open);
+  modules.frame();
+  modBtn.classList.toggle('active', modules.open);
   laBtn.classList.toggle('active', la.open);
   serialBtn.classList.toggle('active', serial.open);
   statTimer += dt;

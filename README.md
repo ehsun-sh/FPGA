@@ -23,6 +23,11 @@ and watch it run on an interactive 3D Digilent Nexys A7-100T on the right.
 - **VGA output and a virtual monitor**: a design that drives the VGA connector (`VGA_R/G/B[3:0]`, `VGA_HS`, `VGA_VS`)
   gets a monitor next to the 3D board, plus a bigger **VGA Monitor** window. Like a real monitor it measures the sync
   timing, picks the mode (640×480, 800×600 or 1024×768 at 60 Hz) and shows "No signal" or "Out of range" otherwise.
+- **Modules** (🧩 in the board area): the on-board ADT7420 temperature sensor (I²C) and ADXL362 accelerometer (SPI) are
+  always connected, with sliders for temperature and acceleration. **Add Module** wires more parts to the Pmod headers,
+  on pins you choose: HC-SR04 distance sensor, Pmod BTN / SWT / 8LD, Pmod ENC rotary encoder and an SG90 servo. Each
+  card can append the matching XDC lines. Modules are behavioural models that react to the design's pins cycle by
+  cycle, and the lines resolve like real wires (open-drain lines with pull-ups for I²C).
 - **Exercises with automatic checking**: every lesson ends with an exercise and a “Check my solution” button. The
   checker maps the student's design onto a virtual board, flips switches and buttons, sends UART bytes and reads the
   LEDs, the seven-segment display and pins (UART, SPI and I²C are decoded). Time-heavy exercises ask for a
@@ -45,7 +50,7 @@ and watch it run on an interactive 3D Digilent Nexys A7-100T on the right.
   4. FSM: traffic light, button debouncing (with an optional contact-bounce simulation)
   5. FSMD: binary to BCD (double dabble)
   6. Memory: synchronous RAM
-  7. I/O: PWM, UART transmitter with the logic analyzer, UART receiver with the serial console, SPI master and slave, I²C write and read back, VGA colour bars on the monitor (PS/2 and a soft-core processor are planned)
+  7. I/O: PWM, UART transmitter with the logic analyzer, UART receiver with the serial console, SPI master and slave, I²C write and read back, the on-board temperature sensor with open-drain pins, VGA colour bars on the monitor (PS/2 and a soft-core processor are planned)
   8. Playground
 
 Real Vivado cannot run in a browser; this project imitates its look and workflow. The lesson code and XDC files are
@@ -70,6 +75,7 @@ npm run build    # static site in dist/
 | `src/sim/runner.ts` | real-time driver: clocking, inputs, LED/segment brightness (persistence of vision) |
 | `src/sim/tbsim.ts`, `src/sim/tbgen.ts` | behavioral simulation of testbenches (event scheduler, messages) and testbench generator |
 | `src/wave/` | waveform viewer |
+| `src/modules/` | external modules: the pin bus (`bus.ts`), module models (`library.ts`), the Modules panel (`panel.ts`) |
 | `src/vga/` | VGA monitor: sync decoding and picture (`monitor.ts`), the screen and its window (`screen.ts`) |
 | `src/grade/` | exercises and their checkers (`exercises.ts`), the virtual board they drive (`harness.ts`) |
 | `src/la/` | logic analyzer: `capture.ts` (recording, trigger), `decode.ts` (protocol decoders), `window.ts` (UI) |
@@ -91,4 +97,5 @@ Lesson code currently uses the Nexys A7 port names (`SW`, `LED`, `CLK100MHZ`, ..
 
 ## Simulator limits
 
-2-state (0/1, no X/Z), vectors up to 32 bits, no `generate`, functions/tasks or VHDL packages yet.
+2-state (0/1, no X). `z` is supported only on `inout` ports of the top module (`assign P = oe ? v : 1'bz;`), which
+are split into the value driven and the level on the wire. Vectors up to 32 bits, no `generate`, functions/tasks or VHDL packages yet.

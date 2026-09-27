@@ -92,6 +92,8 @@ export interface Design {
   unitPs?: number;
   // names of the top module's parameters / generics
   topParams?: string[];
+  // top-level inout ports, split into the level on the wire and what the design drives
+  tri?: { port: number; o: number; oe: number }[];
 }
 
 export function mask(w: number): number {

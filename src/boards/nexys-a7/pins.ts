@@ -11,6 +11,19 @@ const VGA: Record<'r' | 'g' | 'b', string[]> = {
   g: ['C6', 'A5', 'B6', 'A6'],
   b: ['B7', 'C7', 'D7', 'D8'],
 };
+// on-board sensors: ADT7420 temperature sensor (I²C) and ADXL362 accelerometer (SPI)
+const SENSORS: [string, string, 'tmp' | 'acl'][] = [
+  ['TMP_SCL', 'C14', 'tmp'],
+  ['TMP_SDA', 'C15', 'tmp'],
+  ['TMP_INT', 'D13', 'tmp'],
+  ['TMP_CT', 'B14', 'tmp'],
+  ['ACL_MISO', 'E15', 'acl'],
+  ['ACL_MOSI', 'F14', 'acl'],
+  ['ACL_SCLK', 'F15', 'acl'],
+  ['ACL_CSN', 'D15', 'acl'],
+  ['ACL_INT[1]', 'B13', 'acl'],
+  ['ACL_INT[2]', 'C16', 'acl'],
+];
 // Pmod signal pins 1-4 and 7-10 (5/11 = GND, 6/12 = VCC)
 const PMOD_NUMS = [1, 2, 3, 4, 7, 8, 9, 10];
 const PMOD: Record<string, string[]> = {
@@ -52,6 +65,7 @@ export const PINS: Record<string, Device> = {
 };
 for (const [h, pins] of Object.entries(PMOD)) pins.forEach((p, i) => (PINS[p] = { kind: 'pin', name: `${h}${PMOD_NUMS[i]}` }));
 for (const [c, pins] of Object.entries(VGA)) pins.forEach((p, i) => (PINS[p] = { kind: 'vga', name: `VGA_${c.toUpperCase()}[${i}]`, line: c as 'r' | 'g' | 'b', bit: i }));
+for (const [name, pin] of SENSORS) PINS[pin] = { kind: 'pin', name };
 PINS.B11 = { kind: 'vga', name: 'VGA_HS', line: 'hs', bit: 0 };
 PINS.B12 = { kind: 'vga', name: 'VGA_VS', line: 'vs', bit: 0 };
 SW.forEach((p, i) => (PINS[p] = { kind: 'sw', index: i }));
@@ -86,6 +100,7 @@ export const DEFAULT_NAMES: Record<string, string> = {
 };
 for (const [h, pins] of Object.entries(PMOD)) pins.forEach((p, i) => (DEFAULT_NAMES[`${h}[${PMOD_NUMS[i]}]`] = p));
 for (const [c, pins] of Object.entries(VGA)) pins.forEach((p, i) => (DEFAULT_NAMES[`VGA_${c.toUpperCase()}[${i}]`] = p));
+for (const [name, pin] of SENSORS) DEFAULT_NAMES[name] = pin;
 DEFAULT_NAMES.VGA_HS = 'B11';
 DEFAULT_NAMES.VGA_VS = 'B12';
 SW.forEach((p, i) => (DEFAULT_NAMES[`SW[${i}]`] = p));
@@ -143,6 +158,12 @@ export function masterXdc(enabled: Partial<Record<XdcGroup, boolean>>): string {
     c(enabled.vga, line('VGA_VS', 'B12')),
     '',
     ...Object.entries(PMOD).flatMap(([h, pins]) => [`## Pmod Header ${h}`, ...pins.map((p, i) => c(enabled.pmod, line(`${h}[${PMOD_NUMS[i]}]`, p))), '']),
+    '## Temperature Sensor (ADT7420, I2C)',
+    ...SENSORS.filter((x) => x[2] === 'tmp').map(([n, p]) => c(enabled.tmp && !n.endsWith('INT') && !n.endsWith('CT'), line(n, p))),
+    '',
+    '## Accelerometer (ADXL362, SPI)',
+    ...SENSORS.filter((x) => x[2] === 'acl').map(([n, p]) => c(enabled.acl && !n.includes('INT'), line(n, p))),
+    '',
     '## USB-RS232 Interface',
     c(enabled.uart, line('UART_TXD_IN', 'C4')),
     c(enabled.uart, line('UART_RXD_OUT', 'D4')),

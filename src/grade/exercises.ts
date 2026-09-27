@@ -557,6 +557,32 @@ export const EXERCISES: Record<string, Exercise> = {
       t.ok(a === 'S 0x48 W A 0x01 A 0x5A A P S 0x48 R A 0x5A N P', `SW14 خاموش: دستگاه 0x48 هنوز کار می‌کند (${a})`, `SW14 off: device 0x48 still works (${a})`);
     },
   },
+  sensors: {
+    fa: `<p>یک هشدار دما بسازید: وقتی دما <b>30.0 درجه یا بیشتر</b> است، LED رنگی <b>LD16 قرمز</b> شود و وقتی کمتر است <b>سبز</b>. خروجی‌های <code>LED16_R</code>، <code>LED16_G</code> و <code>LED16_B</code> را اضافه کنید و خطوط RGB را در XDC فعال کنید. بازهٔ بین خواندن‌ها <code>DIV</code> است. بررسی‌کننده آن را کوچک می‌کند و دمای سنسور را عوض می‌کند.</p>`,
+    en: `<p>Build a temperature alarm: when it is <b>30.0 degrees or more</b>, the RGB LED <b>LD16 turns red</b>, and below that it is <b>green</b>. Add the outputs <code>LED16_R</code>, <code>LED16_G</code> and <code>LED16_B</code> and uncomment the RGB lines in the XDC. The time between readings is <code>DIV</code>; the checker makes it small and changes the sensor's temperature.</p>`,
+    params: { DIV: 50_000 },
+    check(h, t) {
+      needDevice(h, t, 'rgb', 'LD16 به پایه‌ها وصل است (خطوط RGB را در XDC فعال کنید)', 'LD16 is connected to pins (uncomment the RGB LED lines in the XDC)');
+      t.need(h.hasPin('C14') && h.hasPin('C15'), 'TMP_SCL و TMP_SDA به سنسور وصل‌اند', 'TMP_SCL and TMP_SDA are connected to the sensor');
+      const s = h.attach('adt7420');
+      const at = (temp: number) => {
+        s.set!('temp', temp);
+        h.run(150_000);
+        return h.rgb(0).join('');
+      };
+      const cases: [number, string, string][] = [
+        [35, '100', 'قرمز'],
+        [24.5, '010', 'سبز'],
+        [30, '100', 'قرمز'],
+        [29.9375, '010', 'سبز'],
+        [-5, '010', 'سبز'],
+      ];
+      for (const [temp, want, fa] of cases) {
+        const got = at(temp);
+        t.ok(got === want, `در ${temp} درجه LD16 ${fa} است (R G B = ${got.split('').join(' ')})`, `at ${temp} °C LD16 is ${want === '100' ? 'red' : 'green'} (R G B = ${got.split('').join(' ')})`);
+      }
+    },
+  },
   vga: {
     fa: `<p>یک مربع ۱۰۰×۱۰۰ پیکسلی وسط صفحه روی نوارهای رنگی بکشید: ستون‌های <b>270 تا 369</b> و خط‌های <b>190 تا 289</b>. رنگ مربع را کلیدها تعیین می‌کنند: R = SW15..SW12، G = SW11..SW8 و B = SW7..SW4. بیرون مربع نوارهای رنگی مثل قبل دیده می‌شوند.</p>`,
     en: `<p>Draw a 100×100-pixel square in the middle of the screen, over the colour bars: columns <b>270 to 369</b> and lines <b>190 to 289</b>. The switches set its colour: R = SW15..SW12, G = SW11..SW8 and B = SW7..SW4. Outside the square the colour bars stay as they are.</p>`,

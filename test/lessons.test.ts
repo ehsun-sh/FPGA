@@ -425,6 +425,17 @@ const checks: Record<string, (h: Harness) => void> = {
     expect(decodeI2c(tr, { scl: 0, sda: 1 }).map((x) => x.short).join(' ')).toBe('S 0x49 W N P');
     expect(h.led() >> 15).toBe(1);
   },
+  sensors(h) {
+    const bh = new BoardHarness(h.d, DEFAULT_BOARD.masterXdc({ clk: true, led: true, seg: true, tmp: true }), DEFAULT_BOARD);
+    const s = bh.attach('adt7420', undefined, { temp: 24.5 });
+    bh.run(25_100_000);
+    expect(bh.led()).toBe(0x188);
+    expect(bh.text(2, 0)).toBe('245');
+    s.set!('temp', -12.5);
+    bh.run(25_100_000);
+    expect(bh.led()).toBe(-200 & 0x1fff);
+    expect(bh.text(2, 0)).toBe('125');
+  },
   vga(h) {
     const bh = new BoardHarness(h.d, DEFAULT_BOARD.masterXdc({ clk: true, sw: true, vga: true }), DEFAULT_BOARD);
     let m = bh.vga(1)!;

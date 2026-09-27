@@ -285,6 +285,97 @@ export class NexysA7Model implements BoardView {
     this.scene.add(g);
   }
 
+  // position of a Pmod header pin on the board (pins 1-6 on the outer row, pin 1 nearest the back edge)
+  private headerPin(pin: string): { x: number; z: number; hi: number } | null {
+    const hi = HEADERS.findIndex((h) => Object.values(h.pins).includes(pin));
+    if (hi < 0) return null;
+    const num = +Object.entries(HEADERS[hi].pins).find(([, p]) => p === pin)![0];
+    const k = (num - 1) % 6;
+    return { x: 6.05 - 0.12 + (num <= 6 ? 0.24 : 0), z: -3.6 - 0.6 + k * 0.24 + hi * 1.25, hi };
+  }
+
+  // external modules: a Pmod card plugged into its header, or a module on the desk with flywires to its pins
+  private moduleGroup: THREE.Group | null = null;
+  setModules(mods: { label: string; color: string; pins: string[]; pmod: boolean }[]) {
+    if (this.moduleGroup) {
+      this.scene.remove(this.moduleGroup);
+      this.moduleGroup.traverse((o) => {
+        if (o instanceof THREE.Mesh) {
+          o.geometry.dispose();
+          for (const m of [o.material].flat() as THREE.MeshStandardMaterial[]) {
+            m.map?.dispose();
+            m.dispose();
+          }
+        }
+      });
+      this.moduleGroup = null;
+    }
+    if (!mods.length) return;
+    const g = new THREE.Group();
+    const black = new THREE.MeshStandardMaterial({ color: '#15171a', roughness: 0.6 });
+    const label = (text: string, color: string) =>
+      new THREE.MeshStandardMaterial({
+        roughness: 0.6,
+        map: canvasTexture(256, 160, (c) => {
+          c.fillStyle = color;
+          c.fillRect(0, 0, 256, 160);
+          c.fillStyle = 'rgba(0,0,0,0.25)';
+          c.fillRect(0, 118, 256, 42);
+          c.fillStyle = '#fff';
+          c.font = 'bold 34px sans-serif';
+          c.textAlign = 'center';
+          c.textBaseline = 'middle';
+          c.fillText(text, 128, 60, 240);
+        }),
+      });
+    const plugged = new Set<number>();
+    let slot = 0;
+    for (const m of mods) {
+      const pos = m.pins.map((p) => this.headerPin(p));
+      const hi = pos[0]?.hi;
+      const oneHeader = m.pmod && pos.every((p) => p && p.hi === hi) && hi !== undefined && !plugged.has(hi);
+      const top = label(m.label, m.color);
+      const side = new THREE.MeshStandardMaterial({ color: m.color, roughness: 0.6 });
+      const mats = [side, side, top, side, side, side];
+      if (oneHeader) {
+        plugged.add(hi!);
+        const zc = -3.6 + hi! * 1.25;
+        this.box(0.5, 0.45, 1.3, black, 6.45, TOP, zc, g);
+        const card = this.box(1.6, 0.08, 1.2, mats, 7.45, TOP + 0.2, zc, g);
+        card.rotation.y = Math.PI / 2;
+        continue;
+      }
+      // on the desk, to the right of the board, with a wire to every pin
+      const x0 = 8.9;
+      const z0 = -3.4 + slot++ * 2.1;
+      const DESK = -0.62;
+      const card = this.box(1.8, 0.1, 1.3, mats, x0, DESK, z0, g);
+      card.rotation.y = Math.PI / 2;
+      pos.forEach((p, i) => {
+        if (!p) return;
+        const wire = new THREE.MeshStandardMaterial({ color: ['#e04848', '#e0c048', '#48a0e0', '#48e070', '#c048e0', '#e08a48', '#ffffff', '#8a8a8a'][i % 8], roughness: 0.5 });
+        const clip = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.3, 8), wire);
+        clip.position.set(p.x, TOP + 0.6, p.z);
+        g.add(clip);
+        const end = new THREE.Vector3(x0 - 0.55, DESK + 0.15, z0 - 0.45 + (i * 0.9) / Math.max(1, pos.length - 1));
+        const curve = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(p.x, TOP + 0.75, p.z),
+          new THREE.Vector3(p.x + 0.4, TOP + 1.3, p.z),
+          new THREE.Vector3((p.x + end.x) / 2 + 0.3, TOP + 0.9, (p.z + end.z) / 2),
+          end,
+        ]);
+        g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.03, 6), wire));
+      });
+    }
+    g.userData.wide = slot > 0;
+    this.moduleGroup = g;
+    this.scene.add(g);
+    if (!this.userMoved) {
+      if (this.view === 'top') this.topView();
+      else this.resetView();
+    }
+  }
+
   // VGA monitor behind the board, with a cable to the VGA connector
   private monitor: { group: THREE.Group; tex: THREE.CanvasTexture; led: THREE.MeshStandardMaterial; signal: boolean | null } | null = null;
   setMonitor(screen: HTMLCanvasElement | null) {
@@ -363,13 +454,15 @@ export class NexysA7Model implements BoardView {
   resetView() {
     this.view = 'persp';
     this.userMoved = false;
-    const k = this.fit();
+    const wide = !!this.moduleGroup?.userData.wide;
+    const k = this.fit() * (wide ? 1.18 : 1);
+    const dx = wide ? 1.4 : 0;
     if (this.monitor) {
-      this.camera.position.set(0, 13 * k, 20 * k);
-      this.controls.target.set(0, 2.4, -2.5);
+      this.camera.position.set(dx, 13 * k, 20 * k);
+      this.controls.target.set(dx, 2.4, -2.5);
     } else {
-      this.camera.position.set(0, 14.5 * k, 11.5 * k);
-      this.controls.target.set(0, 0, 0.6);
+      this.camera.position.set(dx, 14.5 * k, 11.5 * k);
+      this.controls.target.set(dx, 0, 0.6);
     }
     this.controls.update();
   }
@@ -377,9 +470,11 @@ export class NexysA7Model implements BoardView {
   topView() {
     this.view = 'top';
     this.userMoved = false;
-    const k = this.fit();
-    this.camera.position.set(0, 19 * k, 0.6);
-    this.controls.target.set(0, 0, 0.5);
+    const wide = !!this.moduleGroup?.userData.wide;
+    const k = this.fit() * (wide ? 1.18 : 1);
+    const dx = wide ? 1.4 : 0;
+    this.camera.position.set(dx, 19 * k, 0.6);
+    this.controls.target.set(dx, 0, 0.5);
     this.controls.update();
   }
 

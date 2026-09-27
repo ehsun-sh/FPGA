@@ -1,4 +1,5 @@
 // Elaboration: resolves names, evaluates parameters, flattens the module hierarchy into one Design.
+import { splitTristate } from './tristate';
 import { HdlError, type ADecl, type AExpr, type AModule, type APart, type AStmt, type AType, type Lang, type Loc } from './ast';
 import { bitsFor, mask, type Design, type Expr, type LVal, type Part, type Sig, type Stmt } from './ir';
 
@@ -110,6 +111,13 @@ export class Elaborator {
     const ov = new Map<string, number>();
     for (const [k, v] of Object.entries(params ?? {})) ov.set(top.lang === 'vhdl' ? k.toLowerCase() : k, v);
     this.instantiate(top, '', ov, true);
+    if (this.design.ports.some((p) => p.dir === 'inout')) {
+      try {
+        this.design.tri = splitTristate(this.design);
+      } catch (e) {
+        throw new HdlError((e as Error).message, top.loc, 'Synth 8-3352');
+      }
+    }
     return this.design;
   }
 

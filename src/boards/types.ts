@@ -38,6 +38,8 @@ export interface BoardView {
   topView(): void;
   // show logic-analyzer probe clips on header pins (package pin names), if the view supports it
   setProbes?(probes: { pin: string; color: string }[]): void;
+  // external modules wired to header pins (package pins); a Pmod plugs straight into its header
+  setModules?(mods: { label: string; color: string; pins: string[]; pmod: boolean }[]): void;
   // show (canvas) or hide (null) a VGA monitor plugged into the board; the canvas is its screen
   setMonitor?(screen: HTMLCanvasElement | null): void;
   // the screen canvas changed
@@ -46,7 +48,7 @@ export interface BoardView {
   updateMonitor?(signal: boolean): void;
 }
 
-export type XdcGroup = 'clk' | 'sw' | 'led' | 'rgb' | 'seg' | 'btn' | 'reset' | 'pmod' | 'uart' | 'vga';
+export type XdcGroup = 'clk' | 'sw' | 'led' | 'rgb' | 'seg' | 'btn' | 'reset' | 'pmod' | 'uart' | 'vga' | 'tmp' | 'acl';
 
 export interface BoardDef {
   id: string;

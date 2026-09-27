@@ -25,6 +25,7 @@ const EXTRA: Record<string, Partial<Record<XdcGroup, boolean>>> = {
   alu: { seg: true },
   fsm: { sw: true },
   bin2bcd: { btn: true },
+  sensors: { rgb: true },
 };
 
 const HEX7SEG = `module hex7seg (input wire [3:0] x, output reg [6:0] seg);
@@ -230,6 +231,11 @@ endmodule`,
         'assign JB  = {sda, scl};',
         "i2c_device #(.ADDR(7'h49)) sensor2 (.clk(CLK100MHZ), .scl(scl), .sda(sda), .sda_low(d2_low), .data(stored2));\n\n    assign JB  = {sda, scl};",
       ],
+    ]),
+  sensors: () =>
+    edit('sensors', [
+      ['output wire [15:0] LED,', 'output wire [15:0] LED,\n    output wire        LED16_R, LED16_G, LED16_B,'],
+      ["assign LED = {nack, 2'b00, t16};", "assign LED = {nack, 2'b00, t16};\n    wire hot = !neg && (t16 >= 13'd480);   // 30.0 degrees = 480 sixteenths\n    assign LED16_R = hot;\n    assign LED16_G = !hot;\n    assign LED16_B = 1'b0;"],
     ]),
   vga: () =>
     edit('vga', [

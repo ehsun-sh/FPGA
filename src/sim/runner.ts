@@ -2,6 +2,7 @@
 import { isBoardInput, type BoardDef, type BoardOutputs } from '../boards';
 import type { Binding, Mapping } from '../boards/mapping';
 import { compileDesign, type CompiledSim, type Design } from '../hdl';
+import { PinBus } from '../modules/bus';
 
 const SEG_INDEX: Record<string, number> = { a: 0, b: 1, c: 2, d: 3, e: 4, f: 5, g: 6, dp: 7 };
 const RGB_INDEX: Record<string, number> = { r: 0, g: 1, b: 2 };
@@ -36,6 +37,8 @@ export class Runner {
   // (absolute board cycle) and on time restarts
   private probes = new Map<string, Probe>();
   private probeSigs: number[] = [];
+  // modules attached to the board's pins (sensors, Pmods, ...)
+  bus: PinBus;
 
   private outBindings: Binding[] = [];
   private inBindings: Binding[] = [];
@@ -55,6 +58,7 @@ export class Runner {
     this.lit = new Float64Array(n);
     this.acc = new Float64Array(n);
     this.bright = new Float64Array(n);
+    this.bus = new PinBus(board.clockHz, () => this.sim);
   }
   private lastMark = 0;
   private fractional = 0;
@@ -64,8 +68,9 @@ export class Runner {
   program(design: Design, mapping: Mapping, inputs: { switches: boolean[]; pressed: (b: string) => boolean }) {
     this.design = design;
     this.mapping = mapping;
-    this.probeSigs = [];
     this.probes.clear(); // instruments re-register for the new design
+    this.bus.setDesign(design, mapping);
+    this.probeSigs = this.bus.sigs();
     this.outBindings = mapping.bindings.filter((b) => !isBoardInput(b.device));
     this.inBindings = mapping.bindings.filter((b) => isBoardInput(b.device) && b.device.kind !== 'clk');
     this.sim = this.compile();
@@ -86,6 +91,7 @@ export class Runner {
   }
 
   private sample(t: number) {
+    this.bus.refresh(t);
     for (const p of this.probes.values()) p.onSample(t);
   }
 
@@ -93,7 +99,25 @@ export class Runner {
   setProbe(owner: string, probe: Probe | null) {
     if (probe) this.probes.set(owner, probe);
     else this.probes.delete(owner);
-    const next = [...new Set([...this.probes.values()].flatMap((p) => p.sigs))].sort((a, b) => a - b);
+    this.reprobe();
+  }
+
+  // modules were attached or removed: watch their lines and update the design's inputs
+  modulesChanged() {
+    this.reprobe();
+    this.bus.now = this.now;
+    this.poke();
+  }
+
+  // something outside the clock runs changed the design's inputs (a module's button, ...)
+  poke() {
+    if (!this.sim) return;
+    this.computeLit();
+    this.sample(this.now);
+  }
+
+  private reprobe() {
+    const next = [...new Set([...[...this.probes.values()].flatMap((p) => p.sigs), ...this.bus.sigs()])].sort((a, b) => a - b);
     if (next.join() === this.probeSigs.join()) return;
     this.probeSigs = next;
     if (!this.sim) return;
@@ -123,6 +147,8 @@ export class Runner {
     this.pending = [];
     this.serialLevel = 1;
     this.serialFree = 0;
+    this.bus.reset(0);
+    this.computeLit();
     for (const p of this.probes.values()) p.onRestart?.();
     this.sample(0);
   }
@@ -130,6 +156,7 @@ export class Runner {
   stop() {
     this.running = false;
     this.sim = null;
+    this.bus.setDesign(null, null);
     this.design = null;
     this.mapping = null;
     this.achievedHz = 0;
@@ -293,6 +320,14 @@ export class Runner {
       this.acc.fill(0);
       while (done < want) {
         let n = Math.min(this.chunk, want - done);
+        {
+          const now = this.totalCycles + done;
+          this.runBase = done;
+          if (this.bus.runDue(now)) this.mark(-1); // module events changed inputs: outputs may follow
+          n = Math.max(1, Math.min(n, this.bus.nextAt - now));
+          if (this.bus.timed) n = Math.min(n, 1000);
+          if (!this.running) break;
+        }
         if (this.pending.length) {
           const now = this.totalCycles + done;
           for (const p of this.pending.filter((q) => q.at <= now)) {
@@ -321,6 +356,7 @@ export class Runner {
       }
       this.runBase = 0;
       this.totalCycles += done;
+      this.bus.now = this.totalCycles;
       // close the accumulation window
       const span = done - this.lastMark;
       if (span > 0) for (let i = 0; i < this.acc.length; i++) this.acc[i] += this.lit[i] * span;
