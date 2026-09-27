@@ -52,12 +52,12 @@ function drawSilkscreen(g: CanvasRenderingContext2D) {
   const h = D * S;
   // solder mask
   const grd = g.createLinearGradient(0, 0, w, h);
-  grd.addColorStop(0, '#b3202a');
-  grd.addColorStop(1, '#9c1a23');
+  grd.addColorStop(0, '#1f7a3e');
+  grd.addColorStop(1, '#176632');
   g.fillStyle = grd;
   g.fillRect(0, 0, w, h);
   // faint copper traces
-  g.strokeStyle = 'rgba(120,10,18,0.55)';
+  g.strokeStyle = 'rgba(8,70,30,0.55)';
   g.lineWidth = 3;
   const rnd = mulberry(7);
   for (let i = 0; i < 260; i++) {
@@ -319,9 +319,9 @@ export class NexysA7Model implements BoardView {
 
   private buildBoard() {
     const silk = canvasTexture(W * S, D * S, drawSilkscreen);
-    const edge = new THREE.MeshStandardMaterial({ color: '#7d141b', roughness: 0.6 });
+    const edge = new THREE.MeshStandardMaterial({ color: '#12502a', roughness: 0.6 });
     const top = new THREE.MeshStandardMaterial({ map: silk, roughness: 0.5, metalness: 0.05 });
-    const bottom = new THREE.MeshStandardMaterial({ color: '#8a161e', roughness: 0.7 });
+    const bottom = new THREE.MeshStandardMaterial({ color: '#155a2f', roughness: 0.7 });
     const pcb = new THREE.Mesh(new THREE.BoxGeometry(W, T, D), [edge, edge, top, bottom, edge, edge]);
     pcb.receiveShadow = true;
     pcb.castShadow = true;
@@ -479,10 +479,10 @@ export class NexysA7Model implements BoardView {
 
     // User LEDs
     for (let i = 0; i < 16; i++) {
-      const mat = new THREE.MeshStandardMaterial({ color: '#e6ece4', emissive: '#29ff55', emissiveIntensity: 0, roughness: 0.25 });
+      const mat = new THREE.MeshStandardMaterial({ color: '#8fcf9c', emissive: '#00ff44', emissiveIntensity: 0, roughness: 0.25 });
       this.box(0.22, 0.09, 0.13, mat, SW_X(i), TOP, LED_Z);
       this.ledMats.push(mat);
-      this.ledGlows.push(this.glow('#40ff70', SW_X(i), TOP + 0.14, LED_Z, 1.0));
+      this.ledGlows.push(this.glow('#22ff55', SW_X(i), TOP + 0.14, LED_Z, 1.0));
     }
     // RGB LEDs
     for (const [k, x] of [

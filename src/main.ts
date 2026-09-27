@@ -2,6 +2,7 @@ import './style.css';
 import { BOARDS, getBoard } from './boards';
 import { mapPorts, type Mapping } from './boards/mapping';
 import { estimateUtilization, HdlError, synthesize, type Design, type Lang } from './hdl';
+import { EN, LESSON_UI, type LessonText } from './lessons/en';
 import { ALL_LESSONS, LESSONS, PLAYGROUND, type Lesson } from './lessons/lessons';
 import { Runner } from './sim/runner';
 import { CodeEditor } from './ui/editor';
@@ -78,6 +79,10 @@ app.innerHTML = `
   <button class="tb" data-act="stop" title="Stop"><span class="ico stop">■</span> Stop</button>
   <button class="tb" data-act="reset" title="Reset the design (like re-programming)"><span class="ico">↺</span> Reset</button>
   <span class="sep"></span>
+  <div class="seg-ctl" role="group" aria-label="Site language">
+    <button data-ui="fa">فارسی</button><button data-ui="en">English</button>
+  </div>
+  <span class="sep"></span>
   <div class="seg-ctl" role="group" aria-label="HDL language">
     <button data-lang="verilog">Verilog</button><button data-lang="vhdl">VHDL</button>
   </div>
@@ -97,7 +102,7 @@ app.innerHTML = `
   <aside class="flow" id="flow">
     <div class="flow-title">FLOW NAVIGATOR</div>
     <div class="flow-sec">
-      <div class="sec-h">▾ LEARN · آموزش</div>
+      <div class="sec-h" id="learn-h">▾ LEARN</div>
       <div id="lesson-list"></div>
     </div>
     <div class="flow-sec">
@@ -134,7 +139,7 @@ app.innerHTML = `
       <button data-tab="xdc">${xdcName}</button>
     </div>
     <div class="tab-body">
-      <article class="lesson" id="lesson" dir="rtl" lang="fa"></article>
+      <article class="lesson" id="lesson"></article>
       <div class="editor-host hidden" id="src-editor"></div>
       <div class="editor-host hidden" id="xdc-editor"></div>
     </div>
@@ -188,6 +193,10 @@ app.innerHTML = `
 let lang: Lang = store.get('lang') === 'vhdl' ? 'vhdl' : 'verilog';
 let lesson: Lesson = ALL_LESSONS.find((l) => l.id === store.get('lesson')) ?? LESSONS[0];
 let tab: 'lesson' | 'source' | 'xdc' = 'lesson';
+type UiLang = 'fa' | 'en';
+let uiLang: UiLang = store.get('ui-lang') === 'en' ? 'en' : 'fa';
+// lesson text in the selected site language (Persian lives in lessons.ts, English in en.ts)
+const text = (l: Lesson): LessonText => (uiLang === 'en' && EN[l.id] ? EN[l.id] : l);
 
 const srcKey = (l: Lesson, lg: Lang) => `src:${l.id}:${lg}`;
 const xdcKey = (l: Lesson) => `xdc:${boardDef.id}:${l.id}`;
@@ -436,7 +445,7 @@ function renderLessonList() {
   const el = $('#lesson-list');
   el.innerHTML = ALL_LESSONS.map(
     (l, i) =>
-      `<button class="flow-item lesson-item ${l.id === lesson.id ? 'active' : ''}" data-lesson="${l.id}" dir="rtl"><span class="num">${l === PLAYGROUND ? '★' : i + 1}</span>${esc(l.title)}</button>`,
+      `<button class="flow-item lesson-item ${l.id === lesson.id ? 'active' : ''}" data-lesson="${l.id}" dir="${uiLang === 'fa' ? 'rtl' : 'ltr'}"><span class="num">${l === PLAYGROUND ? '★' : i + 1}</span>${esc(text(l).title)}</button>`,
   ).join('');
 }
 
@@ -449,26 +458,31 @@ function renderLesson() {
   const prev = ALL_LESSONS[idx - 1];
   const next = ALL_LESSONS[idx + 1];
   const el = $('#lesson');
+  const tx = text(lesson);
+  const ui = LESSON_UI[uiLang];
+  const rtl = uiLang === 'fa';
+  el.dir = rtl ? 'rtl' : 'ltr';
+  el.lang = uiLang;
   el.innerHTML = `
-<div class="lesson-head"><span class="chapter">${esc(lesson.chapter)}</span><h1>${esc(lesson.title)}</h1><p class="summary">${esc(lesson.summary)}</p></div>
-<section><h2>📖 توضیح</h2>${lesson.body}</section>
-<section><h2>💻 کد</h2>
+<div class="lesson-head"><span class="chapter">${esc(tx.chapter)}</span><h1>${esc(tx.title)}</h1><p class="summary">${esc(tx.summary)}</p></div>
+<section><h2>${ui.explain}</h2>${tx.body}</section>
+<section><h2>${ui.code}</h2>
   <div class="code-tabs" dir="ltr">
     <button data-code="verilog" class="${lang === 'verilog' ? 'active' : ''}">Verilog</button>
     <button data-code="vhdl" class="${lang === 'vhdl' ? 'active' : ''}">VHDL</button>
     <span class="grow"></span>
-    <button class="open-ed" data-act="open-editor">باز کردن در ویرایشگر ✎</button>
+    <button class="open-ed" data-act="open-editor">${ui.openEditor}</button>
   </div>
   <div class="code-panel" data-panel="verilog" ${lang === 'verilog' ? '' : 'hidden'}>${codeBlock(lesson.verilog, 'verilog')}</div>
   <div class="code-panel" data-panel="vhdl" ${lang === 'vhdl' ? '' : 'hidden'}>${codeBlock(lesson.vhdl, 'vhdl')}</div>
 </section>
-<section class="try"><h2>🔌 روی برد امتحان کنید</h2>${lesson.tryIt}
-  <button class="big-run" data-act="run">▶ اجرا روی برد ${esc(boardDef.name)}</button>
+<section class="try"><h2>${ui.tryIt}</h2>${tx.tryIt}
+  <button class="big-run" data-act="run">${ui.runOn(esc(boardDef.name))}</button>
 </section>
-${lesson.exercise ? `<section class="exercise"><h2>🎯 تمرین</h2>${lesson.exercise}<p class="dim">کد را در تب ویرایشگر تغییر دهید و دوباره Run بزنید. تغییرات شما در مرورگر ذخیره می‌شود.</p></section>` : ''}
+${tx.exercise ? `<section class="exercise"><h2>${ui.exercise}</h2>${tx.exercise}<p class="dim">${ui.exerciseHint}</p></section>` : ''}
 <nav class="lesson-nav">
-  ${prev ? `<button data-lesson="${prev.id}">→ ${esc(prev.title)}</button>` : '<span></span>'}
-  ${next ? `<button data-lesson="${next.id}">${esc(next.title)} ←</button>` : '<span></span>'}
+  ${prev ? `<button data-lesson="${prev.id}">${rtl ? '→' : '←'} ${esc(text(prev).title)}</button>` : '<span></span>'}
+  ${next ? `<button data-lesson="${next.id}">${esc(text(next).title)} ${rtl ? '←' : '→'}</button>` : '<span></span>'}
 </nav>`;
   el.scrollTop = 0;
 }
@@ -505,6 +519,20 @@ function setLang(lg: Lang) {
   document.querySelectorAll<HTMLElement>('.code-tabs [data-code]').forEach((b) => b.classList.toggle('active', b.dataset.code === lang));
   document.querySelectorAll<HTMLElement>('.code-panel').forEach((p) => (p.hidden = p.dataset.panel !== lang));
   log(`# set_property TARGET_LANGUAGE ${lang === 'verilog' ? 'Verilog' : 'VHDL'} [current_project]`, 'cmd');
+}
+
+function setUiLang(l: UiLang) {
+  uiLang = l;
+  store.set('ui-lang', l);
+  applyUiLang();
+  renderLessonList();
+  renderLesson();
+}
+
+function applyUiLang() {
+  document.documentElement.lang = uiLang;
+  document.querySelectorAll<HTMLElement>('[data-ui]').forEach((b) => b.classList.toggle('active', b.dataset.ui === uiLang));
+  $('#learn-h').textContent = `▾ LEARN · ${LESSON_UI[uiLang].learn}`;
 }
 
 function showTab(t: typeof tab) {
@@ -624,6 +652,8 @@ document.addEventListener('click', (ev) => {
     const found = ALL_LESSONS.find((x) => x.id === l.dataset.lesson);
     if (found) openLesson(found);
   }
+  const ui = t.closest('[data-ui]') as HTMLElement | null;
+  if (ui) setUiLang(ui.dataset.ui as UiLang);
   const lg = t.closest('[data-lang]') as HTMLElement | null;
   if (lg) setLang(lg.dataset.lang as Lang);
   const tb = t.closest('[data-tab]') as HTMLElement | null;
@@ -767,6 +797,7 @@ dragSplit($('#split-h'), (_dx, dy) => {
 
 // ---------------------------------------------------------------- init
 document.querySelectorAll<HTMLElement>('[data-lang]').forEach((b) => b.classList.toggle('active', b.dataset.lang === lang));
+applyUiLang();
 $('#src-name').textContent = fileName();
 renderLessonList();
 renderLesson();

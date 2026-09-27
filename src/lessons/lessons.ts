@@ -1,5 +1,6 @@
 // Step-by-step FPGA course. Lesson text is Persian (RTL); code and identifiers stay in English.
 import type { XdcGroup } from '../boards';
+import { truth } from './helpers';
 
 export interface Lesson {
   id: string;
@@ -60,11 +61,6 @@ const HEX_CASE_VHDL = `        case x is
             when "1110" => seg <= "0000110";
             when others => seg <= "0001110"; -- F
         end case;`;
-
-const truth = (head: string[], rows: (string | number)[][]) =>
-  `<table class="truth"><thead><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows
-    .map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`)
-    .join('')}</tbody></table>`;
 
 export const LESSONS: Lesson[] = [
   {

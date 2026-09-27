@@ -79,7 +79,7 @@ button {
   width: 16px;
   height: 16px;
   border-radius: 3px;
-  background: radial-gradient(circle at 50% 50%, #111 0 35%, transparent 36%), #b3202a;
+  background: radial-gradient(circle at 50% 50%, #111 0 35%, transparent 36%), #1f7a3e;
   display: inline-block;
 }
 .project {
@@ -809,4 +809,16 @@ dialog button {
   .lesson {
     padding: 14px 16px 30px;
   }
+}
+
+.lesson[lang='en'] {
+  font: 15px/1.7 var(--ui);
+}
+.lesson[lang='en'] .note {
+  border-right: 0;
+  border-left: 4px solid #e6a23c;
+}
+.lesson-item[dir='ltr'] {
+  text-align: left;
+  font-family: var(--ui);
 }

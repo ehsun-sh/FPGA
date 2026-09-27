@@ -182,3 +182,14 @@ describe('board definitions', () => {
     });
   }
 });
+
+describe('translations', () => {
+  it('every lesson has English text', async () => {
+    const { EN } = await import('../src/lessons/en');
+    for (const l of ALL_LESSONS) {
+      const e = EN[l.id];
+      expect(e, l.id).toBeTruthy();
+      expect(!!e.exercise, `${l.id} exercise`).toBe(!!l.exercise);
+    }
+  });
+});
