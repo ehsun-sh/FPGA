@@ -184,21 +184,21 @@ export class SerialConsole {
 
   show() {
     this.el.hidden = false;
-    this.attach();
     this.syncControls();
+    this.fresh = []; // render() draws everything received while the window was closed
     this.render();
+    this.updateStats();
     (this.el.querySelector('.serial-send input') as HTMLInputElement).focus();
   }
 
   hide() {
-    this.el.hidden = true;
-    this.runner.setProbe('serial', null);
+    this.el.hidden = true; // keep listening, so nothing the design sends meanwhile is lost
   }
 
   setDesign(mapping: Mapping | null) {
     this.mapping = mapping;
     this.stream.reset();
-    if (this.open) this.attach();
+    this.attach();
     this.updateStats();
   }
 
@@ -225,8 +225,8 @@ export class SerialConsole {
   }
 
   frame() {
-    if (!this.open) return;
     this.stream.advance(this.runner.now);
+    if (!this.open) return;
     if (this.fresh.length) {
       this.append(this.fresh);
       this.fresh = [];
