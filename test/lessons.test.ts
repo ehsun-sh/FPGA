@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOARDS, DEFAULT_BOARD } from '../src/boards';
+import { BoardHarness } from '../src/grade/harness';
 import { mapPorts } from '../src/boards/mapping';
 import { compileDesign, synthesize } from '../src/hdl';
 import { Acquisition, Recorder } from '../src/la/capture';
@@ -423,6 +424,17 @@ const checks: Record<string, (h: Harness) => void> = {
     });
     expect(decodeI2c(tr, { scl: 0, sda: 1 }).map((x) => x.short).join(' ')).toBe('S 0x49 W N P');
     expect(h.led() >> 15).toBe(1);
+  },
+  vga(h) {
+    const bh = new BoardHarness(h.d, DEFAULT_BOARD.masterXdc({ clk: true, sw: true, vga: true }), DEFAULT_BOARD);
+    let m = bh.vga(1)!;
+    expect(m.state(bh.cycles)).toBe('ok');
+    expect(m.mode.w).toBe(640);
+    expect(Math.round(m.refreshHz)).toBe(60);
+    expect([0, 100, 200, 300, 350, 450, 500, 600].map((x) => m.pixel(x, 240))).toEqual([0xfff, 0xff0, 0x0ff, 0x0f0, 0xf0f, 0xf00, 0x00f, 0x000]);
+    bh.sw(1);
+    m = bh.vga(1)!;
+    expect([m.pixel(0, 0), m.pixel(32, 0), m.pixel(32, 32), m.pixel(639, 479)]).toEqual([0, 0xfff, 0, 0xfff]);
   },
   playground(h) {
     h.sw(0x00ff);

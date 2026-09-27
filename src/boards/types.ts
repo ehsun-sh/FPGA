@@ -15,7 +15,9 @@ export type Device =
   // a general-purpose header pin or signal line with no on-board indicator (Pmod, USB-UART, ...)
   | { kind: 'pin'; name: string }
   // USB-UART bridge line; dir is seen from the FPGA ('in' = PC to FPGA, idles high)
-  | { kind: 'uart'; name: string; dir: 'in' | 'out' };
+  | { kind: 'uart'; name: string; dir: 'in' | 'out' }
+  // VGA connector: 4-bit colour channels (bit 0 = LSB) and the two sync lines
+  | { kind: 'vga'; name: string; line: 'r' | 'g' | 'b' | 'hs' | 'vs'; bit: number };
 
 export interface BoardOutputs {
   led: number[]; // brightness 0..1 per user LED
@@ -36,9 +38,15 @@ export interface BoardView {
   topView(): void;
   // show logic-analyzer probe clips on header pins (package pin names), if the view supports it
   setProbes?(probes: { pin: string; color: string }[]): void;
+  // show (canvas) or hide (null) a VGA monitor plugged into the board; the canvas is its screen
+  setMonitor?(screen: HTMLCanvasElement | null): void;
+  // the screen canvas changed
+  refreshMonitor?(): void;
+  // the monitor's power LED: green with a signal, amber without
+  updateMonitor?(signal: boolean): void;
 }
 
-export type XdcGroup = 'clk' | 'sw' | 'led' | 'rgb' | 'seg' | 'btn' | 'reset' | 'pmod' | 'uart';
+export type XdcGroup = 'clk' | 'sw' | 'led' | 'rgb' | 'seg' | 'btn' | 'reset' | 'pmod' | 'uart' | 'vga';
 
 export interface BoardDef {
   id: string;

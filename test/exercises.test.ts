@@ -231,6 +231,13 @@ endmodule`,
         "i2c_device #(.ADDR(7'h49)) sensor2 (.clk(CLK100MHZ), .scl(scl), .sda(sda), .sda_low(d2_low), .data(stored2));\n\n    assign JB  = {sda, scl};",
       ],
     ]),
+  vga: () =>
+    edit('vga', [
+      [
+        'wire [11:0] rgb   = SW[0] ? check : bar;',
+        'wire        sq    = (x >= 270) && (x < 370) && (y >= 190) && (y < 290);\n    wire [11:0] rgb   = sq ? SW[15:4] : SW[0] ? check : bar;',
+      ],
+    ]),
 };
 
 // the testbench exercise: reset in the middle of the run and check the counter

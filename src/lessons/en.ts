@@ -601,6 +601,29 @@ ${truth(
     tryIt: `<p>Turn on SW7 (duty = 128, i.e. 50%) and then try SW0 to SW6: LD0 and LD16's red glow at different strengths. Add green with SW15..SW8 to make orange or yellow.</p>`,
     exercise: `<p>Build a "breathing LED": a slow counter raises the duty value gradually and then lowers it again.</p>`,
   },
+  vga: {
+    title: 'VGA video on a monitor',
+    summary: 'Build the VGA sync signals from two counters and draw colour bars on a 640×480 monitor.',
+    body: `
+<p>The blue VGA connector sends five signals to a monitor: three colour signals (<code>VGA_R</code>, <code>VGA_G</code> and <code>VGA_B</code>, 4 bits each, so 4096 colours) and two sync signals: <b>HS</b> (horizontal) and <b>VS</b> (vertical). The monitor draws the picture like a pen, line by line from left to right. The FPGA must send the colour of every point (pixel) at the exact moment the pen reaches it. There is no picture memory; the colour is computed on the spot.</p>
+<h3>640×480 at 60 Hz timing</h3>
+<p>The pixel clock is about <b>25 MHz</b>. We get it from 100 MHz with an enable pulse every 4 clocks. Every line lasts 800 pixels and every frame 525 lines:</p>
+<table class="truth"><tr><th></th><th>Visible</th><th>Front porch</th><th>Sync pulse</th><th>Back porch</th><th>Total</th></tr>
+<tr><td>Horizontal (pixels)</td><td>640</td><td>16</td><td>96</td><td>48</td><td>800</td></tr>
+<tr><td>Vertical (lines)</td><td>480</td><td>10</td><td>2</td><td>33</td><td>525</td></tr></table>
+<p>So a line takes 32 µs and a frame 16.8 ms (60 frames per second). In this mode the sync pulses are <b>active-low</b>. During the porches and the sync pulses the colour must be black (zero), because the monitor measures the black level then.</p>
+<h3>Two counters</h3>
+<ul>
+  <li><code>x</code> goes up by one every pixel and wraps from 799 to 0.</li>
+  <li><code>y</code> goes up by one at the end of every line and wraps from 524 to 0.</li>
+  <li><code>hsync</code> is 0 while <code>656 ≤ x &lt; 752</code>, and <code>vsync</code> is 0 while <code>490 ≤ y &lt; 492</code>.</li>
+  <li><code>active</code> means <code>x &lt; 640</code> and <code>y &lt; 480</code>. There the colour of pixel <code>(x, y)</code> is sent.</li>
+</ul>
+<p>After that, drawing is only a combinational circuit that turns <code>x</code> and <code>y</code> into a colour. This lesson draws eight 80-pixel colour bars, and SW0 shows a checkerboard (<code>x[5] ^ y[5]</code> changes every 32 pixels).</p>
+<div class="note">The virtual monitor works like a real one: it finds the video mode from the spacing of the HS and VS pulses. If the timing is wrong it shows <b>No signal</b> or <b>Out of range</b>, and wrong porches shift the picture.</div>`,
+    tryIt: `<p>Press <span class="kbd">▶ Run</span>. A monitor with a VGA cable appears next to the board and shows the colour bars. For a bigger picture press <span class="kbd">🖥 VGA Monitor</span> in the toolbar. Turn on SW0 to see the checkerboard. One whole frame is about 1.7 million clocks, so on a slow browser you see the picture being drawn line by line.</p>
+<p>You can also look at the HS pulses in the logic analyzer and measure their spacing (it should be 32 µs).</p>`,
+  },
 };
 
 // Lesson-page labels

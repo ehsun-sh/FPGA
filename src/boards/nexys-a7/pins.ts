@@ -6,6 +6,11 @@ import type { Device, XdcGroup } from '../types';
 const SW = ['J15', 'L16', 'M13', 'R15', 'R17', 'T18', 'U18', 'R13', 'T8', 'U8', 'R16', 'T13', 'H6', 'U12', 'U11', 'V10'];
 const LED = ['H17', 'K15', 'J13', 'N14', 'R18', 'V17', 'U17', 'U16', 'V16', 'T15', 'U14', 'T16', 'V15', 'V14', 'V12', 'V11'];
 const AN = ['J17', 'J18', 'T9', 'J14', 'P14', 'T14', 'K2', 'U13'];
+const VGA: Record<'r' | 'g' | 'b', string[]> = {
+  r: ['A3', 'B4', 'C5', 'A4'],
+  g: ['C6', 'A5', 'B6', 'A6'],
+  b: ['B7', 'C7', 'D7', 'D8'],
+};
 // Pmod signal pins 1-4 and 7-10 (5/11 = GND, 6/12 = VCC)
 const PMOD_NUMS = [1, 2, 3, 4, 7, 8, 9, 10];
 const PMOD: Record<string, string[]> = {
@@ -46,6 +51,9 @@ export const PINS: Record<string, Device> = {
   C4: { kind: 'uart', name: 'UART_TXD_IN', dir: 'in' },
 };
 for (const [h, pins] of Object.entries(PMOD)) pins.forEach((p, i) => (PINS[p] = { kind: 'pin', name: `${h}${PMOD_NUMS[i]}` }));
+for (const [c, pins] of Object.entries(VGA)) pins.forEach((p, i) => (PINS[p] = { kind: 'vga', name: `VGA_${c.toUpperCase()}[${i}]`, line: c as 'r' | 'g' | 'b', bit: i }));
+PINS.B11 = { kind: 'vga', name: 'VGA_HS', line: 'hs', bit: 0 };
+PINS.B12 = { kind: 'vga', name: 'VGA_VS', line: 'vs', bit: 0 };
 SW.forEach((p, i) => (PINS[p] = { kind: 'sw', index: i }));
 LED.forEach((p, i) => (PINS[p] = { kind: 'led', index: i }));
 AN.forEach((p, i) => (PINS[p] = { kind: 'an', index: i }));
@@ -77,6 +85,9 @@ export const DEFAULT_NAMES: Record<string, string> = {
   UART_TXD_IN: 'C4',
 };
 for (const [h, pins] of Object.entries(PMOD)) pins.forEach((p, i) => (DEFAULT_NAMES[`${h}[${PMOD_NUMS[i]}]`] = p));
+for (const [c, pins] of Object.entries(VGA)) pins.forEach((p, i) => (DEFAULT_NAMES[`VGA_${c.toUpperCase()}[${i}]`] = p));
+DEFAULT_NAMES.VGA_HS = 'B11';
+DEFAULT_NAMES.VGA_VS = 'B12';
 SW.forEach((p, i) => (DEFAULT_NAMES[`SW[${i}]`] = p));
 LED.forEach((p, i) => (DEFAULT_NAMES[`LED[${i}]`] = p));
 AN.forEach((p, i) => (DEFAULT_NAMES[`AN[${i}]`] = p));
@@ -125,6 +136,11 @@ export function masterXdc(enabled: Partial<Record<XdcGroup, boolean>>): string {
       const [n, p] = x.split(':');
       return c(enabled.btn, line(n, p));
     }),
+    '',
+    '## VGA Connector',
+    ...Object.entries(VGA).flatMap(([col, pins]) => pins.map((p, i) => c(enabled.vga, line(`VGA_${col.toUpperCase()}[${i}]`, p)))),
+    c(enabled.vga, line('VGA_HS', 'B11')),
+    c(enabled.vga, line('VGA_VS', 'B12')),
     '',
     ...Object.entries(PMOD).flatMap(([h, pins]) => [`## Pmod Header ${h}`, ...pins.map((p, i) => c(enabled.pmod, line(`${h}[${PMOD_NUMS[i]}]`, p))), '']),
     '## USB-RS232 Interface',

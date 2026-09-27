@@ -5,6 +5,7 @@ import { mapPorts, type Binding, type Mapping } from '../boards/mapping';
 import { compileDesign, type CompiledSim, type Design } from '../hdl';
 import { Recorder, type Trace } from '../la/capture';
 import { decodeUart } from '../la/decode';
+import { hTotal, vgaTap, vTotal, VgaMonitor } from '../vga/monitor';
 
 // active-low segment patterns {g..a} for 0..F
 export const HEX7 = [0x40, 0x79, 0x24, 0x30, 0x19, 0x12, 0x02, 0x78, 0x00, 0x10, 0x08, 0x03, 0x46, 0x21, 0x06, 0x0e];
@@ -158,6 +159,35 @@ export class BoardHarness {
       r.sample(++t, this.sim.v);
     }
     return r.extract(0, t);
+  }
+
+  // watches the VGA connector for `frames` whole frames (after one frame to lock on) and returns the monitor
+  vga(frames = 1): VgaMonitor | null {
+    const tap = vgaTap(this.map.bindings);
+    if (!tap || !this.clocked) return null;
+    const mon = new VgaMonitor(this.board.clockHz);
+    let base = 0;
+    const feed = (t: number) => {
+      const l = tap.read(this.sim.v);
+      mon.feed(t, l.hs, l.vs, l.color);
+    };
+    const old = this.sim;
+    const sim = compileDesign(this.design, { clock: this.map.clock, probe: tap.sigs, onProbe: (c) => feed(base + c + 1) });
+    sim.v.set(old.v);
+    old.mems.forEach((m, i) => sim.mems[i].set(m));
+    sim.sync();
+    this.sim = sim;
+    const l = tap.read(sim.v);
+    mon.reset(0, l.hs, l.vs, l.color);
+    const frame = Math.round((this.board.clockHz / 25.175e6) * hTotal(mon.mode) * vTotal(mon.mode));
+    const want = mon.frames + frames + 1;
+    const step = 1 << 16;
+    const limit = frame * (frames + 3);
+    while (mon.frames < want && base < limit) {
+      this.run(step);
+      base += step;
+    }
+    return mon;
   }
 
   // sends bytes into a pin as UART 8N1

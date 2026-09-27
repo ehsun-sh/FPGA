@@ -20,6 +20,9 @@ and watch it run on an interactive 3D Digilent Nexys A7-100T on the right.
   `` `timescale `` in Verilog, and `wait for` / `wait until` / `wait on`, `after`, `report` / `assert` and
   `std.env.finish` in VHDL. An event-driven scheduler runs them, and the waveform viewer shows every signal. It has a
   scope and object browser, run for / run all / restart, zoom, pan, a cursor and a radix per signal.
+- **VGA output and a virtual monitor**: a design that drives the VGA connector (`VGA_R/G/B[3:0]`, `VGA_HS`, `VGA_VS`)
+  gets a monitor next to the 3D board, plus a bigger **VGA Monitor** window. Like a real monitor it measures the sync
+  timing, picks the mode (640×480, 800×600 or 1024×768 at 60 Hz) and shows "No signal" or "Out of range" otherwise.
 - **Exercises with automatic checking**: every lesson ends with an exercise and a “Check my solution” button. The
   checker maps the student's design onto a virtual board, flips switches and buttons, sends UART bytes and reads the
   LEDs, the seven-segment display and pins (UART, SPI and I²C are decoded). Time-heavy exercises ask for a
@@ -42,7 +45,7 @@ and watch it run on an interactive 3D Digilent Nexys A7-100T on the right.
   4. FSM: traffic light, button debouncing (with an optional contact-bounce simulation)
   5. FSMD: binary to BCD (double dabble)
   6. Memory: synchronous RAM
-  7. I/O: PWM, UART transmitter with the logic analyzer, UART receiver with the serial console, SPI master and slave, I²C write and read back (PS/2, VGA and a soft-core processor are planned)
+  7. I/O: PWM, UART transmitter with the logic analyzer, UART receiver with the serial console, SPI master and slave, I²C write and read back, VGA colour bars on the monitor (PS/2 and a soft-core processor are planned)
   8. Playground
 
 Real Vivado cannot run in a browser; this project imitates its look and workflow. The lesson code and XDC files are
@@ -67,6 +70,7 @@ npm run build    # static site in dist/
 | `src/sim/runner.ts` | real-time driver: clocking, inputs, LED/segment brightness (persistence of vision) |
 | `src/sim/tbsim.ts`, `src/sim/tbgen.ts` | behavioral simulation of testbenches (event scheduler, messages) and testbench generator |
 | `src/wave/` | waveform viewer |
+| `src/vga/` | VGA monitor: sync decoding and picture (`monitor.ts`), the screen and its window (`screen.ts`) |
 | `src/grade/` | exercises and their checkers (`exercises.ts`), the virtual board they drive (`harness.ts`) |
 | `src/la/` | logic analyzer: `capture.ts` (recording, trigger), `decode.ts` (protocol decoders), `window.ts` (UI) |
 | `src/serial/` | serial console: live UART decoder and terminal window |

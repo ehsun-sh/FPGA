@@ -11,6 +11,7 @@ import { Runner } from './sim/runner';
 import { generateTestbench } from './sim/tbgen';
 import { formatTime, TbSim } from './sim/tbsim';
 import { WaveView } from './wave/view';
+import { VgaScreen } from './vga/screen';
 import { EXERCISES } from './grade/exercises';
 import { gradeExercise } from './grade/grade';
 import { CodeEditor } from './ui/editor';
@@ -84,6 +85,7 @@ app.innerHTML = `
   <div class="menu"><button>Tools</button><div class="dropdown">
     <button data-act="la">Logic Analyzer <kbd>Ctrl+L</kbd></button>
     <button data-act="serial">Serial Console <kbd>Ctrl+M</kbd></button>
+    <button data-act="vga">VGA Monitor</button>
   </div></div>
   <div class="menu"><button>Help</button><div class="dropdown">
     <button data-act="about">About FPGA Lab</button>
@@ -97,6 +99,7 @@ app.innerHTML = `
   <button class="tb" data-act="sim" id="sim-btn" title="Run the testbench and show the waveforms (Shift+F6)"><span class="ico">∿</span> Simulate</button>
   <button class="tb" data-act="la" id="la-btn" title="Open the logic analyzer (Ctrl+L)"><span class="ico">⎍</span> Logic Analyzer</button>
   <button class="tb" data-act="serial" id="serial-btn" title="Open the serial console on the USB-UART (Ctrl+M)"><span class="ico">⌨</span> Serial Console</button>
+  <button class="tb" data-act="vga" id="vga-btn" title="Show the picture on the VGA connector in a bigger window"><span class="ico">🖥</span> VGA Monitor</button>
   <span class="sep"></span>
   <div class="seg-ctl" role="group" aria-label="Site language">
     <button data-ui="fa">فارسی</button><button data-ui="en">English</button>
@@ -278,6 +281,7 @@ try {
   /* keep defaults */
 }
 serial.onSettings = (st) => store.set('serial', JSON.stringify(st));
+const vga = new VgaScreen(document.body, boardDef, board, runner);
 function loadLa() {
   let cfg: LaConfig | null = null;
   try {
@@ -441,6 +445,8 @@ function doProgram(d: Design, map: Mapping) {
   }
   la.setDesign(d, map);
   serial.setDesign(map);
+  vga.setDesign(map);
+  if (vga.connected) log('INFO: VGA monitor connected to the VGA port', 'info');
   log(`INFO: [Labtools 27-3164] End of startup status: HIGH — device is running`, 'ok');
   $('#hw-dev').textContent = `${hwDev} (Programmed)`;
   $('#hw-dev').classList.add('ok');
@@ -556,6 +562,7 @@ function stop() {
   runner.stop();
   la.setDesign(null, null);
   serial.setDesign(null);
+  vga.setDesign(null);
   board.setOutputs({ led: [], rgb: [], seg: [], done: false });
   $('#hw-dev').textContent = `${hwDev} (not programmed)`;
   $('#hw-dev').classList.remove('ok');
@@ -832,6 +839,10 @@ function act(name: string) {
       }
       document.querySelector('#serial-btn')?.classList.toggle('active', serial.open);
       break;
+    case 'vga':
+      if (vga.open) vga.hide();
+      else vga.show();
+      break;
     case 'reset':
       if (runner.sim) {
         runner.reset({ switches: board.switches, pressed: (b) => board.isPressed(b) });
@@ -998,11 +1009,14 @@ board.onButton = (b, down) => runner.setButton(b, down);
 let statTimer = 0;
 const laBtn = $('#la-btn');
 const serialBtn = $('#serial-btn');
+const vgaBtn = $('#vga-btn');
 board.onFrame = (dt) => {
   const out = runner.frame(dt);
   board.setOutputs(out);
   la.frame();
   serial.frame();
+  vga.frame();
+  vgaBtn.classList.toggle('active', vga.open);
   laBtn.classList.toggle('active', la.open);
   serialBtn.classList.toggle('active', serial.open);
   statTimer += dt;

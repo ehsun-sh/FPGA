@@ -1484,3 +1484,36 @@ dialog button {
   font-weight: 400;
   opacity: 0.8;
 }
+
+/* VGA monitor window */
+.la-win.vga-win {
+  left: auto;
+  right: 16px;
+  top: 110px;
+  bottom: auto;
+  width: min(680px, calc(100vw - 32px));
+  height: auto;
+  min-width: 320px;
+  min-height: 0;
+  aspect-ratio: auto;
+  z-index: 52;
+}
+.vga-body {
+  flex: 1;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+}
+.vga-body canvas {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  image-rendering: pixelated;
+  border: 10px solid #16181c;
+  border-radius: 6px;
+}
+.la-ico.vga {
+  background: linear-gradient(135deg, #2d56b3, #5ad1f0);
+}

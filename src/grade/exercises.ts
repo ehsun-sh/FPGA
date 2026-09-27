@@ -557,6 +557,25 @@ export const EXERCISES: Record<string, Exercise> = {
       t.ok(a === 'S 0x48 W A 0x01 A 0x5A A P S 0x48 R A 0x5A N P', `SW14 خاموش: دستگاه 0x48 هنوز کار می‌کند (${a})`, `SW14 off: device 0x48 still works (${a})`);
     },
   },
+  vga: {
+    fa: `<p>یک مربع ۱۰۰×۱۰۰ پیکسلی وسط صفحه روی نوارهای رنگی بکشید: ستون‌های <b>270 تا 369</b> و خط‌های <b>190 تا 289</b>. رنگ مربع را کلیدها تعیین می‌کنند: R = SW15..SW12، G = SW11..SW8 و B = SW7..SW4. بیرون مربع نوارهای رنگی مثل قبل دیده می‌شوند.</p>`,
+    en: `<p>Draw a 100×100-pixel square in the middle of the screen, over the colour bars: columns <b>270 to 369</b> and lines <b>190 to 289</b>. The switches set its colour: R = SW15..SW12, G = SW11..SW8 and B = SW7..SW4. Outside the square the colour bars stay as they are.</p>`,
+    check(h, t) {
+      needDevice(h, t, 'vga', 'VGA به پایه‌ها وصل است (خطوط VGA را در XDC فعال کنید)', 'VGA is connected to pins (uncomment the VGA lines in the XDC)');
+      h.sw(0xf80 << 4);
+      const m = h.vga(1);
+      t.need(!!m && m.state(h.cycles) === 'ok', 'مانیتور سیگنال 640×480 @ 60 Hz می‌گیرد', 'the monitor gets a 640×480 @ 60 Hz signal');
+      const px = (x: number, y: number) => m!.pixel(x, y).toString(16).toUpperCase().padStart(3, '0');
+      const inside = [px(270, 190), px(369, 190), px(270, 289), px(369, 289), px(320, 240)];
+      t.ok(inside.every((c) => c === 'F80'), `داخل مربع رنگ کلیدها (F80) است (شما: ${[...new Set(inside)].join(', ')})`, `inside the square the colour is the switches' (F80) (yours: ${[...new Set(inside)].join(', ')})`);
+      const outside = [px(269, 240), px(370, 240), px(320, 189), px(320, 290)];
+      const want = ['0F0', 'F0F', 'F0F', 'F0F'];
+      t.ok(outside.every((c, i) => c === want[i]), 'بیرون مربع نوارهای رنگی دست نخورده‌اند', 'outside the square the colour bars are untouched');
+      h.sw(0x00f << 4);
+      const m2 = h.vga(1);
+      t.ok(!!m2 && m2.pixel(320, 240) === 0x00f, 'رنگ مربع با کلیدها عوض می‌شود (00F)', 'the square changes colour with the switches (00F)');
+    },
+  },
 };
 
 // types "text" into UART_TXD_IN (C4) and decodes what comes back on UART_RXD_OUT (D4) at the same time

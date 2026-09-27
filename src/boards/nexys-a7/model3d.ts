@@ -285,12 +285,92 @@ export class NexysA7Model implements BoardView {
     this.scene.add(g);
   }
 
+  // VGA monitor behind the board, with a cable to the VGA connector
+  private monitor: { group: THREE.Group; tex: THREE.CanvasTexture; led: THREE.MeshStandardMaterial; signal: boolean | null } | null = null;
+  setMonitor(screen: HTMLCanvasElement | null) {
+    if (this.monitor && (!screen || this.monitor.tex.image !== screen)) {
+      this.scene.remove(this.monitor.group);
+      this.monitor.group.traverse((o) => {
+        if (o instanceof THREE.Mesh) {
+          o.geometry.dispose();
+          (o.material as THREE.Material).dispose();
+        }
+      });
+      this.monitor.tex.dispose();
+      this.monitor = null;
+    }
+    if (screen && !this.monitor) this.buildMonitor(screen);
+    if (!this.userMoved) {
+      if (this.view === 'top') this.topView();
+      else this.resetView();
+    }
+  }
+
+  refreshMonitor() {
+    if (this.monitor) this.monitor.tex.needsUpdate = true;
+  }
+
+  updateMonitor(signal: boolean) {
+    const m = this.monitor;
+    if (!m || m.signal === signal) return;
+    m.signal = signal;
+    m.led.emissive.set(signal ? '#27d65a' : '#ffae1a');
+  }
+
+  private buildMonitor(screen: HTMLCanvasElement) {
+    const g = new THREE.Group();
+    const plastic = new THREE.MeshStandardMaterial({ color: '#16181c', roughness: 0.55, metalness: 0.1 });
+    const dark = new THREE.MeshStandardMaterial({ color: '#0b0c0e', roughness: 0.4 });
+    const tex = new THREE.CanvasTexture(screen);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    const MZ = -9.6; // screen plane
+    const SW_ = 9.6; // screen size (4:3)
+    const SH = 7.2;
+    const BOT = 1.6; // bottom of the screen
+    const DESK = -0.62;
+    // stand: base plate and neck
+    this.box(4.2, 0.18, 2.6, plastic, 0, DESK, MZ - 0.6, g);
+    this.box(1.1, BOT - DESK - 0.2, 0.5, plastic, 0, DESK + 0.18, MZ - 0.75, g);
+    // housing and bezel
+    this.box(SW_ + 0.7, SH + 0.8, 0.5, plastic, 0, BOT - 0.55, MZ - 0.3, g);
+    this.box(SW_ + 0.7, 0.45, 0.12, dark, 0, BOT - 0.55, MZ, g);
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(SW_, SH), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
+    scr.position.set(0, BOT + SH / 2 - 0.05, MZ - 0.04);
+    g.add(scr);
+    // power LED
+    const led = new THREE.MeshStandardMaterial({ color: '#222', emissive: '#ffae1a', emissiveIntensity: 2.5 });
+    const ledM = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 8), led);
+    ledM.position.set(SW_ / 2 - 0.2, BOT - 0.33, MZ + 0.08);
+    g.add(ledM);
+    // cable from the board's VGA connector down to the desk and up into the monitor
+    const cableMat = new THREE.MeshStandardMaterial({ color: '#1f2a44', roughness: 0.6 });
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-0.9, TOP + 0.25, -5.55),
+      new THREE.Vector3(-0.9, TOP + 0.1, -6.3),
+      new THREE.Vector3(-1.6, DESK + 0.1, -7.4),
+      new THREE.Vector3(-2.2, DESK + 0.1, MZ - 0.9),
+      new THREE.Vector3(-2.3, BOT + 0.6, MZ - 0.62),
+    ]);
+    const cable = new THREE.Mesh(new THREE.TubeGeometry(curve, 48, 0.09, 8), cableMat);
+    cable.castShadow = true;
+    g.add(cable);
+    this.box(0.9, 0.45, 0.35, new THREE.MeshStandardMaterial({ color: '#2d56b3', roughness: 0.5 }), -0.9, TOP, -5.72, g);
+    this.scene.add(g);
+    this.monitor = { group: g, tex, led, signal: null };
+  }
+
   resetView() {
     this.view = 'persp';
     this.userMoved = false;
     const k = this.fit();
-    this.camera.position.set(0, 14.5 * k, 11.5 * k);
-    this.controls.target.set(0, 0, 0.6);
+    if (this.monitor) {
+      this.camera.position.set(0, 13 * k, 20 * k);
+      this.controls.target.set(0, 2.4, -2.5);
+    } else {
+      this.camera.position.set(0, 14.5 * k, 11.5 * k);
+      this.controls.target.set(0, 0, 0.6);
+    }
     this.controls.update();
   }
 

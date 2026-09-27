@@ -3,6 +3,7 @@
 import { ADVANCED } from './advanced';
 import { LESSONS, PLAYGROUND, type Lesson } from './lessons';
 import { TESTBENCH_LESSON } from './sim';
+import { VGA_LESSON } from './vga';
 
 type Text = { fa: string; en: string };
 
@@ -12,7 +13,7 @@ export interface Chapter {
   soon?: Text[]; // planned lessons, shown greyed out
 }
 
-const pool = new Map([...LESSONS, ...ADVANCED, TESTBENCH_LESSON, PLAYGROUND].map((l) => [l.id, l]));
+const pool = new Map([...LESSONS, ...ADVANCED, TESTBENCH_LESSON, VGA_LESSON, PLAYGROUND].map((l) => [l.id, l]));
 const pick = (...ids: string[]) =>
   ids.map((id) => {
     const l = pool.get(id);
@@ -29,10 +30,9 @@ export const CHAPTERS: Chapter[] = [
   { title: { fa: 'حافظه', en: 'Memory' }, lessons: pick('ram') },
   {
     title: { fa: 'ورودی/خروجی و ارتباط با دنیای بیرون', en: 'I/O and peripherals' },
-    lessons: pick('pwm', 'uart', 'uart_rx', 'spi', 'i2c'),
+    lessons: pick('pwm', 'uart', 'uart_rx', 'spi', 'i2c', 'vga'),
     soon: [
       { fa: 'صفحه‌کلید PS/2', en: 'PS/2 keyboard' },
-      { fa: 'تصویر VGA', en: 'VGA video' },
       { fa: 'پردازنده نرم‌افزاری (Soft-core)', en: 'Soft-core processor' },
     ],
   },
