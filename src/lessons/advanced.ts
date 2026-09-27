@@ -29,6 +29,118 @@ ${HEX_CASE_VHDL}
 end rtl;
 `;
 
+const UART_TX_V = `module uart_tx #(parameter CLKS_PER_BIT = 868) (   // 100 MHz / 115200
+    input  wire       clk,
+    input  wire       start,       // one-clock pulse: send \`data\`
+    input  wire [7:0] data,
+    output reg        tx = 1'b1,   // idle high
+    output wire       busy
+);
+    localparam [1:0] IDLE = 2'd0, START = 2'd1, DATA = 2'd2, STOP = 2'd3;
+    reg  [1:0]  state = IDLE;
+    reg  [15:0] cnt   = 0;         // clocks within the current bit
+    reg  [2:0]  n     = 0;         // data bit number
+    reg  [7:0]  sh    = 0;         // shift register, LSB goes out first
+    wire        bit_done = (cnt == CLKS_PER_BIT - 1);
+
+    always @(posedge clk) begin
+        cnt <= (state == IDLE || bit_done) ? 16'd0 : cnt + 1;
+        case (state)
+            IDLE: begin
+                tx <= 1'b1;
+                if (start) begin sh <= data; state <= START; end
+            end
+            START: begin
+                tx <= 1'b0;
+                if (bit_done) begin n <= 0; state <= DATA; end
+            end
+            DATA: begin
+                tx <= sh[0];
+                if (bit_done) begin
+                    sh <= sh >> 1;
+                    if (n == 3'd7) state <= STOP;
+                    else           n <= n + 1;
+                end
+            end
+            default: begin             // STOP
+                tx <= 1'b1;
+                if (bit_done) state <= IDLE;
+            end
+        endcase
+    end
+
+    assign busy = (state != IDLE);
+endmodule
+`;
+
+const UART_TX_VHDL = `-- UART transmitter (115200 baud, 8N1)
+entity uart_tx is
+    generic (CLKS_PER_BIT : integer := 868);   -- 100 MHz / 115200
+    port (
+        clk   : in  std_logic;
+        start : in  std_logic;                     -- one-clock pulse: send data
+        data  : in  std_logic_vector(7 downto 0);
+        tx    : out std_logic;                     -- idle high
+        busy  : out std_logic
+    );
+end uart_tx;
+
+architecture rtl of uart_tx is
+    type state_t is (IDLE, START_BIT, DATA_BITS, STOP_BIT);
+    signal state    : state_t := IDLE;
+    signal cnt      : unsigned(15 downto 0) := (others => '0');   -- clocks within the current bit
+    signal n        : unsigned(2 downto 0) := (others => '0');    -- data bit number
+    signal sh       : std_logic_vector(7 downto 0) := (others => '0');
+    signal txr      : std_logic := '1';
+    signal bit_done : std_logic;
+begin
+    bit_done <= '1' when cnt = CLKS_PER_BIT - 1 else '0';
+
+    process(clk)
+    begin
+        if rising_edge(clk) then
+            if state = IDLE or bit_done = '1' then
+                cnt <= (others => '0');
+            else
+                cnt <= cnt + 1;
+            end if;
+            case state is
+                when IDLE =>
+                    txr <= '1';
+                    if start = '1' then
+                        sh    <= data;
+                        state <= START_BIT;
+                    end if;
+                when START_BIT =>
+                    txr <= '0';
+                    if bit_done = '1' then
+                        n     <= (others => '0');
+                        state <= DATA_BITS;
+                    end if;
+                when DATA_BITS =>
+                    txr <= sh(0);                           -- LSB first
+                    if bit_done = '1' then
+                        sh <= '0' & sh(7 downto 1);
+                        if n = 7 then
+                            state <= STOP_BIT;
+                        else
+                            n <= n + 1;
+                        end if;
+                    end if;
+                when STOP_BIT =>
+                    txr <= '1';
+                    if bit_done = '1' then
+                        state <= IDLE;
+                    end if;
+            end case;
+        end if;
+    end process;
+
+    tx   <= txr;
+    busy <= '0' when state = IDLE else '1';
+end rtl;
+`;
+
 export const ADVANCED: Lesson[] = [
   // ------------------------------------------------------------ chapter 2: RT-level combinational
   {
@@ -1196,49 +1308,7 @@ end rtl;
 </ul>
 <p class="note">💡 تنظیمات Logic Analyzer برای این درس آماده است: کانال TX روی پایه D4، Trigger روی لبه پایین‌رونده و دیکودر UART با 115200 baud.</p>`,
     verilog: `// UART transmitter (115200 baud, 8N1) sending "Hello FPGA!" on the USB-UART line
-module uart_tx #(parameter CLKS_PER_BIT = 868) (   // 100 MHz / 115200
-    input  wire       clk,
-    input  wire       start,       // one-clock pulse: send \`data\`
-    input  wire [7:0] data,
-    output reg        tx = 1'b1,   // idle high
-    output wire       busy
-);
-    localparam [1:0] IDLE = 2'd0, START = 2'd1, DATA = 2'd2, STOP = 2'd3;
-    reg  [1:0]  state = IDLE;
-    reg  [15:0] cnt   = 0;         // clocks within the current bit
-    reg  [2:0]  n     = 0;         // data bit number
-    reg  [7:0]  sh    = 0;         // shift register, LSB goes out first
-    wire        bit_done = (cnt == CLKS_PER_BIT - 1);
-
-    always @(posedge clk) begin
-        cnt <= (state == IDLE || bit_done) ? 16'd0 : cnt + 1;
-        case (state)
-            IDLE: begin
-                tx <= 1'b1;
-                if (start) begin sh <= data; state <= START; end
-            end
-            START: begin
-                tx <= 1'b0;
-                if (bit_done) begin n <= 0; state <= DATA; end
-            end
-            DATA: begin
-                tx <= sh[0];
-                if (bit_done) begin
-                    sh <= sh >> 1;
-                    if (n == 3'd7) state <= STOP;
-                    else           n <= n + 1;
-                end
-            end
-            default: begin             // STOP
-                tx <= 1'b1;
-                if (bit_done) state <= IDLE;
-            end
-        endcase
-    end
-
-    assign busy = (state != IDLE);
-endmodule
-
+${UART_TX_V}
 module top (
     input  wire        CLK100MHZ,
     input  wire        BTNC,           // send the message once
@@ -1300,73 +1370,7 @@ module top (
 endmodule
 `,
     vhdl: `${VHDL_NUMERIC}
--- UART transmitter (115200 baud, 8N1)
-entity uart_tx is
-    generic (CLKS_PER_BIT : integer := 868);   -- 100 MHz / 115200
-    port (
-        clk   : in  std_logic;
-        start : in  std_logic;                     -- one-clock pulse: send data
-        data  : in  std_logic_vector(7 downto 0);
-        tx    : out std_logic;                     -- idle high
-        busy  : out std_logic
-    );
-end uart_tx;
-
-architecture rtl of uart_tx is
-    type state_t is (IDLE, START_BIT, DATA_BITS, STOP_BIT);
-    signal state    : state_t := IDLE;
-    signal cnt      : unsigned(15 downto 0) := (others => '0');   -- clocks within the current bit
-    signal n        : unsigned(2 downto 0) := (others => '0');    -- data bit number
-    signal sh       : std_logic_vector(7 downto 0) := (others => '0');
-    signal txr      : std_logic := '1';
-    signal bit_done : std_logic;
-begin
-    bit_done <= '1' when cnt = CLKS_PER_BIT - 1 else '0';
-
-    process(clk)
-    begin
-        if rising_edge(clk) then
-            if state = IDLE or bit_done = '1' then
-                cnt <= (others => '0');
-            else
-                cnt <= cnt + 1;
-            end if;
-            case state is
-                when IDLE =>
-                    txr <= '1';
-                    if start = '1' then
-                        sh    <= data;
-                        state <= START_BIT;
-                    end if;
-                when START_BIT =>
-                    txr <= '0';
-                    if bit_done = '1' then
-                        n     <= (others => '0');
-                        state <= DATA_BITS;
-                    end if;
-                when DATA_BITS =>
-                    txr <= sh(0);                           -- LSB first
-                    if bit_done = '1' then
-                        sh <= '0' & sh(7 downto 1);
-                        if n = 7 then
-                            state <= STOP_BIT;
-                        else
-                            n <= n + 1;
-                        end if;
-                    end if;
-                when STOP_BIT =>
-                    txr <= '1';
-                    if bit_done = '1' then
-                        state <= IDLE;
-                    end if;
-            end case;
-        end if;
-    end process;
-
-    tx   <= txr;
-    busy <= '0' when state = IDLE else '1';
-end rtl;
-
+${UART_TX_VHDL}
 ${VHDL_NUMERIC}
 -- sends "Hello FPGA!" on the USB-UART line
 entity top is
@@ -1451,6 +1455,251 @@ end rtl;
       ],
       decs: [{ type: 'uart', name: 'UART', ch: 0, baud: 115200, bits: 8, parity: 'none', stop: 1 }],
       base: 2e-4,
+      pos: 4,
+      trig: { ch: 0, edge: 'fall' },
+    },
+  },
+
+  {
+    id: 'uart_rx',
+    title: 'گیرنده UART و کنسول سریال',
+    summary: 'دریافت حروفی که در کنسول سریال تایپ می‌کنید و برگرداندن آن‌ها با حروف بزرگ.',
+    body: `
+<p>در درس قبل FPGA فقط می‌فرستاد. حالا جهت مخالف را می‌سازیم: کامپیوتر از طریق پایه <code>UART_TXD_IN</code> (پایه C4) به FPGA بایت می‌فرستد. برای این کار از <b>کنسول سریال</b> استفاده می‌کنیم: همان برنامه‌ای که روی کامپیوتر به درگاه COM برد وصل می‌شود (مثل PuTTY یا Tera Term).</p>
+<h3>گیرنده</h3>
+<ol>
+  <li><b>هم‌گام‌سازی</b>: ورودی از دنیای بیرون با کلاک ما هم‌زمان نیست، پس اول از دو فلیپ‌فلاپ پشت‌سرهم (synchronizer) عبور می‌کند.</li>
+  <li><b>IDLE</b>: منتظر لبه پایین‌رونده بیت شروع می‌مانیم.</li>
+  <li><b>START</b>: نصف طول یک بیت (۴۳۴ کلاک) صبر می‌کنیم تا به <b>وسط</b> بیت شروع برسیم. اگر خط هنوز صفر است، شروع واقعی است.</li>
+  <li><b>DATA</b>: هر ۸۶۸ کلاک یک نمونه برمی‌داریم؛ یعنی دقیقاً وسط هر بیت داده.</li>
+  <li><b>STOP</b>: در وسط بیت توقف، بایت کامل است و خروجی <code>done</code> یک کلاک یک می‌شود.</li>
+</ol>
+<p>نمونه‌برداری در وسط بیت باعث می‌شود اختلاف کوچک سرعت دو طرف (تا حدود ۲ تا ۳ درصد) مشکلی ایجاد نکند.</p>
+<h3>Echo</h3>
+<p>هر بایتی که می‌رسد با همان فرستنده درس قبل برگردانده می‌شود و حروف کوچک به حروف بزرگ تبدیل می‌شوند (کم کردن 0x20). یک رجیستر نگه‌دارنده (<code>pend</code>) لازم است، چون ممکن است بایت بعدی برسد در حالی که فرستنده هنوز مشغول بایت قبلی است.</p>
+<p>LD7..LD0 آخرین بایت دریافتی و LD15..LD8 تعداد بایت‌ها را نشان می‌دهند.</p>`,
+    verilog: `// UART receiver + echo: letters typed in the serial console come back in upper case
+module uart_rx #(parameter CLKS_PER_BIT = 868) (
+    input  wire       clk,
+    input  wire       rx,
+    output reg  [7:0] data = 0,
+    output reg        done = 1'b0      // one-clock pulse: a byte arrived
+);
+    localparam [1:0] IDLE = 2'd0, START = 2'd1, DATA = 2'd2, STOP = 2'd3;
+    localparam HALF = CLKS_PER_BIT / 2;
+    reg [1:0]  state = IDLE;
+    reg [15:0] cnt   = 0;
+    reg [2:0]  n     = 0;
+    reg [7:0]  sh    = 0;
+    reg        rx1   = 1'b1;          // two-flip-flop synchronizer
+    reg        rx2   = 1'b1;
+
+    always @(posedge clk) begin
+        rx1  <= rx;
+        rx2  <= rx1;
+        done <= 1'b0;
+        case (state)
+            IDLE:
+                if (!rx2) begin cnt <= 0; state <= START; end
+            START:                          // wait for the middle of the start bit
+                if (cnt == HALF - 1) begin
+                    cnt <= 0;
+                    if (!rx2) begin n <= 0; state <= DATA; end
+                    else state <= IDLE;     // just a glitch
+                end else cnt <= cnt + 1;
+            DATA:                           // sample the middle of each data bit
+                if (cnt == CLKS_PER_BIT - 1) begin
+                    cnt <= 0;
+                    sh  <= {rx2, sh[7:1]};  // LSB arrives first
+                    if (n == 3'd7) state <= STOP;
+                    else           n <= n + 1;
+                end else cnt <= cnt + 1;
+            default:                        // STOP: middle of the stop bit
+                if (cnt == CLKS_PER_BIT - 1) begin
+                    cnt   <= 0;
+                    data  <= sh;
+                    done  <= 1'b1;
+                    state <= IDLE;
+                end else cnt <= cnt + 1;
+        endcase
+    end
+endmodule
+
+${UART_TX_V}
+module top (
+    input  wire        CLK100MHZ,
+    input  wire        UART_TXD_IN,    // PC -> FPGA
+    output wire        UART_RXD_OUT,   // FPGA -> PC
+    output wire [15:0] LED
+);
+    wire [7:0] rx_data;
+    wire       rx_done;
+    wire       busy;
+
+    uart_rx rx_unit (.clk(CLK100MHZ), .rx(UART_TXD_IN), .data(rx_data), .done(rx_done));
+
+    // lower-case letters become upper case
+    wire [7:0] upper = (rx_data >= 8'h61 && rx_data <= 8'h7A) ? rx_data - 8'h20 : rx_data;
+
+    // hold one byte while the transmitter is still busy with the previous one
+    reg  [7:0] hold  = 0;
+    reg        pend  = 1'b0;
+    wire       start = pend && !busy;
+    always @(posedge CLK100MHZ) begin
+        if (rx_done) begin
+            hold <= upper;
+            pend <= 1'b1;
+        end else if (start)
+            pend <= 1'b0;
+    end
+
+    uart_tx tx_unit (.clk(CLK100MHZ), .start(start), .data(hold), .tx(UART_RXD_OUT), .busy(busy));
+
+    reg [7:0] last  = 0;
+    reg [7:0] count = 0;
+    always @(posedge CLK100MHZ)
+        if (rx_done) begin
+            last  <= rx_data;
+            count <= count + 1;
+        end
+
+    assign LED = {count, last};
+endmodule
+`,
+    vhdl: `${VHDL_NUMERIC}
+-- UART receiver (115200 baud, 8N1)
+entity uart_rx is
+    generic (CLKS_PER_BIT : integer := 868);
+    port (
+        clk  : in  std_logic;
+        rx   : in  std_logic;
+        data : out std_logic_vector(7 downto 0);
+        done : out std_logic                     -- one-clock pulse: a byte arrived
+    );
+end uart_rx;
+
+architecture rtl of uart_rx is
+    type state_t is (IDLE, START_BIT, DATA_BITS, STOP_BIT);
+    constant HALF : integer := CLKS_PER_BIT / 2;
+    signal state    : state_t := IDLE;
+    signal cnt      : unsigned(15 downto 0) := (others => '0');
+    signal n        : unsigned(2 downto 0) := (others => '0');
+    signal sh       : std_logic_vector(7 downto 0) := (others => '0');
+    signal rx1, rx2 : std_logic := '1';           -- two-flip-flop synchronizer
+    signal dout     : std_logic_vector(7 downto 0) := (others => '0');
+    signal dn       : std_logic := '0';
+begin
+    process(clk)
+    begin
+        if rising_edge(clk) then
+            rx1 <= rx;
+            rx2 <= rx1;
+            dn  <= '0';
+            case state is
+                when IDLE =>
+                    if rx2 = '0' then
+                        cnt   <= (others => '0');
+                        state <= START_BIT;
+                    end if;
+                when START_BIT =>                   -- wait for the middle of the start bit
+                    if cnt = HALF - 1 then
+                        cnt <= (others => '0');
+                        if rx2 = '0' then
+                            n     <= (others => '0');
+                            state <= DATA_BITS;
+                        else
+                            state <= IDLE;          -- just a glitch
+                        end if;
+                    else
+                        cnt <= cnt + 1;
+                    end if;
+                when DATA_BITS =>                   -- sample the middle of each data bit
+                    if cnt = CLKS_PER_BIT - 1 then
+                        cnt <= (others => '0');
+                        sh  <= rx2 & sh(7 downto 1);   -- LSB arrives first
+                        if n = 7 then
+                            state <= STOP_BIT;
+                        else
+                            n <= n + 1;
+                        end if;
+                    else
+                        cnt <= cnt + 1;
+                    end if;
+                when STOP_BIT =>                    -- middle of the stop bit
+                    if cnt = CLKS_PER_BIT - 1 then
+                        cnt   <= (others => '0');
+                        dout  <= sh;
+                        dn    <= '1';
+                        state <= IDLE;
+                    else
+                        cnt <= cnt + 1;
+                    end if;
+            end case;
+        end if;
+    end process;
+
+    data <= dout;
+    done <= dn;
+end rtl;
+
+${VHDL_NUMERIC}
+${UART_TX_VHDL}
+${VHDL_NUMERIC}
+-- echo: letters typed in the serial console come back in upper case
+entity top is
+    port (
+        CLK100MHZ    : in  std_logic;
+        UART_TXD_IN  : in  std_logic;                     -- PC -> FPGA
+        UART_RXD_OUT : out std_logic;                     -- FPGA -> PC
+        LED          : out std_logic_vector(15 downto 0)
+    );
+end top;
+
+architecture rtl of top is
+    signal rx_data, upper, hold : std_logic_vector(7 downto 0) := (others => '0');
+    signal rx_done, busy, start : std_logic;
+    signal pend                 : std_logic := '0';
+    signal last, count          : unsigned(7 downto 0) := (others => '0');
+begin
+    rx_unit : entity work.uart_rx port map (clk => CLK100MHZ, rx => UART_TXD_IN, data => rx_data, done => rx_done);
+
+    -- lower-case letters become upper case
+    upper <= std_logic_vector(unsigned(rx_data) - 32) when unsigned(rx_data) >= 97 and unsigned(rx_data) <= 122 else rx_data;
+
+    -- hold one byte while the transmitter is still busy with the previous one
+    start <= pend and not busy;
+    process(CLK100MHZ)
+    begin
+        if rising_edge(CLK100MHZ) then
+            if rx_done = '1' then
+                hold  <= upper;
+                pend  <= '1';
+                last  <= unsigned(rx_data);
+                count <= count + 1;
+            elsif start = '1' then
+                pend <= '0';
+            end if;
+        end if;
+    end process;
+
+    tx_unit : entity work.uart_tx port map (clk => CLK100MHZ, start => start, data => hold, tx => UART_RXD_OUT, busy => busy);
+
+    LED <= std_logic_vector(count) & std_logic_vector(last);
+end rtl;
+`,
+    xdc: { clk: true, led: true, uart: true },
+    tryIt: `<p>طرح را اجرا کنید و <b>کنسول سریال</b> را باز کنید (دکمه <span class="kbd">⌨ Serial Console</span> یا Ctrl+M). سرعت باید 115200 و قالب 8N1 باشد. یک متن تایپ کنید و Enter بزنید: FPGA آن را با حروف بزرگ برمی‌گرداند. می‌توانید روی صفحه سیاه کنسول کلیک کنید و مستقیم تایپ کنید تا هر کلید فوراً فرستاده شود. LEDها کد ASCII آخرین حرف و تعداد حروف را نشان می‌دهند. Logic Analyzer هم برای این درس آماده است و هر دو خط را با دیکودر نشان می‌دهد.</p>`,
+    exercise: `<p>سرعت کنسول را روی 9600 بگذارید ولی طرح را 115200 نگه دارید. چه چیزی برمی‌گردد و چرا؟ بعد <code>CLKS_PER_BIT</code> را برای 9600 درست کنید.</p>`,
+    la: {
+      chans: [
+        { name: 'RX in', probe: 'pin:C4' },
+        { name: 'TX out', probe: 'pin:D4' },
+      ],
+      decs: [
+        { type: 'uart', name: 'PC→FPGA', ch: 0, baud: 115200, bits: 8, parity: 'none', stop: 1 },
+        { type: 'uart', name: 'FPGA→PC', ch: 1, baud: 115200, bits: 8, parity: 'none', stop: 1 },
+      ],
+      base: 5e-5,
       pos: 4,
       trig: { ch: 0, edge: 'fall' },
     },

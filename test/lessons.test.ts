@@ -39,6 +39,9 @@ function harness(src: string, lang: 'verilog' | 'vhdl', xdc: string) {
     reset(v: number) {
       setDev((b) => b.device.kind === 'reset', v);
     },
+    pin(pin: string, v: number) {
+      setDev((b) => b.pin === pin, v);
+    },
     led(): number {
       let r = 0;
       for (const b of map.bindings) if (b.device.kind === 'led' && ((sim.v[b.sig] >>> b.bit) & 1)) r |= 1 << b.device.index;
@@ -341,6 +344,31 @@ const checks: Record<string, (h: Harness) => void> = {
     const text = anns.map((a) => String.fromCharCode(parseInt(/0x([0-9A-F]+)/.exec(a.text)![1], 16))).join('');
     expect(text).toBe('Hello FPGA!\r\n');
     expect(anns.every((a) => a.kind === 'data')).toBe(true);
+  },
+  uart_rx(h) {
+    const T = 868;
+    const tx = h.map.bindings.find((b) => b.pin === 'D4')!;
+    const acq = new Acquisition();
+    acq.rec.setSources([{ sig: tx.sig, bit: tx.bit }]);
+    let t = 0;
+    const step = (n: number) => {
+      for (let i = 0; i < n; i++) {
+        h.sim.run(1);
+        acq.sample(++t, h.sim.v);
+      }
+    };
+    h.pin('C4', 1);
+    step(100);
+    for (const byte of [...'hi!'].map((c) => c.charCodeAt(0))) {
+      for (const bit of [0, ...Array.from({ length: 8 }, (_, k) => (byte >> k) & 1), 1]) {
+        h.pin('C4', bit);
+        step(T);
+      }
+    }
+    step(12 * T);
+    const anns = decodeUart(acq.rec.extract(0, t), { ch: 0, baud: 115200, bits: 8, parity: 'none', stop: 1 }, 100e6);
+    expect(anns.map((a) => a.short).join('')).toBe("'H''I''!'");
+    expect(h.led()).toBe((3 << 8) | 0x21);
   },
   playground(h) {
     h.sw(0x00ff);

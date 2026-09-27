@@ -1,6 +1,6 @@
 // The logic-analyzer window: a virtual bench instrument (in the spirit of a USB logic analyzer and its PC software)
 // whose probes clip onto the board's header pins, on-board devices or internal design signals.
-import { deviceLabel, type BoardDef, type BoardView } from '../boards';
+import { deviceLabel, isBoardInput, type BoardDef, type BoardView } from '../boards';
 import type { Mapping } from '../boards/mapping';
 import type { Design } from '../hdl';
 import type { Runner } from '../sim/runner';
@@ -145,21 +145,21 @@ export class LogicAnalyzer {
 
   // ------------------------------------------------------------------ plumbing to the simulator
   private attach() {
-    this.runner.onSample = (t) => {
-      if (this.runner.sim) this.acq.sample(t, this.runner.sim.v);
-    };
-    this.runner.onRestart = () => {
-      this.acq.restart();
-      this.dirty = true;
-    };
-    this.runner.setProbeSigs(this.srcs.filter((s): s is Source => !!s).map((s) => s.sig));
+    this.runner.setProbe('la', {
+      sigs: this.srcs.filter((s): s is Source => !!s).map((s) => s.sig),
+      onSample: (t) => {
+        if (this.runner.sim) this.acq.sample(t, this.runner.sim.v);
+      },
+      onRestart: () => {
+        this.acq.restart();
+        this.dirty = true;
+      },
+    });
     if (this.runner.sim) this.acq.sample(this.runner.now, this.runner.sim.v);
   }
 
   private detach() {
-    this.runner.onSample = null;
-    this.runner.onRestart = null;
-    this.runner.setProbeSigs([]);
+    this.runner.setProbe('la', null);
   }
 
   private resolve() {
@@ -412,7 +412,7 @@ export class LogicAnalyzer {
     else if (what === 'spi') this.cfg.decs.push({ type: 'spi', name: 'SPI', clk: 0, mosi: ch(1), miso: n > 2 ? 2 : null, cs: n > 3 ? 3 : null, mode: 0, bits: 8, msbFirst: true });
     else if (what === 'i2c') this.cfg.decs.push({ type: 'i2c', name: 'I2C', scl: 0, sda: ch(1) });
     else if (what === 'outputs') {
-      const outs = (this.mapping?.bindings ?? []).filter((b) => !['sw', 'btn', 'clk', 'reset'].includes(b.device.kind)).slice(0, MAX_CH);
+      const outs = (this.mapping?.bindings ?? []).filter((b) => !isBoardInput(b.device)).slice(0, MAX_CH);
       if (outs.length) {
         this.cfg.chans = outs.map((b) => ({ name: deviceLabel(b.device, this.board), probe: `pin:${b.pin}` }));
         this.cfg.decs = [];
@@ -438,9 +438,9 @@ export class LogicAnalyzer {
       groups.get(g)!.push(`<option value="${esc(value)}">${esc(label)}</option>`);
     };
     for (const h of this.board.headers) for (const [num, pin] of Object.entries(h.pins)) add(`Pmod ${h.name}`, `pin:${pin}`, `${h.name}${num} (${pin})`);
-    const kinds: Record<string, string> = { pin: 'Other pins', led: 'LEDs', rgb: 'RGB LEDs', seg: '7-segment', an: '7-segment', sw: 'Switches', btn: 'Buttons', reset: 'Buttons' };
+    const kinds: Record<string, string> = { uart: 'USB-UART', pin: 'Other pins', led: 'LEDs', rgb: 'RGB LEDs', seg: '7-segment', an: '7-segment', sw: 'Switches', btn: 'Buttons', reset: 'Buttons' };
     const inHeader = new Set(this.board.headers.flatMap((h) => Object.values(h.pins)));
-    const order = ['pin', 'led', 'rgb', 'seg', 'an', 'sw', 'btn', 'reset'];
+    const order = ['uart', 'pin', 'led', 'rgb', 'seg', 'an', 'sw', 'btn', 'reset'];
     const entries = Object.entries(this.board.pins)
       .filter(([p, d]) => d.kind !== 'clk' && !inHeader.has(p))
       .sort((a, b) => order.indexOf(a[1].kind) - order.indexOf(b[1].kind) || ('index' in a[1] && 'index' in b[1] ? a[1].index - b[1].index : 0));

@@ -13,7 +13,9 @@ export type Device =
   // active-low reset button
   | { kind: 'reset'; name: string }
   // a general-purpose header pin or signal line with no on-board indicator (Pmod, USB-UART, ...)
-  | { kind: 'pin'; name: string };
+  | { kind: 'pin'; name: string }
+  // USB-UART bridge line; dir is seen from the FPGA ('in' = PC to FPGA, idles high)
+  | { kind: 'uart'; name: string; dir: 'in' | 'out' };
 
 export interface BoardOutputs {
   led: number[]; // brightness 0..1 per user LED

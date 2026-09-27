@@ -1,5 +1,6 @@
 // XDC parsing and port-to-board mapping ("implementation" step).
 import type { Design } from '../hdl';
+import { isBoardInput } from '.';
 import type { BoardDef, Device } from './types';
 
 export interface Binding {
@@ -69,7 +70,7 @@ export function mapPorts(design: Design, xdc: string, board: BoardDef): Mapping 
       const device = board.pins[pinName];
       if (!device) continue;
       const bit = s.left >= s.right ? idx - s.right : s.right - idx;
-      const isIn = device.kind === 'sw' || device.kind === 'btn' || device.kind === 'clk' || device.kind === 'reset';
+      const isIn = isBoardInput(device);
       if (isIn && s.dir !== 'input') {
         messages.push({ level: 'error', code: 'DRC 23-20', msg: `pin ${pinName} is an input on the board but port '${s.name}' is an output` });
         continue;

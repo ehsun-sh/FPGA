@@ -1,5 +1,5 @@
 // Drives a compiled design in real time: feeds board inputs, clocks it, and turns outputs into LED brightness.
-import type { BoardDef, BoardOutputs } from '../boards';
+import { isBoardInput, type BoardDef, type BoardOutputs } from '../boards';
 import type { Binding, Mapping } from '../boards/mapping';
 import { compileDesign, type CompiledSim, type Design } from '../hdl';
 
@@ -8,6 +8,19 @@ const RGB_INDEX: Record<string, number> = { r: 0, g: 1, b: 2 };
 // persistence of vision, in simulated board time
 const TAU_SECONDS = 0.01;
 const FRAME_BUDGET_MS = 11;
+
+export interface Probe {
+  sigs: number[];
+  onSample(cycle: number): void;
+  onRestart?(): void;
+}
+
+export interface SerialFormat {
+  baud: number;
+  bits: number;
+  parity: 'none' | 'even' | 'odd';
+  stop: 1 | 2;
+}
 
 export class Runner {
   sim: CompiledSim | null = null;
@@ -19,10 +32,10 @@ export class Runner {
   totalCycles = 0;
   error: string | null = null;
   onError: (msg: string) => void = () => {};
-  // logic-analyzer hooks: extra signals to watch, a callback on every change (absolute board cycle), and time restarts
+  // instruments (logic analyzer, serial console): extra signals to watch, a callback on every change
+  // (absolute board cycle) and on time restarts
+  private probes = new Map<string, Probe>();
   private probeSigs: number[] = [];
-  onSample: ((cycle: number) => void) | null = null;
-  onRestart: (() => void) | null = null;
 
   private outBindings: Binding[] = [];
   private inBindings: Binding[] = [];
@@ -52,8 +65,9 @@ export class Runner {
     this.design = design;
     this.mapping = mapping;
     this.probeSigs = [];
-    this.outBindings = mapping.bindings.filter((b) => !['sw', 'btn', 'clk', 'reset'].includes(b.device.kind));
-    this.inBindings = mapping.bindings.filter((b) => ['sw', 'btn', 'reset'].includes(b.device.kind));
+    this.probes.clear(); // instruments re-register for the new design
+    this.outBindings = mapping.bindings.filter((b) => !isBoardInput(b.device));
+    this.inBindings = mapping.bindings.filter((b) => isBoardInput(b.device) && b.device.kind !== 'clk');
     this.sim = this.compile();
     this.error = null;
     this.reset(inputs);
@@ -67,13 +81,19 @@ export class Runner {
       watch,
       onOut: (c) => this.mark(c),
       probe: this.probeSigs,
-      onProbe: (c) => this.onSample?.(this.totalCycles + this.runBase + c + 1),
+      onProbe: (c) => this.sample(this.totalCycles + this.runBase + c + 1),
     });
   }
 
-  // Signals the logic analyzer samples. Recompiles the running design without disturbing its state.
-  setProbeSigs(ids: number[]) {
-    const next = [...new Set(ids)].sort((a, b) => a - b);
+  private sample(t: number) {
+    for (const p of this.probes.values()) p.onSample(t);
+  }
+
+  // Register (or with null, remove) an instrument. Recompiles the running design without disturbing its state.
+  setProbe(owner: string, probe: Probe | null) {
+    if (probe) this.probes.set(owner, probe);
+    else this.probes.delete(owner);
+    const next = [...new Set([...this.probes.values()].flatMap((p) => p.sigs))].sort((a, b) => a - b);
     if (next.join() === this.probeSigs.join()) return;
     this.probeSigs = next;
     if (!this.sim) return;
@@ -100,8 +120,11 @@ export class Runner {
     this.acc.fill(0);
     this.computeLit();
     this.bright.set(this.lit);
-    this.onRestart?.();
-    this.onSample?.(0);
+    this.pending = [];
+    this.serialLevel = 1;
+    this.serialFree = 0;
+    for (const p of this.probes.values()) p.onRestart?.();
+    this.sample(0);
   }
 
   stop() {
@@ -120,6 +143,7 @@ export class Runner {
     if (d.kind === 'sw') return inputs.switches[d.index] ? 1 : 0;
     if (d.kind === 'btn') return inputs.pressed(d.name) ? 1 : 0;
     if (d.kind === 'reset') return inputs.pressed(d.name) ? 0 : 1; // active-low
+    if (d.kind === 'uart') return this.serialLevel;
     return 0;
   }
 
@@ -135,6 +159,7 @@ export class Runner {
 
   setButton(name: string, pressed: boolean) {
     this.pending = this.pending.filter((p) => p.name !== name);
+    const apply = (p: boolean) => () => this.applyButton(name, p);
     if (this.bounce && this.running && this.mapping?.clock !== undefined) {
       // mechanical contact bounce: a burst of random transitions over ~0.2-3 ms before the level settles
       const hz = this.board.clockHz;
@@ -144,10 +169,10 @@ export class Runner {
       for (let i = 0; i < n; i++) {
         at += Math.round((0.0001 + Math.random() * 0.0006) * hz);
         level = !level;
-        this.pending.push({ at, name, pressed: level });
+        this.pending.push({ at, name, apply: apply(level) });
       }
       at += Math.round(0.0003 * hz);
-      this.pending.push({ at, name, pressed });
+      this.pending.push({ at, name, apply: apply(pressed) });
     }
     this.applyButton(name, pressed);
   }
@@ -159,7 +184,42 @@ export class Runner {
 
   // simulate contact bounce on push buttons
   bounce = false;
-  private pending: { at: number; name: string; pressed: boolean }[] = [];
+  // scheduled input changes, in board cycles (button bounce, serial bits)
+  private pending: { at: number; name: string; apply: () => void }[] = [];
+
+  // PC -> FPGA serial line (UART_TXD_IN), idle high
+  private serialLevel = 1;
+  private serialFree = 0; // board cycle when the line is free for the next byte
+
+  // Queue bytes on the USB-UART line into the FPGA. Returns false when no clocked design is running.
+  sendSerial(bytes: number[], f: SerialFormat): boolean {
+    if (!this.sim || !this.running || this.mapping?.clock === undefined) return false;
+    const T = this.board.clockHz / f.baud;
+    let t = Math.max(this.now + 1, this.serialFree);
+    const set = (lv: number) => () => {
+      this.serialLevel = lv;
+      this.setDevice((d) => d.kind === 'uart' && d.dir === 'in', lv);
+    };
+    for (const b of bytes) {
+      const bits = [0];
+      let ones = 0;
+      for (let k = 0; k < f.bits; k++) {
+        const x = (b >> k) & 1;
+        bits.push(x);
+        ones += x;
+      }
+      if (f.parity !== 'none') bits.push((ones & 1) ^ (f.parity === 'odd' ? 1 : 0));
+      for (let k = 0; k < f.stop; k++) bits.push(1);
+      bits.forEach((lv, k) => this.pending.push({ at: Math.round(t + k * T), name: '#serial', apply: set(lv) }));
+      t += bits.length * T;
+    }
+    this.serialFree = Math.round(t);
+    return true;
+  }
+
+  get serialBusy() {
+    return this.serialFree > this.now;
+  }
 
   private setDevice(match: (d: Binding['device']) => boolean, val: number) {
     if (!this.sim || !this.running) return;
@@ -169,7 +229,7 @@ export class Runner {
     this.safe(() => this.sim!.settle());
     if (this.sim) {
       this.computeLit();
-      this.onSample?.(this.now);
+      this.sample(this.now);
     }
   }
 
@@ -214,7 +274,7 @@ export class Runner {
     this.lastMark = at;
     if (this.sim) {
       this.computeLit();
-      this.onSample?.(this.totalCycles + at);
+      this.sample(this.totalCycles + at);
     }
   }
 
@@ -238,7 +298,7 @@ export class Runner {
           for (const p of this.pending.filter((q) => q.at <= now)) {
             this.runBase = done;
             this.mark(-1); // close the brightness window up to now, then change the input
-            this.applyButton(p.name, p.pressed);
+            p.apply();
           }
           this.pending = this.pending.filter((q) => q.at > now);
           if (this.pending.length) n = Math.max(1, Math.min(n, Math.min(...this.pending.map((q) => q.at)) - now));

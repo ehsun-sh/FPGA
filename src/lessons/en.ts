@@ -264,6 +264,26 @@ ${truth(
     tryIt: `<p>Run the design and open the logic analyzer (the <span class="kbd">⎍ Logic Analyzer</span> button or Ctrl+L). Press <b>Run</b> in its window, then press BTNC on the board, or turn on SW0 to send the message over and over. You will see the TX waveform and the decoded bytes <b>H e l l o …</b>. Zoom with the mouse wheel, place two cursors with click and Shift+click, and measure one bit time (about 8.68 µs).</p>`,
     exercise: `<p>Change the speed to 9600 baud (what is <code>CLKS_PER_BIT</code> now?) and change the baud rate in the decoder settings too. What does the decoder show if you change only one of them?</p>`,
   },
+  uart_rx: {
+    title: 'UART receiver and the serial console',
+    summary: 'Receive the characters you type in the serial console and send them back in upper case.',
+    body: `
+<p>In the previous lesson the FPGA only transmitted. Now we build the other direction: the PC sends bytes to the FPGA on the <code>UART_TXD_IN</code> pin (C4). For that we use a <b>serial console</b>, the kind of program that connects to the board's COM port on a PC (PuTTY or Tera Term, for example).</p>
+<h3>The receiver</h3>
+<ol>
+  <li><b>Synchronise</b>: the input comes from outside and is not aligned with our clock, so it first passes through two flip-flops in a row (a synchronizer).</li>
+  <li><b>IDLE</b>: wait for the falling edge of the start bit.</li>
+  <li><b>START</b>: wait half a bit time (434 clocks) to reach the <b>middle</b> of the start bit. If the line is still 0, it is a real start.</li>
+  <li><b>DATA</b>: take one sample every 868 clocks, exactly in the middle of each data bit.</li>
+  <li><b>STOP</b>: in the middle of the stop bit the byte is complete and <code>done</code> is 1 for one clock.</li>
+</ol>
+<p>Sampling in the middle of each bit means a small speed difference between the two sides (up to about 2 to 3 percent) does no harm.</p>
+<h3>Echo</h3>
+<p>Every byte that arrives is sent back with the transmitter from the previous lesson, and lower-case letters become upper case (subtract 0x20). A holding register (<code>pend</code>) is needed because the next byte can arrive while the transmitter is still busy with the previous one.</p>
+<p>LD7..LD0 show the last byte received and LD15..LD8 count the bytes.</p>`,
+    tryIt: `<p>Run the design and open the <b>serial console</b> (the <span class="kbd">⌨ Serial Console</span> button or Ctrl+M). The speed should be 115200 and the format 8N1. Type some text and press Enter: the FPGA sends it back in upper case. You can also click the black console area and type directly, so each key is sent at once. The LEDs show the ASCII code of the last character and the character count. The logic analyzer is also set up for this lesson and decodes both lines.</p>`,
+    exercise: `<p>Set the console to 9600 baud but leave the design at 115200. What comes back, and why? Then fix <code>CLKS_PER_BIT</code> for 9600.</p>`,
+  },
   playground: {
     title: 'Playground',
     summary: 'Write any design you like and run it on the board.',

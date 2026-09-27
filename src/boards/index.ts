@@ -31,3 +31,8 @@ export function deviceLabel(d: Device, board: BoardDef): string {
       return d.name;
   }
 }
+
+// Devices that drive an FPGA input.
+export function isBoardInput(d: Device): boolean {
+  return d.kind === 'sw' || d.kind === 'btn' || d.kind === 'clk' || d.kind === 'reset' || (d.kind === 'uart' && d.dir === 'in');
+}

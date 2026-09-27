@@ -6,6 +6,7 @@ import { EN, LESSON_UI, type LessonText } from './lessons/en';
 import { ALL_LESSONS, CHAPTERS, chapterOf } from './lessons/course';
 import { LESSONS, PLAYGROUND, type Lesson } from './lessons/lessons';
 import { defaultConfig, LogicAnalyzer, type LaConfig } from './la/window';
+import { SerialConsole } from './serial/console';
 import { Runner } from './sim/runner';
 import { CodeEditor } from './ui/editor';
 import { highlight } from './ui/highlight';
@@ -73,6 +74,7 @@ app.innerHTML = `
   </div></div>
   <div class="menu"><button>Tools</button><div class="dropdown">
     <button data-act="la">Logic Analyzer <kbd>Ctrl+L</kbd></button>
+    <button data-act="serial">Serial Console <kbd>Ctrl+M</kbd></button>
   </div></div>
   <div class="menu"><button>Help</button><div class="dropdown">
     <button data-act="about">About FPGA Lab</button>
@@ -84,6 +86,7 @@ app.innerHTML = `
   <button class="tb" data-act="stop" title="Stop"><span class="ico stop">■</span> Stop</button>
   <button class="tb" data-act="reset" title="Reset the design (like re-programming)"><span class="ico">↺</span> Reset</button>
   <button class="tb" data-act="la" id="la-btn" title="Open the logic analyzer (Ctrl+L)"><span class="ico">⎍</span> Logic Analyzer</button>
+  <button class="tb" data-act="serial" id="serial-btn" title="Open the serial console on the USB-UART (Ctrl+M)"><span class="ico">⌨</span> Serial Console</button>
   <span class="sep"></span>
   <div class="seg-ctl" role="group" aria-label="Site language">
     <button data-ui="fa">فارسی</button><button data-ui="en">English</button>
@@ -229,6 +232,13 @@ const la = new LogicAnalyzer(document.body, boardDef, board, runner);
 const laPreset = (): LaConfig => lesson.la ?? defaultConfig(boardDef);
 la.presetFor = laPreset;
 la.onChange = (cfg) => store.set(`la:${lesson.id}`, JSON.stringify(cfg));
+const serial = new SerialConsole(document.body, boardDef, runner);
+try {
+  serial.load(JSON.parse(store.get('serial') ?? '{}'));
+} catch {
+  /* keep defaults */
+}
+serial.onSettings = (st) => store.set('serial', JSON.stringify(st));
 function loadLa() {
   let cfg: LaConfig | null = null;
   try {
@@ -388,6 +398,7 @@ function doProgram(d: Design, map: Mapping) {
     return;
   }
   la.setDesign(d, map);
+  serial.setDesign(map);
   log(`INFO: [Labtools 27-3164] End of startup status: HIGH — device is running`, 'ok');
   $('#hw-dev').textContent = `${hwDev} (Programmed)`;
   $('#hw-dev').classList.add('ok');
@@ -409,6 +420,7 @@ function runFlow() {
 function stop() {
   runner.stop();
   la.setDesign(null, null);
+  serial.setDesign(null);
   board.setOutputs({ led: [], rgb: [], seg: [], done: false });
   $('#hw-dev').textContent = `${hwDev} (not programmed)`;
   $('#hw-dev').classList.remove('ok');
@@ -612,6 +624,14 @@ function act(name: string) {
       }
       document.querySelector('#la-btn')?.classList.toggle('active', la.open);
       break;
+    case 'serial':
+      if (serial.open) serial.hide();
+      else {
+        serial.show();
+        log('# open serial console (USB-UART)', 'cmd');
+      }
+      document.querySelector('#serial-btn')?.classList.toggle('active', serial.open);
+      break;
     case 'reset':
       if (runner.sim) {
         runner.reset({ switches: board.switches, pressed: (b) => board.isPressed(b) });
@@ -718,6 +738,10 @@ document.addEventListener('keydown', (ev) => {
     ev.preventDefault();
     act('la');
   }
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'm') {
+    ev.preventDefault();
+    act('serial');
+  }
 });
 
 // contact bounce on the push buttons
@@ -743,10 +767,15 @@ speedSel.addEventListener('change', () => {
 board.onSwitch = (i, on) => runner.setSwitch(i, on);
 board.onButton = (b, down) => runner.setButton(b, down);
 let statTimer = 0;
+const laBtn = $('#la-btn');
+const serialBtn = $('#serial-btn');
 board.onFrame = (dt) => {
   const out = runner.frame(dt);
   board.setOutputs(out);
   la.frame();
+  serial.frame();
+  laBtn.classList.toggle('active', la.open);
+  serialBtn.classList.toggle('active', serial.open);
   statTimer += dt;
   if (statTimer > 0.25) {
     statTimer = 0;
