@@ -74,7 +74,7 @@ export function mapPorts(design: Design, xdc: string, board: BoardDef): Mapping 
         messages.push({ level: 'error', code: 'DRC 23-20', msg: `pin ${pinName} is an input on the board but port '${s.name}' is an output` });
         continue;
       }
-      if (!isIn && s.dir === 'input') {
+      if (!isIn && device.kind !== 'pin' && s.dir === 'input') {
         messages.push({ level: 'error', code: 'DRC 23-20', msg: `pin ${pinName} drives an output device but port '${s.name}' is an input` });
         continue;
       }

@@ -1,5 +1,6 @@
 // Step-by-step FPGA course. Lesson text is Persian (RTL); code and identifiers stay in English.
 import type { XdcGroup } from '../boards';
+import type { LaConfig } from '../la/window';
 import { truth } from './helpers';
 
 export interface Lesson {
@@ -13,6 +14,7 @@ export interface Lesson {
   xdc: Partial<Record<XdcGroup, boolean>>;
   tryIt: string; // HTML, shown under "روی برد امتحان کنید"
   exercise?: string; // HTML
+  la?: LaConfig; // logic-analyzer setup for this lesson
 }
 
 export const VHDL_HEADER = `library ieee;

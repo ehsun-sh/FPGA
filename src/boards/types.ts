@@ -11,7 +11,9 @@ export type Device =
   | { kind: 'an'; index: number }
   | { kind: 'btn'; name: string }
   // active-low reset button
-  | { kind: 'reset'; name: string };
+  | { kind: 'reset'; name: string }
+  // a general-purpose header pin or signal line with no on-board indicator (Pmod, USB-UART, ...)
+  | { kind: 'pin'; name: string };
 
 export interface BoardOutputs {
   led: number[]; // brightness 0..1 per user LED
@@ -30,9 +32,11 @@ export interface BoardView {
   isPressed(name: string): boolean;
   resetView(): void;
   topView(): void;
+  // show logic-analyzer probe clips on header pins (package pin names), if the view supports it
+  setProbes?(probes: { pin: string; color: string }[]): void;
 }
 
-export type XdcGroup = 'clk' | 'sw' | 'led' | 'rgb' | 'seg' | 'btn' | 'reset';
+export type XdcGroup = 'clk' | 'sw' | 'led' | 'rgb' | 'seg' | 'btn' | 'reset' | 'pmod' | 'uart';
 
 export interface BoardDef {
   id: string;
@@ -52,6 +56,8 @@ export interface BoardDef {
   };
   // package pin -> device
   pins: Record<string, Device>;
+  // expansion headers, for probing: pin number (1-based, as on the silkscreen) -> package pin; power pins omitted
+  headers: { name: string; pins: Record<number, string> }[];
   // conventional port name (as in the vendor's master XDC, e.g. "SW[0]") -> package pin
   defaultNames: Record<string, string>;
   // master constraints file with only the given groups uncommented

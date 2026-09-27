@@ -1,6 +1,6 @@
 import type { BoardDef } from '../types';
 import { NexysA7Model } from './model3d';
-import { DEFAULT_NAMES, masterXdc, PINS } from './pins';
+import { DEFAULT_NAMES, HEADERS, masterXdc, PINS } from './pins';
 
 export const nexysA7: BoardDef = {
   id: 'nexys-a7-100t',
@@ -18,6 +18,7 @@ export const nexysA7: BoardDef = {
     reset: 'CPU_RESETN',
   },
   pins: PINS,
+  headers: HEADERS,
   defaultNames: DEFAULT_NAMES,
   masterXdc,
   createView: (container) => new NexysA7Model(container),

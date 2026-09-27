@@ -238,6 +238,32 @@ ${truth(
     tryIt: `<p>The RGB LED LD16 (next to the displays) cycles red, green and yellow, and LD2..LD0 show the current state. Press BTNC while it is green.</p>`,
     exercise: `<p>Add a “flashing yellow” state that is active while SW0 is on (like a traffic light at night).</p>`,
   },
+  uart: {
+    title: 'UART transmitter and the logic analyzer',
+    summary: 'Send "Hello FPGA!" over the UART serial protocol, then watch and decode it with the logic analyzer.',
+    body: `
+<p><b>UART</b> is the simplest serial protocol, and the Nexys A7 has a serial port to the PC over the same USB cable. The <code>UART_RXD_OUT</code> pin (D4) runs from the FPGA to the USB-UART chip.</p>
+<h3>An 8N1 frame</h3>
+<ul>
+  <li>The line idles at <b>1</b>.</li>
+  <li><b>Start bit</b>: one 0 bit</li>
+  <li><b>8 data bits</b>, least significant bit first</li>
+  <li><b>Stop bit</b>: one 1 bit</li>
+</ul>
+<pre class="formula">115200 baud → one bit = 100,000,000 / 115200 ≈ 868 clocks ≈ 8.68 µs</pre>
+<h3>The design</h3>
+<p>The <code>uart_tx</code> module is an FSMD with four states, IDLE, START, DATA and STOP: a counter times each bit and a shift register sends the bits out one by one. The top module holds a small ROM with the message and sends the next character whenever the transmitter is free (<code>busy=0</code>).</p>
+<h3>The logic analyzer</h3>
+<p>On a real bench you would clip a <b>logic analyzer</b> (for example a USB instrument such as the Digital Discovery) onto the pins to see this signal. This site has a virtual one: press <span class="kbd">⎍ Logic Analyzer</span> in the toolbar.</p>
+<ul>
+  <li>Each <b>channel</b> is clipped to a pin: the Pmod headers (JA to JD), LEDs, switches, or even internal design signals (like an ILA in Vivado).</li>
+  <li>The <b>trigger</b> lines the capture up with an edge on a channel; here, the falling edge of the start bit.</li>
+  <li>The <b>UART decoder</b> turns the bits into bytes and characters. SPI and I²C decoders are available too.</li>
+</ul>
+<p class="note">💡 The logic analyzer is already set up for this lesson: channel TX on pin D4, a falling-edge trigger and a UART decoder at 115200 baud.</p>`,
+    tryIt: `<p>Run the design and open the logic analyzer (the <span class="kbd">⎍ Logic Analyzer</span> button or Ctrl+L). Press <b>Run</b> in its window, then press BTNC on the board, or turn on SW0 to send the message over and over. You will see the TX waveform and the decoded bytes <b>H e l l o …</b>. Zoom with the mouse wheel, place two cursors with click and Shift+click, and measure one bit time (about 8.68 µs).</p>`,
+    exercise: `<p>Change the speed to 9600 baud (what is <code>CLKS_PER_BIT</code> now?) and change the baud rate in the decoder settings too. What does the decoder show if you change only one of them?</p>`,
+  },
   playground: {
     title: 'Playground',
     summary: 'Write any design you like and run it on the board.',

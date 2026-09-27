@@ -19,6 +19,10 @@ export class Runner {
   totalCycles = 0;
   error: string | null = null;
   onError: (msg: string) => void = () => {};
+  // logic-analyzer hooks: extra signals to watch, a callback on every change (absolute board cycle), and time restarts
+  private probeSigs: number[] = [];
+  onSample: ((cycle: number) => void) | null = null;
+  onRestart: (() => void) | null = null;
 
   private outBindings: Binding[] = [];
   private inBindings: Binding[] = [];
@@ -47,13 +51,42 @@ export class Runner {
   program(design: Design, mapping: Mapping, inputs: { switches: boolean[]; pressed: (b: string) => boolean }) {
     this.design = design;
     this.mapping = mapping;
+    this.probeSigs = [];
     this.outBindings = mapping.bindings.filter((b) => !['sw', 'btn', 'clk', 'reset'].includes(b.device.kind));
     this.inBindings = mapping.bindings.filter((b) => ['sw', 'btn', 'reset'].includes(b.device.kind));
-    const watch = [...new Set(this.outBindings.map((b) => b.sig))];
-    this.sim = compileDesign(design, { clock: mapping.clock, watch, onOut: (c) => this.mark(c) });
+    this.sim = this.compile();
     this.error = null;
     this.reset(inputs);
     this.running = true;
+  }
+
+  private compile(): CompiledSim {
+    const watch = [...new Set(this.outBindings.map((b) => b.sig))];
+    return compileDesign(this.design!, {
+      clock: this.mapping!.clock,
+      watch,
+      onOut: (c) => this.mark(c),
+      probe: this.probeSigs,
+      onProbe: (c) => this.onSample?.(this.totalCycles + this.runBase + c + 1),
+    });
+  }
+
+  // Signals the logic analyzer samples. Recompiles the running design without disturbing its state.
+  setProbeSigs(ids: number[]) {
+    const next = [...new Set(ids)].sort((a, b) => a - b);
+    if (next.join() === this.probeSigs.join()) return;
+    this.probeSigs = next;
+    if (!this.sim) return;
+    const old = this.sim;
+    const sim = this.compile();
+    sim.v.set(old.v);
+    old.mems.forEach((m, i) => sim.mems[i].set(m));
+    sim.sync();
+    this.sim = sim;
+  }
+
+  get now(): number {
+    return this.totalCycles + this.runBase;
   }
 
   reset(inputs: { switches: boolean[]; pressed: (b: string) => boolean }) {
@@ -67,6 +100,8 @@ export class Runner {
     this.acc.fill(0);
     this.computeLit();
     this.bright.set(this.lit);
+    this.onRestart?.();
+    this.onSample?.(0);
   }
 
   stop() {
@@ -132,7 +167,10 @@ export class Runner {
     if (!bs.length) return;
     for (const b of bs) this.writeBit(b, val);
     this.safe(() => this.sim!.settle());
-    if (this.sim) this.computeLit();
+    if (this.sim) {
+      this.computeLit();
+      this.onSample?.(this.now);
+    }
   }
 
   private safe(fn: () => void) {
@@ -174,7 +212,10 @@ export class Runner {
     const span = at - this.lastMark;
     if (span > 0) for (let i = 0; i < this.acc.length; i++) this.acc[i] += this.lit[i] * span;
     this.lastMark = at;
-    if (this.sim) this.computeLit();
+    if (this.sim) {
+      this.computeLit();
+      this.onSample?.(this.totalCycles + at);
+    }
   }
 
   private runBase = 0;
@@ -237,6 +278,11 @@ export class Runner {
         this.bright.set(this.lit);
       }
     } else if (this.sim && this.running) {
+      // no clock: board time still passes, so the logic analyzer can show input changes
+      this.fractional += this.speedHz * dt;
+      const whole = Math.floor(this.fractional);
+      this.fractional -= whole;
+      this.totalCycles += whole;
       this.achievedHz = 0;
       this.bright.set(this.lit);
     }

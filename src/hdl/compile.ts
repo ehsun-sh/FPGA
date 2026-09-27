@@ -485,10 +485,15 @@ export interface CompiledSim {
   settle(): void;
   // runs `cycles` full clock periods on `clk`; calls onOut(cycleIndex) whenever a watched output changes
   run(cycles: number): number;
+  // call after writing v/mems from another instance of the same design (between cycles) to adopt that state
+  sync(): void;
   source: string;
 }
 
-export function compileDesign(design: Design, opts: { clock?: number; watch?: number[]; onOut?: (cycle: number) => void } = {}): CompiledSim {
+export function compileDesign(
+  design: Design,
+  opts: { clock?: number; watch?: number[]; onOut?: (cycle: number) => void; probe?: number[]; onProbe?: (cycle: number) => void } = {},
+): CompiledSim {
   const nSigs = design.sigs.length;
   const slots = new Map<number, number>();
   for (const p of design.procs) {
@@ -559,8 +564,12 @@ export function compileDesign(design: Design, opts: { clock?: number; watch?: nu
   const clockReadByComb = clk !== undefined && comb.some((p) => p.reads!.has(clk));
   let runFn = 'function run(N){return 0;}';
   if (clk !== undefined) {
-    const wDecl = watch.map((id, i) => `let o${i}=v[${id}];`).join('');
-    const wCheck = watch.length ? `if(${watch.map((id, i) => `v[${id}]!==o${i}`).join('||')}){${watch.map((id, i) => `o${i}=v[${id}];`).join('')}onOut(c);}` : '';
+    const check = (ids: number[], p: string, fn: string) =>
+      ids.length ? `if(${ids.map((id, i) => `v[${id}]!==${p}${i}`).join('||')}){${ids.map((id, i) => `${p}${i}=v[${id}];`).join('')}${fn}(c);}` : '';
+    // extra signals the logic analyzer samples; outputs already watched need no second check
+    const probe = (opts.probe ?? []).filter((id) => !watch.includes(id));
+    const wDecl = watch.map((id, i) => `let o${i}=v[${id}];`).join('') + probe.map((id, i) => `let q${i}=v[${id}];`).join('');
+    const wCheck = check(watch, 'o', 'onOut') + check(probe, 'q', 'onProbe');
     const onlyClk = slots.size === 1 && slots.get(clk) === 0 && !clockReadByComb;
     if (slots.size === 0 && !clockReadByComb) {
       runFn = 'function run(N){return N;}';
@@ -586,18 +595,19 @@ function commit(){${[...staticNb].map((i) => `v[${i}]=n[${i}];`).join('')}for(le
 function settle(doComb){let lg=0;if(doComb!==false)comb();for(let it=0;it<1000;it++){${settleBody}if(!fired)return;commit();combClk();}throw new Error('design does not settle (oscillation between clocked processes)');}
 function reset(){for(let i=0;i<v.length;i++)v[i]=init[i];for(let m=0;m<M.length;m++)M[m].fill(minit[m]);dn=0;mq.length=0;d.fill(0);let lg=0;${initBody}
 comb();n.set(v);${resetPrev}settle();}
+function sync(){n.set(v);d.fill(0);dn=0;mq.length=0;${resetPrev}}
 ${runFn}
-return {reset, settle, run};`;
+return {reset, settle, run, sync};`;
 
   const v = new Uint32Array(nSigs);
   const init = new Uint32Array(design.sigs.map((s) => s.init >>> 0));
   const mems = design.mems.map((m) => new Uint32Array(m.length));
   const minit = design.mems.map((m) => m.init >>> 0);
-  let fns: { reset(): void; settle(): void; run(n: number): number };
+  let fns: { reset(): void; settle(): void; run(n: number): number; sync(): void };
   try {
-    fns = new Function('v', 'M', 'init', 'minit', 'onOut', source)(v, mems, init, minit, opts.onOut ?? (() => {}));
+    fns = new Function('v', 'M', 'init', 'minit', 'onOut', 'onProbe', source)(v, mems, init, minit, opts.onOut ?? (() => {}), opts.onProbe ?? (() => {}));
   } catch (err) {
     throw new HdlError(`internal simulator compile error: ${(err as Error).message}`);
   }
-  return { v, mems, reset: fns.reset, settle: fns.settle, run: fns.run, source };
+  return { v, mems, reset: fns.reset, settle: fns.settle, run: fns.run, sync: fns.sync, source };
 }

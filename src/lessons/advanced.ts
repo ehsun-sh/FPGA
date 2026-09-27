@@ -1170,4 +1170,289 @@ end rtl;
     tryIt: `<p>SW7 را روشن کنید (duty = 128، یعنی ۵۰٪) و بعد SW0 تا SW6 را امتحان کنید: LD0 و قرمز LD16 با شدت‌های مختلف روشن می‌شوند. با SW15..SW8 سبز را اضافه کنید تا رنگ نارنجی یا زرد بسازید.</p>`,
     exercise: `<p>یک «چراغ نفس‌کش» (breathing LED) بسازید: یک شمارنده کند مقدار duty را آرام زیاد و بعد کم کند.</p>`,
   },
+
+  {
+    id: 'uart',
+    title: 'فرستنده UART و Logic Analyzer',
+    summary: 'ارسال «Hello FPGA!» با پروتکل سریال UART و دیدن و دیکود کردن آن با Logic Analyzer.',
+    body: `
+<p><b>UART</b> ساده‌ترین پروتکل سریال است و برد Nexys A7 از طریق همان کابل USB یک درگاه سریال به کامپیوتر دارد. پایه <code>UART_RXD_OUT</code> (پایه D4) از FPGA به تراشه USB-UART می‌رود.</p>
+<h3>قاب (Frame) در حالت 8N1</h3>
+<ul>
+  <li>خط در حالت بیکار <b>1</b> است.</li>
+  <li><b>بیت شروع</b>: یک بیت 0</li>
+  <li><b>۸ بیت داده</b>، اول کم‌ارزش‌ترین بیت (LSB first)</li>
+  <li><b>بیت توقف</b>: یک بیت 1</li>
+</ul>
+<pre class="formula">115200 baud ← هر بیت = 100,000,000 / 115200 ≈ 868 کلاک ≈ 8.68 µs</pre>
+<h3>طراحی</h3>
+<p>ماژول <code>uart_tx</code> یک FSMD با چهار حالت IDLE، START، DATA و STOP است: یک شمارنده طول هر بیت را می‌سازد و یک شیفت رجیستر بیت‌ها را یکی‌یکی بیرون می‌فرستد. ماژول بالایی یک ROM کوچک با متن پیام دارد و هر وقت فرستنده آزاد شد (<code>busy=0</code>) حرف بعدی را می‌فرستد.</p>
+<h3>Logic Analyzer</h3>
+<p>در کار واقعی برای دیدن این سیگنال یک <b>Logic Analyzer</b> (مثلاً یک دستگاه USB مثل Digital Discovery) را به پایه‌ها وصل می‌کنیم. در این سایت یک Logic Analyzer مجازی داریم: دکمه <span class="kbd">⎍ Logic Analyzer</span> در نوار ابزار را بزنید.</p>
+<ul>
+  <li>هر <b>کانال</b> به یک پایه وصل می‌شود: پایه‌های Pmod (JA تا JD)، LEDها، کلیدها یا حتی سیگنال‌های داخلی طرح (مثل ILA در Vivado).</li>
+  <li><b>Trigger</b>: ضبط را روی لبه یک کانال هم‌زمان می‌کند؛ اینجا لبه پایین‌رونده بیت شروع.</li>
+  <li><b>دیکودر UART</b> بیت‌ها را به بایت و حرف تبدیل می‌کند. دیکودرهای SPI و I²C هم وجود دارند.</li>
+</ul>
+<p class="note">💡 تنظیمات Logic Analyzer برای این درس آماده است: کانال TX روی پایه D4، Trigger روی لبه پایین‌رونده و دیکودر UART با 115200 baud.</p>`,
+    verilog: `// UART transmitter (115200 baud, 8N1) sending "Hello FPGA!" on the USB-UART line
+module uart_tx #(parameter CLKS_PER_BIT = 868) (   // 100 MHz / 115200
+    input  wire       clk,
+    input  wire       start,       // one-clock pulse: send \`data\`
+    input  wire [7:0] data,
+    output reg        tx = 1'b1,   // idle high
+    output wire       busy
+);
+    localparam [1:0] IDLE = 2'd0, START = 2'd1, DATA = 2'd2, STOP = 2'd3;
+    reg  [1:0]  state = IDLE;
+    reg  [15:0] cnt   = 0;         // clocks within the current bit
+    reg  [2:0]  n     = 0;         // data bit number
+    reg  [7:0]  sh    = 0;         // shift register, LSB goes out first
+    wire        bit_done = (cnt == CLKS_PER_BIT - 1);
+
+    always @(posedge clk) begin
+        cnt <= (state == IDLE || bit_done) ? 16'd0 : cnt + 1;
+        case (state)
+            IDLE: begin
+                tx <= 1'b1;
+                if (start) begin sh <= data; state <= START; end
+            end
+            START: begin
+                tx <= 1'b0;
+                if (bit_done) begin n <= 0; state <= DATA; end
+            end
+            DATA: begin
+                tx <= sh[0];
+                if (bit_done) begin
+                    sh <= sh >> 1;
+                    if (n == 3'd7) state <= STOP;
+                    else           n <= n + 1;
+                end
+            end
+            default: begin             // STOP
+                tx <= 1'b1;
+                if (bit_done) state <= IDLE;
+            end
+        endcase
+    end
+
+    assign busy = (state != IDLE);
+endmodule
+
+module top (
+    input  wire        CLK100MHZ,
+    input  wire        BTNC,           // send the message once
+    input  wire [15:0] SW,             // SW[0] = send again and again
+    output wire        UART_RXD_OUT,   // FPGA -> PC
+    output wire [15:0] LED
+);
+    // message ROM: "Hello FPGA!\\r\\n"
+    reg [3:0] idx = 0;
+    reg [7:0] ch;
+    always @(*) begin
+        case (idx)
+            4'd0:  ch = 8'h48;  // H
+            4'd1:  ch = 8'h65;  // e
+            4'd2:  ch = 8'h6C;  // l
+            4'd3:  ch = 8'h6C;  // l
+            4'd4:  ch = 8'h6F;  // o
+            4'd5:  ch = 8'h20;  // ' '
+            4'd6:  ch = 8'h46;  // F
+            4'd7:  ch = 8'h50;  // P
+            4'd8:  ch = 8'h47;  // G
+            4'd9:  ch = 8'h41;  // A
+            4'd10: ch = 8'h21;  // !
+            4'd11: ch = 8'h0D;  // \\r
+            default: ch = 8'h0A;  // \\n
+        endcase
+    end
+
+    localparam [1:0] S_IDLE = 2'd0, S_SEND = 2'd1, S_WAIT = 2'd2;
+    reg  [1:0] state = S_IDLE;
+    reg        btn_d = 1'b0;
+    wire       busy;
+    wire       start = (state == S_SEND);
+
+    uart_tx tx_unit (.clk(CLK100MHZ), .start(start), .data(ch), .tx(UART_RXD_OUT), .busy(busy));
+
+    always @(posedge CLK100MHZ) begin
+        btn_d <= BTNC;
+        case (state)
+            S_IDLE:
+                if ((BTNC && !btn_d) || SW[0]) begin
+                    idx   <= 0;
+                    state <= S_SEND;
+                end
+            S_SEND:
+                state <= S_WAIT;
+            default:                       // S_WAIT: wait for the character to finish
+                if (!busy) begin
+                    if (idx == 4'd12) state <= S_IDLE;
+                    else begin
+                        idx   <= idx + 1;
+                        state <= S_SEND;
+                    end
+                end
+        endcase
+    end
+
+    assign LED = {busy, 7'b0000000, ch};
+endmodule
+`,
+    vhdl: `${VHDL_NUMERIC}
+-- UART transmitter (115200 baud, 8N1)
+entity uart_tx is
+    generic (CLKS_PER_BIT : integer := 868);   -- 100 MHz / 115200
+    port (
+        clk   : in  std_logic;
+        start : in  std_logic;                     -- one-clock pulse: send data
+        data  : in  std_logic_vector(7 downto 0);
+        tx    : out std_logic;                     -- idle high
+        busy  : out std_logic
+    );
+end uart_tx;
+
+architecture rtl of uart_tx is
+    type state_t is (IDLE, START_BIT, DATA_BITS, STOP_BIT);
+    signal state    : state_t := IDLE;
+    signal cnt      : unsigned(15 downto 0) := (others => '0');   -- clocks within the current bit
+    signal n        : unsigned(2 downto 0) := (others => '0');    -- data bit number
+    signal sh       : std_logic_vector(7 downto 0) := (others => '0');
+    signal txr      : std_logic := '1';
+    signal bit_done : std_logic;
+begin
+    bit_done <= '1' when cnt = CLKS_PER_BIT - 1 else '0';
+
+    process(clk)
+    begin
+        if rising_edge(clk) then
+            if state = IDLE or bit_done = '1' then
+                cnt <= (others => '0');
+            else
+                cnt <= cnt + 1;
+            end if;
+            case state is
+                when IDLE =>
+                    txr <= '1';
+                    if start = '1' then
+                        sh    <= data;
+                        state <= START_BIT;
+                    end if;
+                when START_BIT =>
+                    txr <= '0';
+                    if bit_done = '1' then
+                        n     <= (others => '0');
+                        state <= DATA_BITS;
+                    end if;
+                when DATA_BITS =>
+                    txr <= sh(0);                           -- LSB first
+                    if bit_done = '1' then
+                        sh <= '0' & sh(7 downto 1);
+                        if n = 7 then
+                            state <= STOP_BIT;
+                        else
+                            n <= n + 1;
+                        end if;
+                    end if;
+                when STOP_BIT =>
+                    txr <= '1';
+                    if bit_done = '1' then
+                        state <= IDLE;
+                    end if;
+            end case;
+        end if;
+    end process;
+
+    tx   <= txr;
+    busy <= '0' when state = IDLE else '1';
+end rtl;
+
+${VHDL_NUMERIC}
+-- sends "Hello FPGA!" on the USB-UART line
+entity top is
+    port (
+        CLK100MHZ    : in  std_logic;
+        BTNC         : in  std_logic;                      -- send the message once
+        SW           : in  std_logic_vector(15 downto 0);  -- SW(0) = send again and again
+        UART_RXD_OUT : out std_logic;                      -- FPGA -> PC
+        LED          : out std_logic_vector(15 downto 0)
+    );
+end top;
+
+architecture rtl of top is
+    type state_t is (S_IDLE, S_SEND, S_WAIT);
+    signal state : state_t := S_IDLE;
+    signal idx   : unsigned(3 downto 0) := (others => '0');
+    signal ch    : std_logic_vector(7 downto 0);
+    signal btn_d : std_logic := '0';
+    signal start : std_logic;
+    signal busy  : std_logic;
+begin
+    -- message ROM: "Hello FPGA!\\r\\n"
+    process(idx)
+    begin
+        case idx is
+            when "0000" => ch <= x"48";  -- H
+            when "0001" => ch <= x"65";  -- e
+            when "0010" => ch <= x"6C";  -- l
+            when "0011" => ch <= x"6C";  -- l
+            when "0100" => ch <= x"6F";  -- o
+            when "0101" => ch <= x"20";  -- ' '
+            when "0110" => ch <= x"46";  -- F
+            when "0111" => ch <= x"50";  -- P
+            when "1000" => ch <= x"47";  -- G
+            when "1001" => ch <= x"41";  -- A
+            when "1010" => ch <= x"21";  -- !
+            when "1011" => ch <= x"0D";  -- \\r
+            when others => ch <= x"0A";  -- \\n
+        end case;
+    end process;
+
+    start <= '1' when state = S_SEND else '0';
+
+    tx_unit : entity work.uart_tx
+        port map (clk => CLK100MHZ, start => start, data => ch, tx => UART_RXD_OUT, busy => busy);
+
+    process(CLK100MHZ)
+    begin
+        if rising_edge(CLK100MHZ) then
+            btn_d <= BTNC;
+            case state is
+                when S_IDLE =>
+                    if (BTNC = '1' and btn_d = '0') or SW(0) = '1' then
+                        idx   <= (others => '0');
+                        state <= S_SEND;
+                    end if;
+                when S_SEND =>
+                    state <= S_WAIT;
+                when S_WAIT =>                         -- wait for the character to finish
+                    if busy = '0' then
+                        if idx = 12 then
+                            state <= S_IDLE;
+                        else
+                            idx   <= idx + 1;
+                            state <= S_SEND;
+                        end if;
+                    end if;
+            end case;
+        end if;
+    end process;
+
+    LED <= busy & "0000000" & ch;
+end rtl;
+`,
+    xdc: { clk: true, sw: true, led: true, btn: true, uart: true },
+    tryIt: `<p>طرح را اجرا کنید و Logic Analyzer را باز کنید (دکمه <span class="kbd">⎍ Logic Analyzer</span> یا Ctrl+L). در پنجره آن <b>Run</b> را بزنید و بعد BTNC را روی برد فشار دهید، یا SW0 را روشن کنید تا پیام پشت‌سرهم ارسال شود. شکل موج خط TX و بایت‌های دیکودشده <b>H e l l o …</b> را می‌بینید. با چرخ ماوس بزرگ‌نمایی کنید، با کلیک و Shift+کلیک دو نشانگر بگذارید و طول یک بیت (حدود 8.68µs) را اندازه بگیرید.</p>`,
+    exercise: `<p>سرعت را به 9600 baud تغییر دهید (<code>CLKS_PER_BIT</code> چند می‌شود؟) و در تنظیمات دیکودر هم baud را عوض کنید. اگر فقط یکی را عوض کنید، دیکودر چه چیزی نشان می‌دهد؟</p>`,
+    la: {
+      chans: [
+        { name: 'TX', probe: 'pin:D4' },
+        { name: 'busy', probe: 'pin:V11' },
+      ],
+      decs: [{ type: 'uart', name: 'UART', ch: 0, baud: 115200, bits: 8, parity: 'none', stop: 1 }],
+      base: 2e-4,
+      pos: 4,
+      trig: { ch: 0, edge: 'fall' },
+    },
+  },
 ];

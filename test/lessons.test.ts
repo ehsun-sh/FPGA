@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { BOARDS, DEFAULT_BOARD } from '../src/boards';
 import { mapPorts } from '../src/boards/mapping';
 import { compileDesign, synthesize } from '../src/hdl';
+import { Acquisition } from '../src/la/capture';
+import { decodeUart } from '../src/la/decode';
 import { ADVANCED } from '../src/lessons/advanced';
 import { ALL_LESSONS } from '../src/lessons/course';
 import { LESSONS, PLAYGROUND } from '../src/lessons/lessons';
@@ -315,6 +317,30 @@ const checks: Record<string, (h: Harness) => void> = {
     }
     expect(r).toBe(128);
     expect(g).toBe(384);
+  },
+  uart(h) {
+    // capture the TX line with the logic analyzer engine, triggered on the start bit, and decode it
+    const tx = h.map.bindings.find((b) => b.pin === 'D4')!;
+    expect(tx).toBeTruthy();
+    const acq = new Acquisition();
+    acq.rec.setSources([{ sig: tx.sig, bit: tx.bit }]);
+    acq.trigger = { ch: 0, edge: 'fall' };
+    acq.base = 20_000; // 200 us/div
+    acq.pos = 4 * acq.base;
+    let t = 0;
+    acq.sample(t, h.sim.v);
+    acq.run(0, true);
+    h.btn('BTNC', 1);
+    for (let i = 0; i < 200_000 && !acq.tick(t); i++) {
+      h.sim.run(1);
+      acq.sample(++t, h.sim.v);
+    }
+    expect(acq.captured).toBe(true);
+    const [t0, t1] = acq.window;
+    const anns = decodeUart(acq.rec.extract(t0, t1), { ch: 0, baud: 115200, bits: 8, parity: 'none', stop: 1 }, 100e6);
+    const text = anns.map((a) => String.fromCharCode(parseInt(/0x([0-9A-F]+)/.exec(a.text)![1], 16))).join('');
+    expect(text).toBe('Hello FPGA!\r\n');
+    expect(anns.every((a) => a.kind === 'data')).toBe(true);
   },
   playground(h) {
     h.sw(0x00ff);

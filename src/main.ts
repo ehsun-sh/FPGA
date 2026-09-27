@@ -1,10 +1,11 @@
 import './style.css';
-import { BOARDS, getBoard } from './boards';
+import { BOARDS, deviceLabel, getBoard } from './boards';
 import { mapPorts, type Mapping } from './boards/mapping';
 import { estimateUtilization, HdlError, synthesize, type Design, type Lang } from './hdl';
 import { EN, LESSON_UI, type LessonText } from './lessons/en';
 import { ALL_LESSONS, CHAPTERS, chapterOf } from './lessons/course';
 import { LESSONS, PLAYGROUND, type Lesson } from './lessons/lessons';
+import { defaultConfig, LogicAnalyzer, type LaConfig } from './la/window';
 import { Runner } from './sim/runner';
 import { CodeEditor } from './ui/editor';
 import { highlight } from './ui/highlight';
@@ -70,6 +71,9 @@ app.innerHTML = `
     <button data-act="view-top">Board: top view</button>
     <button data-act="toggle-flow">Toggle Flow Navigator</button>
   </div></div>
+  <div class="menu"><button>Tools</button><div class="dropdown">
+    <button data-act="la">Logic Analyzer <kbd>Ctrl+L</kbd></button>
+  </div></div>
   <div class="menu"><button>Help</button><div class="dropdown">
     <button data-act="about">About FPGA Lab</button>
     <button data-act="lesson-intro">Getting started</button>
@@ -79,6 +83,7 @@ app.innerHTML = `
   <button class="tb run" data-act="run" title="Synthesize, implement and program the board (Ctrl+Enter)"><span class="ico">▶</span> Run on Board</button>
   <button class="tb" data-act="stop" title="Stop"><span class="ico stop">■</span> Stop</button>
   <button class="tb" data-act="reset" title="Reset the design (like re-programming)"><span class="ico">↺</span> Reset</button>
+  <button class="tb" data-act="la" id="la-btn" title="Open the logic analyzer (Ctrl+L)"><span class="ico">⎍</span> Logic Analyzer</button>
   <span class="sep"></span>
   <div class="seg-ctl" role="group" aria-label="Site language">
     <button data-ui="fa">فارسی</button><button data-ui="en">English</button>
@@ -220,6 +225,19 @@ xdcEditor.onChange = (t) => {
 
 const board = boardDef.createView($('#board'));
 const runner = new Runner(boardDef);
+const la = new LogicAnalyzer(document.body, boardDef, board, runner);
+const laPreset = (): LaConfig => lesson.la ?? defaultConfig(boardDef);
+la.presetFor = laPreset;
+la.onChange = (cfg) => store.set(`la:${lesson.id}`, JSON.stringify(cfg));
+function loadLa() {
+  let cfg: LaConfig | null = null;
+  try {
+    cfg = JSON.parse(store.get(`la:${lesson.id}`) ?? 'null');
+  } catch {
+    cfg = null;
+  }
+  la.load(cfg ?? laPreset());
+}
 runner.speedHz = boardDef.clockHz;
 (window as unknown as { fpgaLab: unknown }).fpgaLab = { board, runner };
 
@@ -369,6 +387,7 @@ function doProgram(d: Design, map: Mapping) {
     log('ERROR: programming failed', 'error');
     return;
   }
+  la.setDesign(d, map);
   log(`INFO: [Labtools 27-3164] End of startup status: HIGH — device is running`, 'ok');
   $('#hw-dev').textContent = `${hwDev} (Programmed)`;
   $('#hw-dev').classList.add('ok');
@@ -389,6 +408,7 @@ function runFlow() {
 
 function stop() {
   runner.stop();
+  la.setDesign(null, null);
   board.setOutputs({ led: [], rgb: [], seg: [], done: false });
   $('#hw-dev').textContent = `${hwDev} (not programmed)`;
   $('#hw-dev').classList.remove('ok');
@@ -432,9 +452,7 @@ ${row('Slice LUTs', u.luts, boardDef.resources.luts)}${row('Slice Registers (FF)
       .map((b) => {
         const s = d.sigs[b.sig];
         const nm = s.width > 1 ? `${b.port}[${s.left >= s.right ? b.bit + s.right : s.right - b.bit}]` : b.port;
-        const dev = b.device;
-        const dn =
-          dev.kind === 'sw' ? `SW${dev.index}` : dev.kind === 'led' ? `LD${dev.index}` : dev.kind === 'an' ? `AN${dev.index}` : dev.kind === 'seg' ? `C${dev.seg.toUpperCase()}` : dev.kind === 'btn' ? dev.name : dev.kind === 'rgb' ? `${boardDef.io.rgb[dev.index]} ${dev.color.toUpperCase()}` : dev.kind === 'clk' ? `${clockLabel} oscillator` : dev.name;
+        const dn = deviceLabel(b.device, boardDef);
         return `<tr><td>${esc(nm)}</td><td>${b.pin}</td><td>${dn}</td></tr>`;
       })
       .join('')}</tbody></table>`;
@@ -519,6 +537,7 @@ function openLesson(l: Lesson, switchTab = true) {
   xdcEditor.setText(xdcFor(l), 'xdc');
   renderLessonList();
   renderLesson();
+  loadLa();
   if (switchTab) showTab('lesson');
   log(`# open_lesson ${l.id}`, 'cmd');
 }
@@ -584,6 +603,14 @@ function act(name: string) {
       break;
     case 'stop':
       stop();
+      break;
+    case 'la':
+      if (la.open) la.hide();
+      else {
+        la.show();
+        log('# open_hw_logic_analyzer', 'cmd');
+      }
+      document.querySelector('#la-btn')?.classList.toggle('active', la.open);
       break;
     case 'reset':
       if (runner.sim) {
@@ -687,6 +714,10 @@ document.addEventListener('keydown', (ev) => {
     ev.preventDefault();
     runFlow();
   }
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'l') {
+    ev.preventDefault();
+    act('la');
+  }
 });
 
 // contact bounce on the push buttons
@@ -715,6 +746,7 @@ let statTimer = 0;
 board.onFrame = (dt) => {
   const out = runner.frame(dt);
   board.setOutputs(out);
+  la.frame();
   statTimer += dt;
   if (statTimer > 0.25) {
     statTimer = 0;
@@ -825,6 +857,7 @@ document.querySelectorAll<HTMLElement>('[data-lang]').forEach((b) => b.classList
 applyUiLang();
 $('#src-name').textContent = fileName();
 renderLessonList();
+loadLa();
 renderLesson();
 renderMessages();
 log('****** FPGA Lab — Vivado-style HDL environment (browser edition)', 'plain');

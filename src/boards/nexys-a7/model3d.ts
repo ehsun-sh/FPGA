@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import type { BoardOutputs, BoardView } from '../types';
+import { HEADERS } from './pins';
 
 type ButtonName = 'BTNC' | 'BTNU' | 'BTNL' | 'BTNR' | 'BTND' | 'CPU_RESETN';
 
@@ -241,6 +242,47 @@ export class NexysA7Model implements BoardView {
   private fit(): number {
     const aspect = this.camera.aspect || 1.5;
     return aspect >= 1.45 ? 1 : (1.45 / aspect) ** 0.95;
+  }
+
+  // logic-analyzer flywires clipped onto Pmod pins
+  private probeGroup: THREE.Group | null = null;
+  setProbes(probes: { pin: string; color: string }[]) {
+    if (this.probeGroup) {
+      this.scene.remove(this.probeGroup);
+      this.probeGroup.traverse((o) => {
+        if (o instanceof THREE.Mesh) {
+          o.geometry.dispose();
+          (o.material as THREE.Material).dispose();
+        }
+      });
+      this.probeGroup = null;
+    }
+    if (!probes.length) return;
+    const g = new THREE.Group();
+    probes.forEach(({ pin, color }, n) => {
+      const hi = HEADERS.findIndex((h) => Object.values(h.pins).includes(pin));
+      if (hi < 0) return;
+      const num = +Object.entries(HEADERS[hi].pins).find(([, p]) => p === pin)![0];
+      // pins 1-6 on the outer row, 7-12 on the inner row; pin 1 nearest the back edge
+      const outer = num <= 6;
+      const k = (num - 1) % 6;
+      const x = 6.05 - 0.12 + (outer ? 1 : 0) * 0.24;
+      const z = -3.6 - 0.6 + k * 0.24 + hi * 1.25;
+      const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.5 });
+      const clip = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.34, 10), mat);
+      clip.position.set(x, TOP + 0.62, z);
+      g.add(clip);
+      const spread = (n % 8) * 0.06;
+      const curve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(x, TOP + 0.78, z),
+        new THREE.Vector3(x + 0.25, TOP + 1.2 + spread, z),
+        new THREE.Vector3(x + 1.2, TOP + 1.0 + spread, z + 0.2),
+        new THREE.Vector3(x + 2.6, TOP + 0.3, z + 0.6),
+      ]);
+      g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.03, 6), mat.clone()));
+    });
+    this.probeGroup = g;
+    this.scene.add(g);
   }
 
   resetView() {

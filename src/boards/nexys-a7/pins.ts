@@ -6,6 +6,19 @@ import type { Device, XdcGroup } from '../types';
 const SW = ['J15', 'L16', 'M13', 'R15', 'R17', 'T18', 'U18', 'R13', 'T8', 'U8', 'R16', 'T13', 'H6', 'U12', 'U11', 'V10'];
 const LED = ['H17', 'K15', 'J13', 'N14', 'R18', 'V17', 'U17', 'U16', 'V16', 'T15', 'U14', 'T16', 'V15', 'V14', 'V12', 'V11'];
 const AN = ['J17', 'J18', 'T9', 'J14', 'P14', 'T14', 'K2', 'U13'];
+// Pmod signal pins 1-4 and 7-10 (5/11 = GND, 6/12 = VCC)
+const PMOD_NUMS = [1, 2, 3, 4, 7, 8, 9, 10];
+const PMOD: Record<string, string[]> = {
+  JA: ['C17', 'D18', 'E18', 'G17', 'D17', 'E17', 'F18', 'G18'],
+  JB: ['D14', 'F16', 'G16', 'H14', 'E16', 'F13', 'G13', 'H16'],
+  JC: ['K1', 'F6', 'J2', 'G6', 'E7', 'J3', 'J4', 'E6'],
+  JD: ['H4', 'H1', 'G1', 'G3', 'H2', 'G4', 'G2', 'F3'],
+};
+
+export const HEADERS = Object.entries(PMOD).map(([name, pins]) => ({
+  name,
+  pins: Object.fromEntries(pins.map((p, i) => [PMOD_NUMS[i], p])) as Record<number, string>,
+}));
 
 export const PINS: Record<string, Device> = {
   E3: { kind: 'clk' },
@@ -29,7 +42,9 @@ export const PINS: Record<string, Device> = {
   N16: { kind: 'rgb', index: 1, color: 'r' },
   R11: { kind: 'rgb', index: 1, color: 'g' },
   G14: { kind: 'rgb', index: 1, color: 'b' },
+  D4: { kind: 'pin', name: 'UART_RXD_OUT' },
 };
+for (const [h, pins] of Object.entries(PMOD)) pins.forEach((p, i) => (PINS[p] = { kind: 'pin', name: `${h}${PMOD_NUMS[i]}` }));
 SW.forEach((p, i) => (PINS[p] = { kind: 'sw', index: i }));
 LED.forEach((p, i) => (PINS[p] = { kind: 'led', index: i }));
 AN.forEach((p, i) => (PINS[p] = { kind: 'an', index: i }));
@@ -57,7 +72,9 @@ export const DEFAULT_NAMES: Record<string, string> = {
   LED17_R: 'N16',
   LED17_G: 'R11',
   LED17_B: 'G14',
+  UART_RXD_OUT: 'D4',
 };
+for (const [h, pins] of Object.entries(PMOD)) pins.forEach((p, i) => (DEFAULT_NAMES[`${h}[${PMOD_NUMS[i]}]`] = p));
 SW.forEach((p, i) => (DEFAULT_NAMES[`SW[${i}]`] = p));
 LED.forEach((p, i) => (DEFAULT_NAMES[`LED[${i}]`] = p));
 AN.forEach((p, i) => (DEFAULT_NAMES[`AN[${i}]`] = p));
@@ -106,6 +123,10 @@ export function masterXdc(enabled: Partial<Record<XdcGroup, boolean>>): string {
       const [n, p] = x.split(':');
       return c(enabled.btn, line(n, p));
     }),
+    '',
+    ...Object.entries(PMOD).flatMap(([h, pins]) => [`## Pmod Header ${h}`, ...pins.map((p, i) => c(enabled.pmod, line(`${h}[${PMOD_NUMS[i]}]`, p))), '']),
+    '## USB-RS232 Interface',
+    c(enabled.uart, line('UART_RXD_OUT', 'D4')),
     '',
   ];
   return out.join('\n');

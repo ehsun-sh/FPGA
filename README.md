@@ -14,6 +14,10 @@ and watch it run on an interactive 3D Digilent Nexys A7-100T on the right.
 - **In-browser HDL simulator**: Verilog-2001 and VHDL subsets are parsed, elaborated (hierarchy, parameters/generics,
   enums) and compiled to JavaScript. Single-clock designs run at close to the real 100 MHz clock, so counters and
   multiplexed displays behave like on hardware. Clock can be slowed to 1 Hz to watch every step.
+- **Logic analyzer** (Tools → Logic Analyzer, Ctrl+L): a virtual USB logic analyzer window with up to 32 channels
+  sampled every board clock. Probes clip onto Pmod JA–JD pins (drawn as flywires on the 3D board), any on-board
+  device pin, or internal design signals. Single / Run / Stop acquisition, edge trigger, time base and position,
+  wheel zoom and drag pan, two measurement cursors, and UART, SPI, I²C and parallel-bus decoders with an event list.
 - **Lessons in Persian and English**, each with theory, Verilog and VHDL code, a “try it on the board” step and an
   exercise. The chapter order follows Pong P. Chu, *FPGA Prototyping by Verilog/VHDL Examples* (structure only; the
   text and code are original):
@@ -23,7 +27,7 @@ and watch it run on an interactive 3D Digilent Nexys A7-100T on the right.
   4. FSM: traffic light, button debouncing (with an optional contact-bounce simulation)
   5. FSMD: binary to BCD (double dabble)
   6. Memory: synchronous RAM
-  7. I/O: PWM (UART, PS/2, VGA and a soft-core processor are planned)
+  7. I/O: PWM, UART transmitter with the logic analyzer (SPI/I²C, PS/2, VGA and a soft-core processor are planned)
   8. Playground
 
 Real Vivado cannot run in a browser; this project imitates its look and workflow. The lesson code and XDC files are
@@ -46,6 +50,7 @@ npm run build    # static site in dist/
 | `src/boards/` | board plug-ins (`types.ts` interface, `index.ts` registry), XDC parser / port mapping |
 | `src/boards/nexys-a7/` | Nexys A7-100T: pin table, master XDC, Three.js model |
 | `src/sim/runner.ts` | real-time driver: clocking, inputs, LED/segment brightness (persistence of vision) |
+| `src/la/` | logic analyzer: `capture.ts` (recording, trigger), `decode.ts` (protocol decoders), `window.ts` (UI) |
 | `src/lessons/` | course content: `course.ts` (chapters), `lessons.ts` and `advanced.ts` (Persian text + code), `en.ts` (English) |
 | `src/main.ts`, `src/ui/` | Vivado-style UI |
 
