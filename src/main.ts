@@ -3,7 +3,8 @@ import { BOARDS, getBoard } from './boards';
 import { mapPorts, type Mapping } from './boards/mapping';
 import { estimateUtilization, HdlError, synthesize, type Design, type Lang } from './hdl';
 import { EN, LESSON_UI, type LessonText } from './lessons/en';
-import { ALL_LESSONS, LESSONS, PLAYGROUND, type Lesson } from './lessons/lessons';
+import { ALL_LESSONS, CHAPTERS, chapterOf } from './lessons/course';
+import { LESSONS, PLAYGROUND, type Lesson } from './lessons/lessons';
 import { Runner } from './sim/runner';
 import { CodeEditor } from './ui/editor';
 import { highlight } from './ui/highlight';
@@ -95,6 +96,7 @@ app.innerHTML = `
     <option value="10">10 Hz</option>
     <option value="1">1 Hz</option>
   </select></label>
+  <label class="bouncy" title="Simulate mechanical contact bounce on the push buttons"><input type="checkbox" id="bouncy"> <span id="bouncy-l"></span></label>
   <span class="grow"></span>
   <span class="run-state" id="run-state">Ready</span>
 </div>
@@ -443,10 +445,23 @@ ${row('Slice LUTs', u.luts, boardDef.resources.luts)}${row('Slice Registers (FF)
 // ---------------------------------------------------------------- lessons UI
 function renderLessonList() {
   const el = $('#lesson-list');
-  el.innerHTML = ALL_LESSONS.map(
-    (l, i) =>
-      `<button class="flow-item lesson-item ${l.id === lesson.id ? 'active' : ''}" data-lesson="${l.id}" dir="${uiLang === 'fa' ? 'rtl' : 'ltr'}"><span class="num">${l === PLAYGROUND ? '★' : i + 1}</span>${esc(text(l).title)}</button>`,
-  ).join('');
+  const dir = uiLang === 'fa' ? 'rtl' : 'ltr';
+  const ui = LESSON_UI[uiLang];
+  let n = 0;
+  el.innerHTML = CHAPTERS.map((c, ci) => {
+    const items = c.lessons.map((l) => {
+      const num = l === PLAYGROUND ? '★' : String(++n);
+      return `<button class="flow-item lesson-item ${l.id === lesson.id ? 'active' : ''}" data-lesson="${l.id}" dir="${dir}"><span class="num">${num}</span>${esc(text(l).title)}</button>`;
+    });
+    const soon = (c.soon ?? []).map((s) => `<div class="flow-item lesson-item soon" dir="${dir}"><span class="num">·</span><span>${esc(s[uiLang])} <em>(${ui.soon})</em></span></div>`);
+    const head = l10nChapter(ci);
+    return `<div class="chapter-h" dir="${dir}">${esc(head)}</div>${items.join('')}${soon.join('')}`;
+  }).join('');
+}
+
+function l10nChapter(ci: number) {
+  const c = CHAPTERS[ci];
+  return c.lessons.includes(PLAYGROUND) ? c.title[uiLang] : `${LESSON_UI[uiLang].chapter(ci + 1)}: ${c.title[uiLang]}`;
 }
 
 function codeBlock(code: string, lg: 'verilog' | 'vhdl') {
@@ -464,7 +479,7 @@ function renderLesson() {
   el.dir = rtl ? 'rtl' : 'ltr';
   el.lang = uiLang;
   el.innerHTML = `
-<div class="lesson-head"><span class="chapter">${esc(tx.chapter)}</span><h1>${esc(tx.title)}</h1><p class="summary">${esc(tx.summary)}</p></div>
+<div class="lesson-head"><span class="chapter">${esc(l10nChapter(chapterOf(lesson)))}</span><h1>${esc(tx.title)}</h1><p class="summary">${esc(tx.summary)}</p></div>
 <section><h2>${ui.explain}</h2>${tx.body}</section>
 <section><h2>${ui.code}</h2>
   <div class="code-tabs" dir="ltr">
@@ -533,6 +548,7 @@ function applyUiLang() {
   document.documentElement.lang = uiLang;
   document.querySelectorAll<HTMLElement>('[data-ui]').forEach((b) => b.classList.toggle('active', b.dataset.ui === uiLang));
   $('#learn-h').textContent = `▾ LEARN · ${LESSON_UI[uiLang].learn}`;
+  $('#bouncy-l').textContent = LESSON_UI[uiLang].bouncy;
 }
 
 function showTab(t: typeof tab) {
@@ -671,6 +687,15 @@ document.addEventListener('keydown', (ev) => {
     ev.preventDefault();
     runFlow();
   }
+});
+
+// contact bounce on the push buttons
+const bouncy = $<HTMLInputElement>('#bouncy');
+bouncy.checked = runner.bounce = store.get('bouncy') === '1';
+bouncy.addEventListener('change', () => {
+  runner.bounce = bouncy.checked;
+  store.set('bouncy', bouncy.checked ? '1' : '0');
+  log(`# set_property BOUNCE ${bouncy.checked ? 'on' : 'off'} [get_hw_buttons]`, 'cmd');
 });
 
 // speed

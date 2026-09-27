@@ -208,7 +208,9 @@ export class Elaborator {
       const id = this.design.mems.length;
       this.design.mems.push({ id, name: full, width: info.width, lo: Math.min(l, r), length: Math.abs(l - r) + 1, signed: info.signed, init: 0 });
       if (d.init) {
-        if (d.init.k === 'others') this.design.mems[id].init = this.constEval(d.init.bit, ctx).value ? mask(info.width) : 0;
+        // (others => '0') or (others => (others => '0'))
+        const bit = d.init.k === 'others' && d.init.bit.k === 'others' ? d.init.bit.bit : d.init.k === 'others' ? d.init.bit : null;
+        if (bit) this.design.mems[id].init = this.constEval(bit, ctx).value ? mask(info.width) : 0;
         else throw new HdlError('array initial values other than (others => ...) are not supported', d.loc, 'Synth 8-9999');
       }
       const en: Entry = { k: 'mem', id };
@@ -227,7 +229,8 @@ export class Elaborator {
   }
 
   // ---------------- instantiation ----------------
-  instantiate(mod: AModule, prefix: string, paramOverrides: Map<string, number>, isTop: boolean): Map<string, number> {
+  // aliases: input ports connected to a whole parent signal share that signal (keeps one clock net across the hierarchy)
+  instantiate(mod: AModule, prefix: string, paramOverrides: Map<string, number>, isTop: boolean, aliases = new Map<string, number>()): Map<string, number> {
     if (++this.depth > 32) throw new HdlError(`recursive instantiation of '${mod.name}'`, mod.loc);
     if (!this.design.modules.includes(mod.name)) this.design.modules.push(mod.name);
     const scope = new Scope();
@@ -247,6 +250,12 @@ export class Elaborator {
     }
     const portIds = new Map<string, number>();
     for (const p of mod.ports) {
+      const alias = aliases.get(p.name);
+      if (alias !== undefined && p.dir === 'input' && this.typeInfo(p.type, ctx, p.loc).width === this.design.sigs[alias].width) {
+        scope.set(p.name, { k: 'sig', id: alias });
+        portIds.set(p.name, alias);
+        continue;
+      }
       const en = this.declare({ name: p.name, type: p.type, init: p.init, loc: p.loc }, ctx, scope);
       if (en.k !== 'sig') throw new HdlError(`array ports are not supported`, p.loc);
       portIds.set(p.name, en.id);
@@ -301,12 +310,20 @@ export class Elaborator {
             if (!name) throw new HdlError(`too many parameters for '${it.module}'`, it.loc);
             ov.set(name, this.constEval(p.value, ctx).value);
           });
-          const childPorts = this.instantiate(child, `${prefix}${it.name}.`, ov, false);
+          const aliases = new Map<string, number>();
+          it.conns.forEach((c, i) => {
+            const port = c.port !== undefined ? child.ports.find((p) => p.name === c.port) : child.ports[i];
+            if (port?.dir !== 'input' || c.expr?.k !== 'id') return;
+            const en = ctx.scope.get(c.expr.name);
+            if (en?.k === 'sig') aliases.set(port.name, en.id);
+          });
+          const childPorts = this.instantiate(child, `${prefix}${it.name}.`, ov, false, aliases);
           it.conns.forEach((c, i) => {
             const port = c.port !== undefined ? child.ports.find((p) => p.name === c.port) : child.ports[i];
             if (!port) throw new HdlError(`module '${it.module}' has no port '${c.port ?? '#' + i}'`, it.loc, 'Synth 8-448');
             if (!c.expr) return;
             const pid = childPorts.get(port.name)!;
+            if (aliases.get(port.name) === pid) return; // shared net, no copy needed
             if (port.dir === 'input') {
               this.design.procs.push({
                 kind: 'comb',

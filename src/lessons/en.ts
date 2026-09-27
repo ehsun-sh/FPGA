@@ -2,7 +2,6 @@
 import { truth } from './helpers';
 
 export interface LessonText {
-  chapter: string;
   title: string;
   summary: string;
   body: string;
@@ -12,7 +11,6 @@ export interface LessonText {
 
 export const EN: Record<string, LessonText> = {
   intro: {
-    chapter: 'Chapter 1',
     title: 'What is an FPGA? Meet the Nexys A7',
     summary: 'Your first design: every switch lights the LED above it.',
     body: `
@@ -45,12 +43,13 @@ export const EN: Record<string, LessonText> = {
   <li>A <b>100 MHz</b> clock on pin E3, named <code>CLK100MHZ</code></li>
 </ul>
 <h3>Your first design</h3>
-<p>The simplest possible circuit: wire every switch straight to the LED above it. In Verilog <code>assign</code>, and in VHDL <code>&lt;=</code>, creates a permanent (combinational) connection.</p>`,
+<p>The simplest possible circuit: wire every switch straight to the LED above it. In Verilog <code>assign</code>, and in VHDL <code>&lt;=</code>, creates a permanent (combinational) connection.</p>
+<h3>How this course is organised</h3>
+<p>The chapters follow the order of Pong P. Chu's book <i>FPGA Prototyping by Verilog/VHDL Examples</i>: gates first, then RT-level combinational circuits, regular sequential circuits, state machines, FSMD, memory and I/O. The text and code here are written for this site; the book is a good companion for going deeper.</p>`,
     tryIt: `<p>Press <span class="kbd">▶ Run</span>, then click the switches at the bottom of the board. Each switch that is up (ON) lights the LED above it.</p>`,
     exercise: `<p>Change the code so the LED order is reversed (SW0 → LD15). Hint: in Verilog use <code>{SW[0], SW[1], ...}</code> or a loop.</p>`,
   },
   gates: {
-    chapter: 'Chapter 2',
     title: 'Logic gates',
     summary: 'AND, OR, NOT, NAND, NOR, XOR and XNOR with two switches.',
     body: `
@@ -82,7 +81,6 @@ ${truth(
     exercise: `<p>Build a three-input AND gate (SW0, SW1, SW2) and show its output on LD7. Make SW 3 bits and LED 8 bits wide.</p>`,
   },
   mux: {
-    chapter: 'Chapter 3',
     title: 'Multiplexers (MUX)',
     summary: 'Pick one of several inputs with a select signal.',
     body: `
@@ -111,7 +109,6 @@ ${truth(
     exercise: `<p>Build an 8-to-1 MUX: inputs SW0 to SW7, select SW15..SW13, output LD2.</p>`,
   },
   adder: {
-    chapter: 'Chapter 4',
     title: 'Adders and hierarchical design',
     summary: 'Half adder, full adder and a 4-bit adder built from module instances.',
     body: `
@@ -143,7 +140,6 @@ ${truth(
     exercise: `<p>Turn the adder into a <b>subtractor</b>: A − B = A + (~B) + 1. Use SW8 to choose between add and subtract.</p>`,
   },
   seg7: {
-    chapter: 'Chapter 5',
     title: 'Seven-segment display',
     summary: 'Hex decoder: the 4-bit switch value on one digit.',
     body: `
@@ -175,7 +171,6 @@ ${truth(
     exercise: `<p>Change AN so all eight digits show the same value. Then use SW15 to switch the decimal point (DP) on and off.</p>`,
   },
   ff: {
-    chapter: 'Chapter 6',
     title: 'Clocks and flip-flops (sequential logic)',
     summary: 'A 16-bit register with enable and synchronous reset.',
     body: `
@@ -193,7 +188,6 @@ ${truth(
     exercise: `<p>Shift the register one bit left with BTNU and one bit right with BTND (hint: <code>{LED[14:0], 1'b0}</code>). Why does one press empty the register so quickly? (The answer is in the next lesson!)</p>`,
   },
   counter: {
-    chapter: 'Chapter 7',
     title: 'Counters and clock division',
     summary: 'A 1 Hz blinker and an 8-bit counter on the LEDs.',
     body: `
@@ -211,7 +205,6 @@ ${truth(
     exercise: `<p>Build a “Knight Rider” light: one lit LED that moves one position every 100 ms and bounces at both ends.</p>`,
   },
   multiplex: {
-    chapter: 'Chapter 8',
     title: 'Multi-digit display (multiplexing)',
     summary: 'Show the 16-bit switch value on 4 digits by lighting them in turn.',
     body: `
@@ -226,7 +219,6 @@ ${truth(
     exercise: `<p>Extend the display to 8 digits: the four left digits show a counter that increments every second.</p>`,
   },
   fsm: {
-    chapter: 'Chapter 9',
     title: 'Finite state machines: a traffic light',
     summary: 'A Moore FSM with a timer and the RGB LED.',
     body: `
@@ -247,7 +239,6 @@ ${truth(
     exercise: `<p>Add a “flashing yellow” state that is active while SW0 is on (like a traffic light at night).</p>`,
   },
   playground: {
-    chapter: 'Lab',
     title: 'Playground',
     summary: 'Write any design you like and run it on the board.',
     body: `
@@ -272,6 +263,220 @@ ${truth(
 </ul>`,
     tryIt: `<p>Write your code and press <span class="kbd">▶ Run</span>. Errors appear in the Messages window at the bottom.</p>`,
   },
+  decoder: {
+    title: 'Decoder and priority encoder',
+    summary: 'A 3-to-8 decoder with enable and an 8-to-3 priority encoder.',
+    body: `
+<p>The previous chapter worked with single gates. From here on we work at the <b>RT level</b> (register transfer): we think in bigger blocks such as decoders, comparators, shifters and ALUs, and the synthesis tool turns them into LUTs.</p>
+<h3>Decoder</h3>
+<p>An n-to-2<sup>n</sup> decoder takes a binary number and activates <b>exactly one</b> of its outputs. Its main use is selecting one of several things, such as one display digit or one memory word. When the <b>enable</b> input is 0, every output is off.</p>
+<ul>
+  <li>Input <code>SW[2:0]</code>, enable <code>SW[3]</code>, outputs <code>LED[7:0]</code></li>
+  <li>In Verilog it is a single shift: <code>8'b1 &lt;&lt; SW[2:0]</code></li>
+</ul>
+<h3>Priority encoder</h3>
+<p>The opposite of a decoder: it has several request inputs and returns the <b>number of the most important</b> active request. Here <code>SW15</code> has the highest priority.</p>
+${truth(
+  ['SW[15:8]', 'LED[14:12]', 'LED15 (valid)'],
+  [
+    ['1xxxxxxx', '111', 1],
+    ['01xxxxxx', '110', 1],
+    ['001xxxxx', '101', 1],
+    ['...', '...', 1],
+    ['00000001', '000', 1],
+    ['00000000', '000', 0],
+  ],
+)}
+<ul>
+  <li>Verilog: <code>casez</code>, where <code>?</code> means "don't care".</li>
+  <li>VHDL: the conditional assignment <code>when ... else</code>. Conditions are tested in order, so the first true one wins, which is exactly a priority.</li>
+</ul>
+<p class="note">💡 The <b>valid</b> output is needed because "no request" and "only SW8" both produce code 000.</p>`,
+    tryIt: `<p>Turn on SW3 and set a number with SW2..SW0: exactly one of LD7..LD0 lights. Now turn on a few of SW15..SW8: LD14..LD12 show the number of the highest switch that is on, and LD15 says there is a request.</p>`,
+    exercise: `<p>Build a 2-to-4 decoder that selects the display digits AN3..AN0. Remember that AN is active-low.</p>`,
+  },
+  shifter: {
+    title: 'Barrel shifter',
+    summary: 'Rotate 8 bits left or right by 0 to 7 places in a single clock.',
+    body: `
+<p>A barrel shifter rotates a word by any amount in <b>one combinational step</b>: bits that fall off one end come back in at the other.</p>
+<h3>A staged structure</h3>
+<p>Instead of one big 8-input mux per bit, the shift amount is applied one bit at a time:</p>
+<ol>
+  <li>if <code>amt[0]=1</code>: rotate by 1</li>
+  <li>if <code>amt[1]=1</code>: rotate by 2</li>
+  <li>if <code>amt[2]=1</code>: rotate by 4</li>
+</ol>
+<p>Each stage is only a 2-to-1 mux per bit, so n bits need log<sub>2</sub>(n) stages. This is an important example of <b>structure-driven design</b> at the RT level.</p>
+<h3>Rotating left</h3>
+<p>Rotating left by k is the same as rotating right by <code>8 − k</code>. So we just negate the amount (<code>0 − amt</code> in 3 bits) and reuse the same circuit.</p>
+<ul>
+  <li>Data: <code>SW[7:0]</code> (also shown on LD15..LD8)</li>
+  <li>Amount: <code>SW[10:8]</code>, direction: <code>SW15</code> (1 = left)</li>
+  <li>Result: <code>LED[7:0]</code></li>
+</ul>`,
+    tryIt: `<p>Turn on only SW0 and change SW10..SW8: the lit LED rotates right and wraps around. Turn on SW15 to change direction.</p>`,
+    exercise: `<p>Add a third control input (for example SW14) that chooses between rotate and logical shift (filling with zeros).</p>`,
+  },
+  alu: {
+    title: 'A simple 4-bit ALU',
+    summary: 'An arithmetic logic unit with eight operations and a zero flag.',
+    body: `
+<p>The <b>ALU</b> (Arithmetic Logic Unit) is the heart of every processor: it takes two operands and an opcode and returns a result. In hardware every operation is built in parallel and a large mux picks one.</p>
+${truth(
+  ['op = SW[15:13]', 'Operation', 'Result'],
+  [
+    ['000', 'ADD', 'A + B (bit 4 = carry)'],
+    ['001', 'SUB', 'A − B (bit 4 = borrow)'],
+    ['010', 'AND', 'A &amp; B'],
+    ['011', 'OR', 'A | B'],
+    ['100', 'XOR', 'A ^ B'],
+    ['101', 'NOT', '~A'],
+    ['110', 'SLT', '1 if A &lt; B'],
+    ['111', 'SHL', 'A &lt;&lt; 1'],
+  ],
+)}
+<ul>
+  <li><code>A = SW[3:0]</code> and <code>B = SW[7:4]</code></li>
+  <li>The 5-bit result is on <code>LED[4:0]</code>; the fifth bit is the carry or borrow.</li>
+  <li>The <b>zero flag</b> on <code>LD15</code> lights when the low four result bits are zero. Processors use this flag for conditional branches.</li>
+</ul>
+<p class="note">💡 In Verilog an expression takes its width from the left side of the assignment: because <code>r</code> is 5 bits, <code>a + b</code> is computed in 5 bits and the carry is kept. In VHDL we widen the operands ourselves with <code>resize</code>.</p>`,
+    tryIt: `<p>Set A with SW3..SW0 and B with SW7..SW4, and pick the operation with SW15..SW13. For example make A equal B and choose SUB: the result is zero and LD15 lights.</p>`,
+    exercise: `<p>Show the result on the seven-segment display instead of the LEDs (reuse the decoder from lesson 5).</p>`,
+  },
+  shiftreg: {
+    title: 'Shift register and LFSR',
+    summary: 'A serial-to-parallel shift register and a pseudo-random number generator.',
+    body: `
+<p>A <b>regular sequential circuit</b> is one whose next state follows a simple, repetitive pattern: registers, counters and <b>shift registers</b>.</p>
+<h3>Shift register</h3>
+<p>On every tick all bits move one place and a new bit enters from the serial input: <code>sr &lt;= {sr[6:0], SW[0]}</code>. This is how serial links such as UART and SPI turn a serial stream into parallel data.</p>
+<h3>LFSR</h3>
+<p>A <b>Linear Feedback Shift Register</b> is a shift register whose input bit is the XOR of some of its own bits. With the right taps an 8-bit LFSR walks through all 255 non-zero states before repeating. Uses include pseudo-random numbers, test patterns and scramblers.</p>
+<pre class="formula">feedback = q7 ⊕ q5 ⊕ q4 ⊕ q3   (x⁸ + x⁶ + x⁵ + x⁴ + 1)</pre>
+<p>To see the motion, we make a <b>tick</b> four times a second (every 25 million clocks), as in the counter lesson. The registers only change when <code>tick=1</code>; this is a <b>clock enable</b>, so everything still runs on one clock.</p>
+<p class="note">⚠️ An LFSR must never become zero, because it would stay there. That is why its initial and reset value is 01.</p>`,
+    tryIt: `<p>LD7..LD0 show the LFSR's pseudo-random pattern. Toggle SW0 a few times and watch the bits march left on LD15..LD8. The red button returns everything to the start.</p>`,
+    exercise: `<p>Change the taps (for example only <code>q7 ⊕ q6</code>) and count in simulation after how many steps the pattern repeats. Why is it less than 255?</p>`,
+  },
+  stopwatch: {
+    title: 'BCD stopwatch',
+    summary: 'A 00.0 to 99.9 second stopwatch built from cascaded decimal counters.',
+    body: `
+<p>This lesson puts three ideas from the chapter together: an accurate <b>tick</b>, <b>cascaded BCD counters</b> and a <b>multiplexed display</b>.</p>
+<h3>A 0.1 second tick</h3>
+<pre class="formula">0.1 s × 100,000,000 Hz = 10,000,000 clocks</pre>
+<h3>BCD counters</h3>
+<p>In BCD each decimal digit is kept separately in 4 bits (0 to 9). When a digit passes 9 it goes back to 0 and increments the next digit, just like a car's odometer:</p>
+<ul>
+  <li><code>d0</code>: tenths, <code>d1</code>: seconds, <code>d2</code>: tens of seconds</li>
+  <li>The decimal point (DP) is lit on digit <code>d1</code>: <b>12.3</b></li>
+</ul>
+<p>The benefit of BCD is that each digit goes straight to a seven-segment decoder, with no division by 10.</p>
+<h3>Controls</h3>
+<ul>
+  <li><code>SW0</code> = run/stop (go)</li>
+  <li><code>BTNU</code> = clear</li>
+</ul>`,
+    tryIt: `<p>Turn SW0 on to start the stopwatch and off to stop it. BTNU clears it. Keep the speed at <b>Real-time</b> so it matches a real clock.</p>`,
+    exercise: `<p>Add a minutes digit (on AN3) so the stopwatch counts to 9:59.9. The tens-of-seconds digit must now wrap at 5.</p>`,
+  },
+  debounce: {
+    title: 'Button debouncing',
+    summary: 'A state machine that filters mechanical switch bounce, plus an edge detector.',
+    body: `
+<p>A button's metal contacts <b>bounce</b> for a few milliseconds when pressed or released, so instead of one clean change the signal jumps between 0 and 1 dozens of times. A person never notices, but a circuit running at 100 MHz sees every bounce as a separate press.</p>
+<h3>The debounce FSM</h3>
+<p>We accept the input only after it has stayed <b>stable for 10 ms</b>:</p>
+${truth(
+  ['State', 'db output', 'Next state'],
+  [
+    ['ZERO', 0, 'input goes 1 → WAIT1'],
+    ['WAIT1', 0, 'stays 1 for 10 ms → ONE; goes 0 → ZERO'],
+    ['ONE', 1, 'input goes 0 → WAIT0'],
+    ['WAIT0', 1, 'stays 0 for 10 ms → ZERO; goes 1 → ONE'],
+  ],
+)}
+<pre class="formula">10 ms × 100 MHz = 1,000,000 clocks  (a 20-bit counter)</pre>
+<h3>Edge detector</h3>
+<p>To count presses we need the <b>moment</b> the button goes down, not how long it is held. We keep last clock's value in a flip-flop: <code>tick = level &amp; ~prev</code>. The output is 1 for exactly one clock.</p>
+<h3>The experiment</h3>
+<p>There are two counters: one counts edges of the <b>raw</b> BTNC input (LD7..LD0), the other counts edges of the <b>debounced</b> signal (LD15..LD8). BTNU clears both.</p>
+<p class="note">💡 The simulator's buttons are clean by default. Turn on <b>Bouncy buttons</b> in the toolbar to make them bounce like a real button.</p>`,
+    tryIt: `<p>First turn on <b>Bouncy buttons</b> in the toolbar. Then press BTNC a few times: LD15..LD8 (debounced) count every press exactly once, but LD7..LD0 (raw) jump by several on each press. BTNU clears both.</p>`,
+    exercise: `<p>Add the debouncer to the register (flip-flop) lesson so that each press of BTNU shifts the register by exactly one bit.</p>`,
+  },
+  bin2bcd: {
+    title: 'FSMD: binary to BCD',
+    summary: 'The double-dabble algorithm as a datapath driven by a state machine.',
+    body: `
+<p>An <b>FSMD</b> (FSM with datapath) is how an <b>algorithm</b> becomes hardware: a <b>datapath</b> (registers and arithmetic units) does the work and a <b>state machine</b> steps it along. Most accelerators and processors have this shape.</p>
+<h3>The problem</h3>
+<p>Show the 13-bit number <code>SW[12:0]</code> (0 to 8191) in decimal on 4 digits. Dividing by 10 is expensive in hardware, so we use the <b>double dabble</b> algorithm (shift and add 3) instead.</p>
+<h3>The algorithm</h3>
+<ol>
+  <li>Clear the BCD register.</li>
+  <li>Repeat 13 times: add <b>3</b> to every BCD digit that is <b>5 or more</b>, then shift the BCD and binary registers left together by one bit.</li>
+</ol>
+<p>Why 3? A digit of 5 or more passes 9 after the shift (a multiply by 2). Adding 3 before the shift means adding 6 after it, and 6 is exactly the gap between decimal 10 and binary 16.</p>
+${truth(
+  ['State', 'Action'],
+  [
+    ['IDLE', 'wait for start; load the number and clear BCD'],
+    ['OP', 'one adjust-and-shift step per clock, 13 times'],
+    ['DONE', 'store the result in the output register, back to IDLE'],
+  ],
+)}
+<p>The <code>start</code> input is tied to 1, so the conversion repeats continuously (once every 15 clocks) and the result is always fresh.</p>`,
+    tryIt: `<p>Build a binary number with SW12..SW0 (the LEDs show it). The display shows its decimal value; for example all 13 switches on gives <b>8191</b>.</p>`,
+    exercise: `<p>Change the controller so a conversion starts only when BTNC is pressed, and LD15 is lit while <code>ready=1</code>.</p>`,
+  },
+  ram: {
+    title: 'Synchronous RAM',
+    summary: 'A 16 × 8 RAM: write with a button, read synchronously.',
+    body: `
+<p>Besides flip-flops, an FPGA has ready-made memory blocks: <b>block RAM</b> (36 Kbit per block on Artix-7) and <b>distributed RAM</b> (built from LUTs). You don't have to instantiate them by hand: describe the memory with a standard template and Vivado recognises it (<b>inference</b>).</p>
+<h3>The synchronous RAM template</h3>
+<ul>
+  <li>Verilog: an array <code>reg [7:0] mem [0:15]</code></li>
+  <li>VHDL: an array type <code>type ram_t is array (0 to 15) of std_logic_vector(7 downto 0)</code></li>
+  <li>Write only on the clock edge and only when <code>we=1</code>.</li>
+  <li>Read on the clock edge too: data is ready one clock after the address. Block RAM only supports synchronous reads.</li>
+</ul>
+<h3>Board connections</h3>
+${truth(
+  ['Signal', 'Connected to'],
+  [
+    ['addr', 'SW[11:8] (also shown on LD11..LD8)'],
+    ['din', 'SW[7:0]'],
+    ['we', 'BTNC'],
+    ['dout', 'LED[7:0]'],
+  ],
+)}
+<p class="note">💡 Check the Utilization report to see which resource the memory uses. For larger memories (for example 1024 × 8) Vivado uses BRAM.</p>`,
+    tryIt: `<p>Pick an address with SW11..SW8, set data with SW7..SW0 and press BTNC. Change the address and come back: the stored data reappears on LD7..LD0, even if you changed SW7..SW0.</p>`,
+    exercise: `<p>Build a ROM holding the message "HELLO" and use a counter to show the letters one by one on the display.</p>`,
+  },
+  pwm: {
+    title: 'PWM: dimming an LED',
+    summary: 'Pulse-width modulation with a parameterised module, mixing colours on the RGB LED.',
+    body: `
+<p>A digital output is only 0 or 1, so how do we dim an LED? With <b>PWM</b> (pulse-width modulation): switch the output on and off very fast, and the fraction of time it is on (the <b>duty cycle</b>) sets the brightness. The same method drives motors, servos and sound.</p>
+<h3>The circuit</h3>
+<p>A free-running W-bit counter counts, and the output is 1 while the counter is below <code>duty</code>:</p>
+<pre class="formula">pwm = (cnt &lt; duty)      duty cycle = duty / 2^W</pre>
+<p>With W=8 and a 100 MHz clock the PWM frequency is about <b>390 kHz</b>; the eye only sees the average.</p>
+<h3>A parameterised module</h3>
+<p>The counter width is a <code>parameter</code> in Verilog and a <code>generic</code> in VHDL, so the module can be reused at different resolutions.</p>
+<ul>
+  <li><code>SW[7:0]</code> → brightness of LD16's red and of LD0</li>
+  <li><code>SW[15:8]</code> → brightness of LD16's green and of LD1</li>
+</ul>
+<p>Mixing red and green in different ratios makes orange and yellow.</p>`,
+    tryIt: `<p>Turn on SW7 (duty = 128, i.e. 50%) and then try SW0 to SW6: LD0 and LD16's red glow at different strengths. Add green with SW15..SW8 to make orange or yellow.</p>`,
+    exercise: `<p>Build a "breathing LED": a slow counter raises the duty value gradually and then lowers it again.</p>`,
+  },
 };
 
 // Lesson-page labels
@@ -285,6 +490,9 @@ export const LESSON_UI = {
     exercise: '🎯 تمرین',
     exerciseHint: 'کد را در تب ویرایشگر تغییر دهید و دوباره Run بزنید. تغییرات شما در مرورگر ذخیره می‌شود.',
     learn: 'آموزش',
+    chapter: (n: number) => `فصل ${n}`,
+    soon: 'به‌زودی',
+    bouncy: 'لرزش دکمه‌ها',
   },
   en: {
     explain: '📖 Explanation',
@@ -295,5 +503,8 @@ export const LESSON_UI = {
     exercise: '🎯 Exercise',
     exerciseHint: 'Change the code in the editor tab and press Run again. Your changes are saved in the browser.',
     learn: 'Lessons',
+    chapter: (n: number) => `Chapter ${n}`,
+    soon: 'coming soon',
+    bouncy: 'Bouncy buttons',
   },
 };

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { BOARDS, DEFAULT_BOARD } from '../src/boards';
 import { mapPorts } from '../src/boards/mapping';
 import { compileDesign, synthesize } from '../src/hdl';
-import { ALL_LESSONS } from '../src/lessons/lessons';
+import { ADVANCED } from '../src/lessons/advanced';
+import { ALL_LESSONS } from '../src/lessons/course';
+import { LESSONS, PLAYGROUND } from '../src/lessons/lessons';
 
 type Harness = ReturnType<typeof harness>;
 
@@ -150,6 +152,170 @@ const checks: Record<string, (h: Harness) => void> = {
     h.sim.run(100_000_000);
     expect(h.rgb16()).toEqual([1, 0, 0]);
   },
+  decoder(h) {
+    for (let i = 0; i < 8; i++) {
+      h.sw(8 | i);
+      expect(h.led() & 0xff).toBe(1 << i);
+    }
+    h.sw(5);
+    expect(h.led() & 0xff).toBe(0);
+    for (const [req, code] of [
+      [0x80, 7],
+      [0x5a, 6],
+      [0x13, 4],
+      [0x01, 0],
+    ]) {
+      h.sw(req << 8);
+      expect((h.led() >> 12) & 7, `req ${req}`).toBe(code);
+      expect(h.led() >> 15).toBe(1);
+    }
+    h.sw(0);
+    expect(h.led() >> 15).toBe(0);
+  },
+  shifter(h) {
+    const rotr = (a: number, k: number) => ((a >> k) | (a << (8 - k))) & 0xff;
+    for (const a of [0x01, 0xb4]) {
+      for (let k = 0; k < 8; k++) {
+        h.sw(a | (k << 8));
+        expect(h.led() & 0xff, `ror ${a} ${k}`).toBe(rotr(a, k));
+        expect(h.led() >> 8).toBe(a);
+        h.sw(a | (k << 8) | 0x8000);
+        expect(h.led() & 0xff, `rol ${a} ${k}`).toBe(rotr(a, (8 - k) & 7));
+      }
+    }
+  },
+  alu(h) {
+    const ops = [
+      (a: number, b: number) => (a + b) & 31,
+      (a: number, b: number) => (a - b) & 31,
+      (a: number, b: number) => a & b,
+      (a: number, b: number) => a | b,
+      (a: number, b: number) => a ^ b,
+      (a: number) => ~a & 15,
+      (a: number, b: number) => (a < b ? 1 : 0),
+      (a: number) => (a << 1) & 31,
+    ];
+    for (const [a, b] of [
+      [9, 12],
+      [7, 7],
+      [15, 1],
+      [0, 5],
+    ]) {
+      for (let op = 0; op < 8; op++) {
+        h.sw(a | (b << 4) | (op << 13));
+        const r = ops[op](a, b);
+        expect(h.led() & 0x7fff, `op ${op} a ${a} b ${b}`).toBe(r);
+        expect(h.led() >> 15).toBe((r & 15) === 0 ? 1 : 0);
+      }
+    }
+  },
+  shiftreg(h) {
+    h.reset(1);
+    h.sw(1);
+    let lfsr = 1;
+    for (let i = 0; i < 3; i++) {
+      h.sim.run(25_000_000);
+      lfsr = ((lfsr << 1) | (((lfsr >> 7) ^ (lfsr >> 5) ^ (lfsr >> 4) ^ (lfsr >> 3)) & 1)) & 0xff;
+      expect(h.led() & 0xff).toBe(lfsr);
+    }
+    expect(h.led() >> 8).toBe(0b111);
+    h.sw(0);
+    h.sim.run(25_000_000);
+    expect(h.led() >> 8).toBe(0b1110);
+    h.reset(0);
+    h.sim.run(1);
+    expect(h.led()).toBe(1);
+  },
+  stopwatch(h) {
+    const digits = () => {
+      const seen = new Map<number, number>();
+      for (let k = 0; k < 4; k++) {
+        seen.set(h.an(), h.seg());
+        h.sim.run(1 << 16);
+      }
+      return seen;
+    };
+    h.sw(1);
+    h.sim.run(12 * 10_000_000);
+    h.sw(0);
+    const d = digits();
+    expect(d.get(0xfe)).toBe(HEX[2]);
+    expect(d.get(0xfd)).toBe(HEX[1]);
+    expect(d.get(0xfb)).toBe(HEX[0]);
+    expect(d.has(0xf7)).toBe(false);
+    h.btn('BTNU', 1);
+    h.sim.run(1);
+    h.btn('BTNU', 0);
+    expect(digits().get(0xfd)).toBe(HEX[0]);
+  },
+  debounce(h) {
+    // a bouncy press: short glitches, then a stable level
+    for (const level of [1, 0, 1, 0, 1]) {
+      h.btn('BTNC', level);
+      h.sim.run(20_000);
+    }
+    h.sim.run(1_100_000);
+    expect(h.led()).toBe((1 << 8) | 3);
+    for (const level of [0, 1, 0]) {
+      h.btn('BTNC', level);
+      h.sim.run(20_000);
+    }
+    h.sim.run(1_100_000);
+    expect(h.led()).toBe((1 << 8) | 4);
+    h.btn('BTNC', 1);
+    h.sim.run(1_100_000);
+    expect(h.led()).toBe((2 << 8) | 5);
+    h.btn('BTNU', 1);
+    h.sim.run(1);
+    expect(h.led()).toBe(0);
+  },
+  bin2bcd(h) {
+    for (const n of [8191, 1234, 7, 5009]) {
+      h.sw(n);
+      h.sim.run(40);
+      const seen = new Map<number, number>();
+      for (let k = 0; k < 4; k++) {
+        seen.set(h.an(), h.seg());
+        h.sim.run(1 << 16);
+      }
+      const dec = String(n).padStart(4, '0');
+      for (let i = 0; i < 4; i++) expect(seen.get(0xff & ~(1 << i)), `${n} digit ${i}`).toBe(HEX[+dec[3 - i]]);
+      expect(h.led()).toBe(n);
+    }
+  },
+  ram(h) {
+    for (const [a, v] of [
+      [3, 0x5a],
+      [9, 0xc3],
+    ]) {
+      h.sw((a << 8) | v);
+      h.btn('BTNC', 1);
+      h.sim.run(2);
+      h.btn('BTNC', 0);
+    }
+    h.sw(3 << 8);
+    h.sim.run(2);
+    expect(h.led()).toBe((3 << 8) | 0x5a);
+    h.sw(9 << 8);
+    h.sim.run(2);
+    expect(h.led()).toBe((9 << 8) | 0xc3);
+    h.sw(4 << 8);
+    h.sim.run(2);
+    expect(h.led()).toBe(4 << 8);
+  },
+  pwm(h) {
+    h.sw(64 | (192 << 8));
+    let r = 0;
+    let g = 0;
+    for (let i = 0; i < 512; i++) {
+      const [cr, cg] = h.rgb16();
+      r += cr;
+      g += cg;
+      h.sim.run(1);
+    }
+    expect(r).toBe(128);
+    expect(g).toBe(384);
+  },
   playground(h) {
     h.sw(0x00ff);
     expect(h.led()).toBe(0x00ff);
@@ -181,6 +347,14 @@ describe('board definitions', () => {
       expect(devs.filter((d) => d.kind === 'btn').map((d) => (d as { name: string }).name).sort()).toEqual([...b.io.buttons].sort());
     });
   }
+});
+
+describe('course', () => {
+  it('every lesson belongs to exactly one chapter', () => {
+    const ids = ALL_LESSONS.map((l) => l.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const l of [...LESSONS, ...ADVANCED, PLAYGROUND]) expect(ids, l.id).toContain(l.id);
+  });
 });
 
 describe('translations', () => {

@@ -76,6 +76,7 @@ export class Runner {
     this.mapping = null;
     this.achievedHz = 0;
     this.lit.fill(0);
+    this.pending = [];
     this.bright.fill(0);
   }
 
@@ -98,9 +99,32 @@ export class Runner {
   }
 
   setButton(name: string, pressed: boolean) {
+    this.pending = this.pending.filter((p) => p.name !== name);
+    if (this.bounce && this.running && this.mapping?.clock !== undefined) {
+      // mechanical contact bounce: a burst of random transitions over ~0.2-3 ms before the level settles
+      const hz = this.board.clockHz;
+      let at = this.totalCycles;
+      let level = pressed;
+      const n = 3 + Math.floor(Math.random() * 5);
+      for (let i = 0; i < n; i++) {
+        at += Math.round((0.0001 + Math.random() * 0.0006) * hz);
+        level = !level;
+        this.pending.push({ at, name, pressed: level });
+      }
+      at += Math.round(0.0003 * hz);
+      this.pending.push({ at, name, pressed });
+    }
+    this.applyButton(name, pressed);
+  }
+
+  private applyButton(name: string, pressed: boolean) {
     if (name === this.board.io.reset) this.setDevice((d) => d.kind === 'reset', pressed ? 0 : 1);
     else this.setDevice((d) => d.kind === 'btn' && d.name === name, pressed ? 1 : 0);
   }
+
+  // simulate contact bounce on push buttons
+  bounce = false;
+  private pending: { at: number; name: string; pressed: boolean }[] = [];
 
   private setDevice(match: (d: Binding['device']) => boolean, val: number) {
     if (!this.sim || !this.running) return;
@@ -167,7 +191,17 @@ export class Runner {
       this.lastMark = 0;
       this.acc.fill(0);
       while (done < want) {
-        const n = Math.min(this.chunk, want - done);
+        let n = Math.min(this.chunk, want - done);
+        if (this.pending.length) {
+          const now = this.totalCycles + done;
+          for (const p of this.pending.filter((q) => q.at <= now)) {
+            this.runBase = done;
+            this.mark(-1); // close the brightness window up to now, then change the input
+            this.applyButton(p.name, p.pressed);
+          }
+          this.pending = this.pending.filter((q) => q.at > now);
+          if (this.pending.length) n = Math.max(1, Math.min(n, Math.min(...this.pending.map((q) => q.at)) - now));
+        }
         this.runBase = done;
         const ts = performance.now();
         try {

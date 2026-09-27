@@ -4,7 +4,6 @@ import { truth } from './helpers';
 
 export interface Lesson {
   id: string;
-  chapter: string;
   title: string;
   summary: string;
   body: string; // HTML
@@ -16,15 +15,15 @@ export interface Lesson {
   exercise?: string; // HTML
 }
 
-const VHDL_HEADER = `library ieee;
+export const VHDL_HEADER = `library ieee;
 use ieee.std_logic_1164.all;
 `;
-const VHDL_NUMERIC = `library ieee;
+export const VHDL_NUMERIC = `library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 `;
 
-const HEX_CASE_V = `        case (x)
+export const HEX_CASE_V = `        case (x)
             4'h0: seg = 7'b1000000;
             4'h1: seg = 7'b1111001;
             4'h2: seg = 7'b0100100;
@@ -43,7 +42,7 @@ const HEX_CASE_V = `        case (x)
             default: seg = 7'b0001110; // F
         endcase`;
 
-const HEX_CASE_VHDL = `        case x is
+export const HEX_CASE_VHDL = `        case x is
             when "0000" => seg <= "1000000";
             when "0001" => seg <= "1111001";
             when "0010" => seg <= "0100100";
@@ -65,7 +64,6 @@ const HEX_CASE_VHDL = `        case x is
 export const LESSONS: Lesson[] = [
   {
     id: 'intro',
-    chapter: 'فصل ۱',
     title: 'FPGA چیست؟ آشنایی با برد Nexys A7',
     summary: 'اولین طراحی: هر کلید، LED بالای خودش را روشن می‌کند.',
     body: `
@@ -98,8 +96,10 @@ export const LESSONS: Lesson[] = [
   <li>کلاک <b>100MHz</b> روی پایه E3 با نام <code>CLK100MHZ</code></li>
 </ul>
 <h3>اولین طراحی</h3>
-<p>ساده‌ترین مدار ممکن: هر کلید را مستقیم به LED بالایش سیم‌کشی می‌کنیم. در Verilog با <code>assign</code> و در VHDL با <code>&lt;=</code> یک اتصال دائمی (ترکیبی) ساخته می‌شود.</p>`,
-    verilog: `// Lesson 1: every switch drives the LED right above it
+<p>ساده‌ترین مدار ممکن: هر کلید را مستقیم به LED بالایش سیم‌کشی می‌کنیم. در Verilog با <code>assign</code> و در VHDL با <code>&lt;=</code> یک اتصال دائمی (ترکیبی) ساخته می‌شود.</p>
+<h3>ساختار این دوره</h3>
+<p>ترتیب فصل‌ها از کتاب <i>FPGA Prototyping by Verilog/VHDL Examples</i> نوشته Pong P. Chu گرفته شده است: اول گیت‌ها، بعد مدارهای ترکیبی سطح RT، مدارهای ترتیبی منظم، ماشین حالت، FSMD، حافظه و ورودی/خروجی. متن و کدهای اینجا مخصوص همین سایت نوشته شده‌اند و کتاب منبع خوبی برای مطالعه عمیق‌تر است.</p>`,
+    verilog: `// every switch drives the LED right above it
 module top (
     input  wire [15:0] SW,
     output wire [15:0] LED
@@ -108,7 +108,7 @@ module top (
 endmodule
 `,
     vhdl: `${VHDL_HEADER}
--- Lesson 1: every switch drives the LED right above it
+-- every switch drives the LED right above it
 entity top is
     port (
         SW  : in  std_logic_vector(15 downto 0);
@@ -127,7 +127,6 @@ end rtl;
   },
   {
     id: 'gates',
-    chapter: 'فصل ۲',
     title: 'گیت‌های منطقی',
     summary: 'AND، OR، NOT، NAND، NOR، XOR و XNOR با دو کلید.',
     body: `
@@ -155,7 +154,7 @@ ${truth(
   ],
 )}
 <p>نکته: در FPGA گیت جداگانه ساخته نمی‌شود؛ ابزار سنتز همه این توابع را داخل <b>LUT</b> پیاده می‌کند. در گزارش سنتز (تب Reports) تعداد LUT تقریبی را ببینید.</p>`,
-    verilog: `// Lesson 2: basic logic gates. A = SW[0], B = SW[1]
+    verilog: `// basic logic gates. A = SW[0], B = SW[1]
 module top (
     input  wire [1:0] SW,
     output wire [6:0] LED
@@ -173,7 +172,7 @@ module top (
 endmodule
 `,
     vhdl: `${VHDL_HEADER}
--- Lesson 2: basic logic gates. A = SW(0), B = SW(1)
+-- basic logic gates. A = SW(0), B = SW(1)
 entity top is
     port (
         SW  : in  std_logic_vector(1 downto 0);
@@ -202,7 +201,6 @@ end rtl;
   },
   {
     id: 'mux',
-    chapter: 'فصل ۳',
     title: 'مالتی‌پلکسر (MUX)',
     summary: 'انتخاب یک ورودی از بین چند ورودی با سیگنال انتخاب.',
     body: `
@@ -227,7 +225,7 @@ ${truth(
   <li>در VHDL: <code>with ... select</code></li>
 </ul>
 <p class="note">⚠️ در بلوک ترکیبی حتماً برای همه حالت‌ها مقدار بدهید (<code>default</code> یا <code>when others</code>)، وگرنه ابزار سنتز <b>Latch</b> می‌سازد.</p>`,
-    verilog: `// Lesson 3: multiplexers
+    verilog: `// multiplexers
 module top (
     input  wire [15:0] SW,
     output reg  [1:0]  LED
@@ -248,7 +246,7 @@ module top (
 endmodule
 `,
     vhdl: `${VHDL_HEADER}
--- Lesson 3: multiplexers
+-- multiplexers
 entity top is
     port (
         SW  : in  std_logic_vector(15 downto 0);
@@ -275,7 +273,6 @@ end rtl;
   },
   {
     id: 'adder',
-    chapter: 'فصل ۴',
     title: 'جمع‌کننده و طراحی سلسله‌مراتبی',
     summary: 'نیم‌جمع‌کننده، تمام‌جمع‌کننده و جمع‌کننده ۴ بیتی با نمونه‌سازی ماژول.',
     body: `
@@ -303,7 +300,7 @@ ${truth(
   <li>برای مقایسه، همان جمع با عملگر <code>+</code> روی <b>LD12..LD8</b></li>
 </ul>
 <p>در عمل همیشه از <code>+</code> استفاده می‌کنیم؛ ابزار سنتز آن را روی زنجیره نقلی سریع (CARRY4) تراشه پیاده می‌کند.</p>`,
-    verilog: `// Lesson 4: full adder + 4-bit ripple-carry adder
+    verilog: `// full adder + 4-bit ripple-carry adder
 module full_adder (
     input  wire a, b, cin,
     output wire s, cout
@@ -335,7 +332,7 @@ module top (
 endmodule
 `,
     vhdl: `${VHDL_NUMERIC}
--- Lesson 4: full adder + 4-bit ripple-carry adder
+-- full adder + 4-bit ripple-carry adder
 entity full_adder is
     port (
         a, b, cin : in  std_logic;
@@ -386,7 +383,6 @@ end rtl;
   },
   {
     id: 'seg7',
-    chapter: 'فصل ۵',
     title: 'نمایشگر ۷ قسمتی',
     summary: 'دیکودر هگزادسیمال: عدد ۴ بیتی کلیدها روی یک رقم.',
     body: `
@@ -414,7 +410,7 @@ ${truth(
   ],
 )}
 <p>این مدار <b>ترکیبی</b> است: یک جدول جست‌وجو (ROM کوچک) که با <code>case</code> توصیف می‌شود و در LUTها پیاده می‌شود.</p>`,
-    verilog: `// Lesson 5: hex to seven-segment decoder on digit 0
+    verilog: `// hex to seven-segment decoder on digit 0
 module top (
     input  wire [3:0] SW,
     output wire CA, CB, CC, CD, CE, CF, CG, DP,
@@ -433,7 +429,7 @@ ${HEX_CASE_V}
 endmodule
 `,
     vhdl: `${VHDL_HEADER}
--- Lesson 5: hex to seven-segment decoder on digit 0
+-- hex to seven-segment decoder on digit 0
 entity top is
     port (
         SW : in  std_logic_vector(3 downto 0);
@@ -465,7 +461,6 @@ end rtl;
   },
   {
     id: 'ff',
-    chapter: 'فصل ۶',
     title: 'کلاک و فلیپ‌فلاپ (مدار ترتیبی)',
     summary: 'رجیستر ۱۶ بیتی با Enable و Reset همگام.',
     body: `
@@ -479,7 +474,7 @@ end rtl;
 <h3>Enable و Reset</h3>
 <p>در این درس ۱۶ فلیپ‌فلاپ داریم (یک رجیستر). وقتی <b>BTNC</b> فشرده است، مقدار کلیدها ذخیره می‌شود؛ وقتی دکمه رها شود LEDها مقدار قبلی را <b>نگه می‌دارند</b> حتی اگر کلیدها را عوض کنید. دکمه قرمز <b>CPU RESET</b> (فعال با صفر) رجیستر را صفر می‌کند.</p>
 <p class="note">💡 در بلوک‌های کلاک‌دار همیشه از <code>&lt;=</code> استفاده کنید تا همه فلیپ‌فلاپ‌ها هم‌زمان به‌روز شوند. گزارش سنتز باید <b>16 FF</b> نشان دهد.</p>`,
-    verilog: `// Lesson 6: a 16-bit register with clock enable and synchronous reset
+    verilog: `// a 16-bit register with clock enable and synchronous reset
 module top (
     input  wire        CLK100MHZ,
     input  wire        CPU_RESETN,   // active-low reset button
@@ -496,7 +491,7 @@ module top (
 endmodule
 `,
     vhdl: `${VHDL_HEADER}
--- Lesson 6: a 16-bit register with clock enable and synchronous reset
+-- a 16-bit register with clock enable and synchronous reset
 entity top is
     port (
         CLK100MHZ  : in  std_logic;
@@ -530,7 +525,6 @@ end rtl;
   },
   {
     id: 'counter',
-    chapter: 'فصل ۷',
     title: 'شمارنده و تقسیم فرکانس',
     summary: 'چشمک‌زن ۱ هرتز و شمارنده ۸ بیتی روی LEDها.',
     body: `
@@ -544,7 +538,7 @@ end rtl;
 </ul>
 <p class="note">⏱️ شبیه‌ساز تلاش می‌کند کلاک را با سرعت واقعی 100MHz اجرا کند. سرعت واقعی شبیه‌سازی در نوار پایین نمایش داده می‌شود. اگر کامپیوترتان کندتر باشد، چشمک‌زدن هم کندتر دیده می‌شود. برای دیدن جزئیات می‌توانید از منوی <b>Clock</b> سرعت را کم کنید.</p>
 <p>در شبیه‌سازی‌های Vivado هم معمولاً برای تست سریع، مقدار <code>HALF_SECOND</code> را کوچک می‌کنند. این کار را امتحان کنید!</p>`,
-    verilog: `// Lesson 7: clock divider, 1 Hz blinker and an 8-bit counter
+    verilog: `// clock divider, 1 Hz blinker and an 8-bit counter
 module top (
     input  wire        CLK100MHZ,
     input  wire        CPU_RESETN,
@@ -576,7 +570,7 @@ module top (
 endmodule
 `,
     vhdl: `${VHDL_NUMERIC}
--- Lesson 7: clock divider, 1 Hz blinker and an 8-bit counter
+-- clock divider, 1 Hz blinker and an 8-bit counter
 entity top is
     port (
         CLK100MHZ  : in  std_logic;
@@ -620,7 +614,6 @@ end rtl;
   },
   {
     id: 'multiplex',
-    chapter: 'فصل ۸',
     title: 'نمایش چند رقمی (Multiplexing)',
     summary: 'نمایش عدد ۱۶ بیتی کلیدها روی ۴ رقم با روشن کردن نوبتی ارقام.',
     body: `
@@ -631,7 +624,7 @@ end rtl;
   <li>یک MUX، نیبل (۴ بیت) مربوط به رقم فعال را انتخاب می‌کند و دیکودر درس ۵ آن را به پاره‌ها تبدیل می‌کند.</li>
 </ul>
 <p>این درس ترکیب همه چیزهایی است که تا اینجا یاد گرفتیم: <b>شمارنده</b> + <b>MUX</b> + <b>دیکودر</b> + <b>سلسله‌مراتب</b>.</p>`,
-    verilog: `// Lesson 8: show SW[15:0] as four hex digits using time multiplexing
+    verilog: `// show SW[15:0] as four hex digits using time multiplexing
 module hex7seg (
     input  wire [3:0] x,
     output reg  [6:0] seg    // {g,f,e,d,c,b,a}, active-low
@@ -673,7 +666,7 @@ module top (
 endmodule
 `,
     vhdl: `${VHDL_NUMERIC}
--- Lesson 8: show SW(15 downto 0) as four hex digits using time multiplexing
+-- show SW(15 downto 0) as four hex digits using time multiplexing
 entity hex7seg is
     port (
         x   : in  std_logic_vector(3 downto 0);
@@ -739,7 +732,6 @@ end rtl;
   },
   {
     id: 'fsm',
-    chapter: 'فصل ۹',
     title: 'ماشین حالت (FSM): چراغ راهنمایی',
     summary: 'ماشین حالت Moore با تایمر و LED سه‌رنگ.',
     body: `
@@ -756,7 +748,7 @@ end rtl;
 </ul>
 <p>ساختار استاندارد FSM: یک بلوک ترتیبی برای <b>ثبت حالت</b> و یک بلوک ترکیبی برای <b>خروجی‌ها</b>.</p>
 <p class="note">💡 LED سه‌رنگ واقعی خیلی پرنور است؛ در طرح‌های واقعی آن را با PWM کم‌نور می‌کنند.</p>`,
-    verilog: `// Lesson 9: traffic light FSM on the RGB LED LD16
+    verilog: `// traffic light FSM on the RGB LED LD16
 module top (
     input  wire CLK100MHZ,
     input  wire CPU_RESETN,
@@ -808,7 +800,7 @@ module top (
 endmodule
 `,
     vhdl: `${VHDL_NUMERIC}
--- Lesson 9: traffic light FSM on the RGB LED LD16
+-- traffic light FSM on the RGB LED LD16
 entity top is
     port (
         CLK100MHZ  : in  std_logic;
@@ -873,7 +865,6 @@ end rtl;
 
 export const PLAYGROUND: Lesson = {
   id: 'playground',
-  chapter: 'آزمایشگاه',
   title: 'زمین بازی (Playground)',
   summary: 'هر طرحی که دوست دارید بنویسید و روی برد اجرا کنید.',
   body: `
@@ -938,4 +929,4 @@ end rtl;
   tryIt: `<p>کد خود را بنویسید و <span class="kbd">▶ Run</span> را بزنید. خطاها در پنجره Messages پایین صفحه نمایش داده می‌شوند.</p>`,
 };
 
-export const ALL_LESSONS = [...LESSONS, PLAYGROUND];
+
