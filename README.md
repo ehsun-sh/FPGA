@@ -35,10 +35,23 @@ npm run build    # static site in dist/
 | Path | What |
 | --- | --- |
 | `src/hdl/` | lexer, Verilog and VHDL parsers, elaboration, compiler to a JS cycle simulator |
-| `src/board/` | Nexys A7 pin table, XDC parser/port mapping, 3D board |
+| `src/boards/` | board plug-ins (`types.ts` interface, `index.ts` registry), XDC parser / port mapping |
+| `src/boards/nexys-a7/` | Nexys A7-100T: pin table, master XDC, Three.js model |
 | `src/sim/runner.ts` | real-time driver: clocking, inputs, LED/segment brightness (persistence of vision) |
 | `src/lessons/` | course content |
 | `src/main.ts`, `src/ui/` | Vivado-style UI |
+
+## Adding a board
+
+Boards are plug-ins. To add one, create `src/boards/<id>/` with:
+
+1. `pins.ts`: package pin → device (`sw`, `led`, `rgb`, `seg`, `an`, `btn`, `reset`, `clk`), the conventional port
+   names from the vendor's master XDC, and a `masterXdc()` generator.
+2. A view implementing `BoardView` (e.g. a Three.js model) that reports switch/button input and renders `BoardOutputs`.
+3. `index.ts` exporting a `BoardDef` (name, part, clock, I/O counts, resources), then add it to `BOARDS` in
+   `src/boards/index.ts`. The board test in `test/lessons.test.ts` checks the definition is consistent.
+
+Lesson code currently uses the Nexys A7 port names (`SW`, `LED`, `CLK100MHZ`, ...).
 
 ## Simulator limits
 

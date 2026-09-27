@@ -1,5 +1,5 @@
 // Step-by-step FPGA course. Lesson text is Persian (RTL); code and identifiers stay in English.
-import { masterXdc } from '../board/pins';
+import type { XdcGroup } from '../boards';
 
 export interface Lesson {
   id: string;
@@ -9,7 +9,8 @@ export interface Lesson {
   body: string; // HTML
   verilog: string;
   vhdl: string;
-  xdc: string;
+  // which groups of the board's master XDC this lesson enables
+  xdc: Partial<Record<XdcGroup, boolean>>;
   tryIt: string; // HTML, shown under "روی برد امتحان کنید"
   exercise?: string; // HTML
 }
@@ -124,7 +125,7 @@ begin
     LED <= SW;
 end rtl;
 `,
-    xdc: masterXdc({ sw: true, led: true }),
+    xdc: { sw: true, led: true },
     tryIt: `<p>روی <span class="kbd">▶ Run</span> بزنید، بعد روی کلیدهای پایین برد کلیک کنید. هر کلید که بالا برود (ON) LED بالای آن روشن می‌شود.</p>`,
     exercise: `<p>کد را طوری تغییر دهید که ترتیب LEDها برعکس شود (SW0 → LD15). راهنمایی: در Verilog از <code>{SW[0], SW[1], ...}</code> یا یک حلقه استفاده کنید.</p>`,
   },
@@ -199,7 +200,7 @@ begin
     LED(6) <= a xnor b;   -- XNOR
 end rtl;
 `,
-    xdc: masterXdc({ sw: true, led: true }),
+    xdc: { sw: true, led: true },
     tryIt: `<p>کلیدهای <b>SW0</b> و <b>SW1</b> را در چهار حالت ممکن قرار دهید و LEDهای LD0 تا LD6 را با جدول درستی مقایسه کنید. LD2 (NOT) فقط به SW0 بستگی دارد.</p>`,
     exercise: `<p>یک گیت AND سه‌ورودی (SW0، SW1، SW2) بسازید و خروجی را روی LD7 نشان دهید. پورت SW را ۳ بیتی و LED را ۸ بیتی کنید.</p>`,
   },
@@ -272,7 +273,7 @@ begin
                   SW(3) when others;
 end rtl;
 `,
-    xdc: masterXdc({ sw: true, led: true }),
+    xdc: { sw: true, led: true },
     tryIt: `<p>SW0 را روشن و SW1 را خاموش کنید. حالا با SW15 بین دو ورودی جابه‌جا شوید و LD0 را ببینید. برای MUX چهار به یک، SW4 و SW5 را تغییر دهید و ببینید LD1 از کدام کلید پیروی می‌کند.</p>`,
     exercise: `<p>یک MUX هشت به یک بسازید: ورودی‌ها SW0 تا SW7، انتخاب SW15..SW13 و خروجی LD2.</p>`,
   },
@@ -383,7 +384,7 @@ begin
     LED(15 downto 13) <= "000";
 end rtl;
 `,
-    xdc: masterXdc({ sw: true, led: true }),
+    xdc: { sw: true, led: true },
     tryIt: `<p>مثلاً A = 0101 (SW0 و SW2 روشن) و B = 0011 (SW4 و SW5 روشن) بگذارید. حاصل 8 یعنی <b>01000</b> روی LD4..LD0 و همین عدد روی LD12..LD8 دیده می‌شود.</p>`,
     exercise: `<p>جمع‌کننده را به یک <b>تفریق‌کننده</b> تبدیل کنید: A − B = A + (~B) + 1. از SW8 به‌عنوان انتخاب جمع/تفریق استفاده کنید.</p>`,
   },
@@ -462,7 +463,7 @@ ${HEX_CASE_VHDL}
     AN <= "11111110";         -- only digit 0 on
 end rtl;
 `,
-    xdc: masterXdc({ sw: true, seg: true }),
+    xdc: { sw: true, seg: true },
     tryIt: `<p>با کلیدهای SW0 تا SW3 عددهای 0 تا 15 را بسازید و ببینید رقم سمت راست 0 تا F را نشان می‌دهد.</p>`,
     exercise: `<p>AN را طوری تغییر دهید که هر ۸ رقم همان عدد را نشان دهند. بعد با SW15 نقطه اعشار (DP) را روشن و خاموش کنید.</p>`,
   },
@@ -527,7 +528,7 @@ begin
     LED <= q;
 end rtl;
 `,
-    xdc: masterXdc({ clk: true, sw: true, led: true, btn: true, reset: true }),
+    xdc: { clk: true, sw: true, led: true, btn: true, reset: true },
     tryIt: `<p>چند کلید را روشن کنید؛ LEDها تغییری نمی‌کنند. حالا دکمه وسط (BTNC) را فشار دهید: الگو ذخیره می‌شود. کلیدها را عوض کنید و ببینید LEDها مقدار قبلی را نگه می‌دارند. دکمه قرمز همه را صفر می‌کند.</p>`,
     exercise: `<p>با BTNU مقدار رجیستر را یک بیت به چپ و با BTND یک بیت به راست شیفت دهید (راهنمایی: <code>{LED[14:0], 1'b0}</code>). چرا با یک بار فشار دادن، رجیستر خیلی سریع خالی می‌شود؟ (جواب در درس بعد!)</p>`,
   },
@@ -617,7 +618,7 @@ begin
     LED(15 downto 8) <= std_logic_vector(count);
 end rtl;
 `,
-    xdc: masterXdc({ clk: true, led: true, reset: true }),
+    xdc: { clk: true, led: true, reset: true },
     tryIt: `<p>Run را بزنید. LD0 باید هر ثانیه یک بار چشمک بزند و LD15..LD8 شمردن باینری را نشان دهند. دکمه قرمز شمارنده را صفر می‌کند.</p>`,
     exercise: `<p>یک «چراغ رونده» (Knight Rider) بسازید: یک LED روشن که هر ۱۰۰ میلی‌ثانیه یک خانه جابه‌جا می‌شود و در دو سر برمی‌گردد.</p>`,
   },
@@ -736,7 +737,7 @@ begin
     DP <= '1';
 end rtl;
 `,
-    xdc: masterXdc({ clk: true, sw: true, seg: true }),
+    xdc: { clk: true, sw: true, seg: true },
     tryIt: `<p>کلیدها را تغییر دهید؛ چهار رقم سمت راست مقدار هگز SW15..SW0 را نشان می‌دهند. از منوی <b>Clock</b> سرعت را روی <b>10 Hz</b> بگذارید تا روشن شدن نوبتی رقم‌ها را با چشم ببینید!</p>`,
     exercise: `<p>نمایش را به ۸ رقم گسترش دهید: چهار رقم سمت چپ مقدار یک شمارنده را نشان دهند که هر ثانیه یکی زیاد می‌شود.</p>`,
   },
@@ -868,7 +869,7 @@ begin
            "100";
 end rtl;
 `,
-    xdc: masterXdc({ clk: true, led: true, rgb: true, btn: true, reset: true }),
+    xdc: { clk: true, led: true, rgb: true, btn: true, reset: true },
     tryIt: `<p>LED سه‌رنگ LD16 (کنار نمایشگرها) به ترتیب قرمز، سبز و زرد می‌شود و LD2..LD0 حالت فعلی را نشان می‌دهند. وقتی سبز است BTNC را بزنید.</p>`,
     exercise: `<p>یک حالت «چشمک‌زن زرد» اضافه کنید که با روشن بودن SW0 فعال شود (مثل چراغ راهنمایی در نیمه‌شب).</p>`,
   },
@@ -937,7 +938,7 @@ begin
     LED <= (others => cnt(23)) when BTNC = '1' else SW;
 end rtl;
 `,
-  xdc: masterXdc({ clk: true, sw: true, led: true, btn: true }),
+  xdc: { clk: true, sw: true, led: true, btn: true },
   tryIt: `<p>کد خود را بنویسید و <span class="kbd">▶ Run</span> را بزنید. خطاها در پنجره Messages پایین صفحه نمایش داده می‌شوند.</p>`,
 };
 

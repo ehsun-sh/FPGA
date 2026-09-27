@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { mapPorts } from '../src/board/mapping';
+import { BOARDS, DEFAULT_BOARD } from '../src/boards';
+import { mapPorts } from '../src/boards/mapping';
 import { compileDesign, synthesize } from '../src/hdl';
 import { ALL_LESSONS } from '../src/lessons/lessons';
 
@@ -7,7 +8,7 @@ type Harness = ReturnType<typeof harness>;
 
 function harness(src: string, lang: 'verilog' | 'vhdl', xdc: string) {
   const d = synthesize(src, lang);
-  const map = mapPorts(d, xdc);
+  const map = mapPorts(d, xdc, DEFAULT_BOARD);
   const errors = map.messages.filter((m) => m.level === 'error');
   if (errors.length) throw new Error(errors.map((e) => e.msg).join('\n'));
   const sim = compileDesign(d, { clock: map.clock });
@@ -51,7 +52,7 @@ function harness(src: string, lang: 'verilog' | 'vhdl', xdc: string) {
       return r;
     },
     rgb16(): number[] {
-      return ['r', 'g', 'b'].map((c) => readDev((b) => b.device.kind === 'rgb' && b.device.index === 16 && b.device.color === c)[0] ?? 0);
+      return ['r', 'g', 'b'].map((c) => readDev((b) => b.device.kind === 'rgb' && b.device.index === 0 && b.device.color === c)[0] ?? 0);
     },
   };
 }
@@ -159,11 +160,25 @@ describe('lessons', () => {
   for (const l of ALL_LESSONS) {
     for (const lang of ['verilog', 'vhdl'] as const) {
       it(`${l.id} (${lang})`, () => {
-        const h = harness(lang === 'verilog' ? l.verilog : l.vhdl, lang, l.xdc);
+        const h = harness(lang === 'verilog' ? l.verilog : l.vhdl, lang, DEFAULT_BOARD.masterXdc(l.xdc));
         const check = checks[l.id];
         expect(check, 'missing behaviour check').toBeTruthy();
         check(h);
       });
     }
+  }
+});
+
+describe('board definitions', () => {
+  for (const b of BOARDS) {
+    it(`${b.id} is consistent`, () => {
+      for (const [name, pin] of Object.entries(b.defaultNames)) expect(b.pins[pin], `${name} -> ${pin}`).toBeTruthy();
+      const devs = Object.values(b.pins);
+      expect(devs.filter((d) => d.kind === 'sw').length).toBe(b.io.switches);
+      expect(devs.filter((d) => d.kind === 'led').length).toBe(b.io.leds);
+      expect(devs.filter((d) => d.kind === 'an').length).toBe(b.io.digits);
+      expect(devs.filter((d) => d.kind === 'rgb').length).toBe(b.io.rgb.length * 3);
+      expect(devs.filter((d) => d.kind === 'btn').map((d) => (d as { name: string }).name).sort()).toEqual([...b.io.buttons].sort());
+    });
   }
 });

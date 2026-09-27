@@ -1,6 +1,6 @@
 import './style.css';
-import { Board3D, type ButtonName } from './board/board3d';
-import { mapPorts, type Mapping } from './board/mapping';
+import { BOARDS, getBoard } from './boards';
+import { mapPorts, type Mapping } from './boards/mapping';
 import { estimateUtilization, HdlError, synthesize, type Design, type Lang } from './hdl';
 import { ALL_LESSONS, LESSONS, PLAYGROUND, type Lesson } from './lessons/lessons';
 import { Runner } from './sim/runner';
@@ -35,12 +35,18 @@ const store = {
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as T;
 
+// ---------------------------------------------------------------- board
+const boardDef = getBoard(store.get('board'));
+const xdcName = `${boardDef.id}.xdc`;
+const hwDev = `${boardDef.part.replace(/csg.*|cpg.*|ftg.*|fgg.*/, '')}_0`;
+const clockLabel = boardDef.clockHz >= 1e6 ? `${boardDef.clockHz / 1e6} MHz` : `${boardDef.clockHz / 1e3} kHz`;
+
 // ---------------------------------------------------------------- layout
 const app = $('#app');
 app.innerHTML = `
 <header class="titlebar">
   <div class="brand"><span class="logo"></span><b>FPGA Lab</b><span class="dim">— a Vivado-style learning environment</span></div>
-  <div class="project">Project: <b>nexys_a7_course</b> · Part: <b>xc7a100tcsg324-1</b></div>
+  <div class="project">Board: <b>${boardDef.vendor} ${boardDef.name}</b> · Part: <b>${boardDef.part}</b></div>
 </header>
 <nav class="menubar">
   <div class="menu"><button>File</button><div class="dropdown">
@@ -77,7 +83,7 @@ app.innerHTML = `
   </div>
   <span class="sep"></span>
   <label class="clock">Clock <select id="speed">
-    <option value="100000000">100 MHz (real time)</option>
+    <option value="${boardDef.clockHz}">${clockLabel} (real time)</option>
     <option value="1000000">1 MHz</option>
     <option value="10000">10 kHz</option>
     <option value="100">100 Hz</option>
@@ -125,7 +131,7 @@ app.innerHTML = `
     <div class="tabs" id="doc-tabs">
       <button data-tab="lesson" class="active">📘 Lesson</button>
       <button data-tab="source"><span id="src-name">top.v</span></button>
-      <button data-tab="xdc">nexys_a7.xdc</button>
+      <button data-tab="xdc">${xdcName}</button>
     </div>
     <div class="tab-body">
       <article class="lesson" id="lesson" dir="rtl" lang="fa"></article>
@@ -137,7 +143,7 @@ app.innerHTML = `
   <section class="pane right">
     <div class="hw-title">
       <span><b>HARDWARE MANAGER</b> — localhost/xilinx_tcf/Digilent/210292A</span>
-      <span class="hw-dev" id="hw-dev">xc7a100t_0 (not programmed)</span>
+      <span class="hw-dev" id="hw-dev">${hwDev} (not programmed)</span>
     </div>
     <div class="board-host" id="board">
       <div class="board-tools">
@@ -170,7 +176,7 @@ app.innerHTML = `
 </footer>
 <dialog id="about"><form method="dialog">
   <h2>FPGA Lab</h2>
-  <p>An in-browser FPGA course with a Vivado-inspired workflow and a simulated Digilent Nexys A7-100T.</p>
+  <p>An in-browser FPGA course with a Vivado-inspired workflow and simulated FPGA boards (currently: ${BOARDS.map((b) => `${b.vendor} ${b.name}`).join(', ')}).</p>
   <p>Real Vivado cannot run in a browser. Instead, your Verilog/VHDL is parsed, elaborated and compiled to a fast cycle-accurate
   JavaScript model that drives the 3D board, following your XDC pin constraints. The same code and XDC work in real Vivado.</p>
   <p class="dim">Educational replica. Not affiliated with AMD/Xilinx or Digilent.</p>
@@ -184,9 +190,9 @@ let lesson: Lesson = ALL_LESSONS.find((l) => l.id === store.get('lesson')) ?? LE
 let tab: 'lesson' | 'source' | 'xdc' = 'lesson';
 
 const srcKey = (l: Lesson, lg: Lang) => `src:${l.id}:${lg}`;
-const xdcKey = (l: Lesson) => `xdc:${l.id}`;
+const xdcKey = (l: Lesson) => `xdc:${boardDef.id}:${l.id}`;
 const sourceFor = (l: Lesson, lg: Lang) => store.get(srcKey(l, lg)) ?? (lg === 'verilog' ? l.verilog : l.vhdl);
-const xdcFor = (l: Lesson) => store.get(xdcKey(l)) ?? l.xdc;
+const xdcFor = (l: Lesson) => store.get(xdcKey(l)) ?? boardDef.masterXdc(l.xdc);
 const fileName = () => (lang === 'verilog' ? 'top.v' : 'top.vhd');
 
 const srcEditor = new CodeEditor($('#src-editor'), lang, sourceFor(lesson, lang));
@@ -201,8 +207,9 @@ xdcEditor.onChange = (t) => {
   saveTimer = window.setTimeout(() => store.set(xdcKey(lesson), t), 300);
 };
 
-const board = new Board3D($('#board'));
-const runner = new Runner();
+const board = boardDef.createView($('#board'));
+const runner = new Runner(boardDef);
+runner.speedHz = boardDef.clockHz;
 (window as unknown as { fpgaLab: unknown }).fpgaLab = { board, runner };
 
 // ---------------------------------------------------------------- console / messages
@@ -229,7 +236,7 @@ function log(text: string, level: Level = 'plain') {
 
 function msg(m: Msg) {
   messages.push(m);
-  const loc = m.line ? ` [${m.file === 'xdc' ? 'nexys_a7.xdc' : fileName()}:${m.line}]` : '';
+  const loc = m.line ? ` [${m.file === 'xdc' ? xdcName : fileName()}:${m.line}]` : '';
   log(`${m.level.toUpperCase()}: [${m.code}] ${m.text}${loc}`, m.level);
 }
 
@@ -249,7 +256,7 @@ function renderMessages() {
       .map(
         (m, i) =>
           `<div class="msg ${m.level}" data-i="${i}"><span class="mi">${m.level === 'error' ? '⛔' : m.level === 'warning' ? '⚠️' : 'ℹ️'}</span><span>[${esc(m.code)}] ${esc(m.text)}${
-            m.line ? ` <a href="#" class="loc">${m.file === 'xdc' ? 'nexys_a7.xdc' : fileName()}:${m.line}</a>` : ''
+            m.line ? ` <a href="#" class="loc">${m.file === 'xdc' ? xdcName : fileName()}:${m.line}</a>` : ''
           }</span></div>`,
       )
       .join('');
@@ -307,8 +314,8 @@ function doSynth(): Design | null {
 
 function doImpl(d: Design): Mapping | null {
   log(`# launch_runs impl_1   (${stamp()})`, 'cmd');
-  log(`INFO: [Vivado 12-3482] Parsing XDC File [nexys_a7.xdc]`, 'info');
-  const map = mapPorts(d, xdcEditor.text);
+  log(`INFO: [Vivado 12-3482] Parsing XDC File [${xdcName}]`, 'info');
+  const map = mapPorts(d, xdcEditor.text, boardDef);
   const unmatched = map.messages.filter((m) => m.code === 'Vivado 12-507');
   const other = map.messages.filter((m) => m.code !== 'Vivado 12-507');
   for (const m of other) msg({ level: m.level, code: m.code, text: m.msg, file: 'xdc', line: m.line });
@@ -340,7 +347,7 @@ function doImpl(d: Design): Mapping | null {
 function doProgram(d: Design, map: Mapping) {
   log(`# write_bitstream -force ${d.top}.bit`, 'cmd');
   log(`INFO: [Common 17-83] Bitstream generated: ${d.top}.bit (simulated)`, 'info');
-  log(`# program_hw_devices [get_hw_devices xc7a100t_0]`, 'cmd');
+  log(`# program_hw_devices [get_hw_devices ${hwDev}]`, 'cmd');
   try {
     runner.program(d, map, { switches: board.switches, pressed: (b) => board.isPressed(b) });
   } catch (e) {
@@ -352,7 +359,7 @@ function doProgram(d: Design, map: Mapping) {
     return;
   }
   log(`INFO: [Labtools 27-3164] End of startup status: HIGH — device is running`, 'ok');
-  $('#hw-dev').textContent = 'xc7a100t_0 (Programmed)';
+  $('#hw-dev').textContent = `${hwDev} (Programmed)`;
   $('#hw-dev').classList.add('ok');
   setRunState();
 }
@@ -372,7 +379,7 @@ function runFlow() {
 function stop() {
   runner.stop();
   board.setOutputs({ led: [], rgb: [], seg: [], done: false });
-  $('#hw-dev').textContent = 'xc7a100t_0 (not programmed)';
+  $('#hw-dev').textContent = `${hwDev} (not programmed)`;
   $('#hw-dev').classList.remove('ok');
   log('# close_hw_target', 'cmd');
   setRunState();
@@ -406,7 +413,7 @@ function renderReports(d: Design, map: Mapping | null) {
     `<tr><td>${n}</td><td>${used}</td><td>${avail.toLocaleString()}</td><td>${((used / avail) * 100).toFixed(2)}</td></tr>`;
   let html = `<h4>Utilization — ${esc(d.top)} (estimate)</h4>
 <table class="rep"><thead><tr><th>Site Type</th><th>Used</th><th>Available</th><th>Util%</th></tr></thead><tbody>
-${row('Slice LUTs', u.luts, 63400)}${row('Slice Registers (FF)', u.ffs, 126800)}${row('Bonded IOB', u.io, 210)}${row('Block RAM Tile', u.bram, 135)}
+${row('Slice LUTs', u.luts, boardDef.resources.luts)}${row('Slice Registers (FF)', u.ffs, boardDef.resources.ffs)}${row('Bonded IOB', u.io, boardDef.resources.iob)}${row('Block RAM Tile', u.bram, boardDef.resources.bram)}
 </tbody></table>
 <h4>Design hierarchy</h4><ul class="hier">${d.modules.map((m, i) => `<li style="padding-left:${i ? 16 : 0}px">${i ? '└ ' : ''}${esc(m)}</li>`).join('')}</ul>`;
   if (map) {
@@ -416,7 +423,7 @@ ${row('Slice LUTs', u.luts, 63400)}${row('Slice Registers (FF)', u.ffs, 126800)}
         const nm = s.width > 1 ? `${b.port}[${s.left >= s.right ? b.bit + s.right : s.right - b.bit}]` : b.port;
         const dev = b.device;
         const dn =
-          dev.kind === 'sw' ? `SW${dev.index}` : dev.kind === 'led' ? `LD${dev.index}` : dev.kind === 'an' ? `AN${dev.index}` : dev.kind === 'seg' ? `C${dev.seg.toUpperCase()}` : dev.kind === 'btn' ? dev.name : dev.kind === 'rgb' ? `LD${dev.index} ${dev.color.toUpperCase()}` : dev.kind === 'clk' ? '100 MHz oscillator' : 'CPU RESET';
+          dev.kind === 'sw' ? `SW${dev.index}` : dev.kind === 'led' ? `LD${dev.index}` : dev.kind === 'an' ? `AN${dev.index}` : dev.kind === 'seg' ? `C${dev.seg.toUpperCase()}` : dev.kind === 'btn' ? dev.name : dev.kind === 'rgb' ? `${boardDef.io.rgb[dev.index]} ${dev.color.toUpperCase()}` : dev.kind === 'clk' ? `${clockLabel} oscillator` : dev.name;
         return `<tr><td>${esc(nm)}</td><td>${b.pin}</td><td>${dn}</td></tr>`;
       })
       .join('')}</tbody></table>`;
@@ -456,7 +463,7 @@ function renderLesson() {
   <div class="code-panel" data-panel="vhdl" ${lang === 'vhdl' ? '' : 'hidden'}>${codeBlock(lesson.vhdl, 'vhdl')}</div>
 </section>
 <section class="try"><h2>🔌 روی برد امتحان کنید</h2>${lesson.tryIt}
-  <button class="big-run" data-act="run">▶ اجرا روی برد Nexys A7</button>
+  <button class="big-run" data-act="run">▶ اجرا روی برد ${esc(boardDef.name)}</button>
 </section>
 ${lesson.exercise ? `<section class="exercise"><h2>🎯 تمرین</h2>${lesson.exercise}<p class="dim">کد را در تب ویرایشگر تغییر دهید و دوباره Run بزنید. تغییرات شما در مرورگر ذخیره می‌شود.</p></section>` : ''}
 <nav class="lesson-nav">
@@ -588,7 +595,7 @@ function act(name: string) {
       download(fileName(), srcEditor.text);
       break;
     case 'download-xdc':
-      download('nexys_a7.xdc', xdcEditor.text);
+      download(xdcName, xdcEditor.text);
       break;
     case 'view-reset':
       board.resetView();
@@ -638,7 +645,8 @@ document.addEventListener('keydown', (ev) => {
 
 // speed
 const speedSel = $<HTMLSelectElement>('#speed');
-speedSel.value = store.get('speed') ?? '100000000';
+speedSel.value = store.get('speed') ?? String(boardDef.clockHz);
+if (!speedSel.value) speedSel.value = String(boardDef.clockHz);
 runner.speedHz = Number(speedSel.value);
 speedSel.addEventListener('change', () => {
   runner.speedHz = Number(speedSel.value);
@@ -647,7 +655,7 @@ speedSel.addEventListener('change', () => {
 
 // board I/O
 board.onSwitch = (i, on) => runner.setSwitch(i, on);
-board.onButton = (b: ButtonName, down) => runner.setButton(b, down);
+board.onButton = (b, down) => runner.setButton(b, down);
 let statTimer = 0;
 board.onFrame = (dt) => {
   const out = runner.frame(dt);
@@ -658,8 +666,8 @@ board.onFrame = (dt) => {
     if (runner.running && runner.mapping?.clock !== undefined) {
       const hz = runner.achievedHz;
       const f = hz >= 1e6 ? `${(hz / 1e6).toFixed(1)} MHz` : hz >= 1e3 ? `${(hz / 1e3).toFixed(1)} kHz` : `${hz.toFixed(1)} Hz`;
-      $('#st-speed').textContent = `Sim clock: ${f} (${((hz / 1e8) * 100).toFixed(hz < 1e6 ? 4 : 1)}% of real time)`;
-      const t = runner.totalCycles / 1e8;
+      $('#st-speed').textContent = `Sim clock: ${f} (${((hz / boardDef.clockHz) * 100).toFixed(hz < 1e6 ? 4 : 1)}% of ${clockLabel})`;
+      const t = runner.totalCycles / boardDef.clockHz;
       $('#st-cycles').textContent = `Board time: ${t < 1 ? (t * 1000).toFixed(1) + ' ms' : t.toFixed(2) + ' s'}`;
     } else if (runner.running) {
       $('#st-speed').textContent = 'Combinational design (no clock)';
@@ -766,4 +774,4 @@ renderMessages();
 log('****** FPGA Lab — Vivado-style HDL environment (browser edition)', 'plain');
 log('INFO: [Labtools 27-2285] Connecting to hw_server url TCP:localhost:3121', 'info');
 log('INFO: [Labtools 27-3415] Connecting to cs_server url TCP:localhost:3042', 'info');
-log('INFO: [Labtools 27-1434] Device xc7a100t (JTAG device index = 0) is ready. Press ▶ Run on Board to program it.', 'info');
+log(`INFO: [Labtools 27-1434] Device ${hwDev} on ${boardDef.vendor} ${boardDef.name} (JTAG device index = 0) is ready. Press ▶ Run on Board to program it.`, 'info');

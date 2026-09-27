@@ -1,6 +1,6 @@
 // XDC parsing and port-to-board mapping ("implementation" step).
 import type { Design } from '../hdl';
-import { DEFAULT_NAMES, PINS, type Device } from './pins';
+import type { BoardDef, Device } from './types';
 
 export interface Binding {
   sig: number;
@@ -16,7 +16,7 @@ export interface Mapping {
   messages: { level: 'info' | 'warning' | 'error'; code: string; msg: string; line?: number }[];
 }
 
-export function parseXdc(text: string): { pins: Map<string, { pin: string; line: number }>; messages: Mapping['messages'] } {
+export function parseXdc(text: string, board: BoardDef): { pins: Map<string, { pin: string; line: number }>; messages: Mapping['messages'] } {
   const pins = new Map<string, { pin: string; line: number }>();
   const messages: Mapping['messages'] = [];
   text.split('\n').forEach((raw, i) => {
@@ -36,16 +36,15 @@ export function parseXdc(text: string): { pins: Map<string, { pin: string; line:
     }
     const name = (port[1] ?? port[2]).replace(/\s+/g, '').toLowerCase();
     const p = pin[1].toUpperCase();
-    if (!PINS[p]) messages.push({ level: 'warning', code: 'Place 30-58', msg: `line ${i + 1}: pin ${p} is not connected to an on-board device in this simulator`, line: i + 1 });
+    if (!board.pins[p]) messages.push({ level: 'warning', code: 'Place 30-58', msg: `line ${i + 1}: pin ${p} is not connected to an on-board device in this simulator`, line: i + 1 });
     pins.set(name, { pin: p, line: i + 1 });
   });
   return { pins, messages };
 }
 
-const DEFAULTS_LC = new Map(Object.entries(DEFAULT_NAMES).map(([k, v]) => [k.toLowerCase(), v]));
-
-export function mapPorts(design: Design, xdc: string): Mapping {
-  const { pins, messages } = parseXdc(xdc);
+export function mapPorts(design: Design, xdc: string, board: BoardDef): Mapping {
+  const { pins, messages } = parseXdc(xdc, board);
+  const DEFAULTS_LC = new Map(Object.entries(board.defaultNames).map(([k, v]) => [k.toLowerCase(), v]));
   const bindings: Binding[] = [];
   let clock: number | undefined;
   const used = new Set<string>();
@@ -61,13 +60,13 @@ export function mapPorts(design: Design, xdc: string): Mapping {
       if (!pinName) {
         pinName = DEFAULTS_LC.get(key) ?? (!isVec ? DEFAULTS_LC.get(s.name.toLowerCase()) : undefined);
         if (pinName) {
-          if (idx === lo) messages.push({ level: 'warning', code: 'Place 30-574', msg: `port '${s.name}' has no PACKAGE_PIN constraint; auto-mapped by name to the matching Nexys A7 pin(s)` });
+          if (idx === lo) messages.push({ level: 'warning', code: 'Place 30-574', msg: `port '${s.name}' has no PACKAGE_PIN constraint; auto-mapped by name to the matching ${board.name} pin(s)` });
         } else {
           if (idx === lo) messages.push({ level: 'warning', code: 'DRC UCIO-1', msg: `port '${s.name}${isVec ? `[${idx}]` : ''}' is not constrained to a package pin and is left unconnected` });
           continue;
         }
       }
-      const device = PINS[pinName];
+      const device = board.pins[pinName];
       if (!device) continue;
       const bit = s.left >= s.right ? idx - s.right : s.right - idx;
       const isIn = device.kind === 'sw' || device.kind === 'btn' || device.kind === 'clk' || device.kind === 'reset';

@@ -1,12 +1,12 @@
 // Drives a compiled design in real time: feeds board inputs, clocks it, and turns outputs into LED brightness.
-import type { BoardOutputs, ButtonName } from '../board/board3d';
-import type { Binding, Mapping } from '../board/mapping';
+import type { BoardDef, BoardOutputs } from '../boards';
+import type { Binding, Mapping } from '../boards/mapping';
 import { compileDesign, type CompiledSim, type Design } from '../hdl';
 
 const SEG_INDEX: Record<string, number> = { a: 0, b: 1, c: 2, d: 3, e: 4, f: 5, g: 6, dp: 7 };
 const RGB_INDEX: Record<string, number> = { r: 0, g: 1, b: 2 };
-// persistence of vision, in simulated clock cycles (10 ms of a real 100 MHz board)
-const TAU_CYCLES = 1_000_000;
+// persistence of vision, in simulated board time
+const TAU_SECONDS = 0.01;
 const FRAME_BUDGET_MS = 11;
 
 export class Runner {
@@ -14,7 +14,7 @@ export class Runner {
   design: Design | null = null;
   mapping: Mapping | null = null;
   running = false;
-  speedHz = 100e6; // target simulated clock rate
+  speedHz = 100e6; // target simulated clock rate (set to board.clockHz for real time)
   achievedHz = 0;
   totalCycles = 0;
   error: string | null = null;
@@ -22,15 +22,29 @@ export class Runner {
 
   private outBindings: Binding[] = [];
   private inBindings: Binding[] = [];
-  private lit = new Float64Array(16 + 6 + 64);
-  private acc = new Float64Array(16 + 6 + 64);
-  private bright = new Float64Array(16 + 6 + 64);
+  // brightness slots: [leds][rgb * 3][digits * 8]
+  private nLed: number;
+  private nRgb: number;
+  private nDig: number;
+  private lit: Float64Array;
+  private acc: Float64Array;
+  private bright: Float64Array;
+
+  constructor(public board: BoardDef) {
+    this.nLed = board.io.leds;
+    this.nRgb = board.io.rgb.length;
+    this.nDig = board.io.digits;
+    const n = this.nLed + this.nRgb * 3 + this.nDig * 8;
+    this.lit = new Float64Array(n);
+    this.acc = new Float64Array(n);
+    this.bright = new Float64Array(n);
+  }
   private lastMark = 0;
   private fractional = 0;
   private chunk = 2000;
   private hzWindow: { t: number; c: number }[] = [];
 
-  program(design: Design, mapping: Mapping, inputs: { switches: boolean[]; pressed: (b: ButtonName) => boolean }) {
+  program(design: Design, mapping: Mapping, inputs: { switches: boolean[]; pressed: (b: string) => boolean }) {
     this.design = design;
     this.mapping = mapping;
     this.outBindings = mapping.bindings.filter((b) => !['sw', 'btn', 'clk', 'reset'].includes(b.device.kind));
@@ -42,7 +56,7 @@ export class Runner {
     this.running = true;
   }
 
-  reset(inputs: { switches: boolean[]; pressed: (b: ButtonName) => boolean }) {
+  reset(inputs: { switches: boolean[]; pressed: (b: string) => boolean }) {
     if (!this.sim) return;
     this.sim.reset();
     // apply current board inputs without settling each bit
@@ -65,11 +79,11 @@ export class Runner {
     this.bright.fill(0);
   }
 
-  private inputValue(b: Binding, inputs: { switches: boolean[]; pressed: (b: ButtonName) => boolean }): number {
+  private inputValue(b: Binding, inputs: { switches: boolean[]; pressed: (b: string) => boolean }): number {
     const d = b.device;
     if (d.kind === 'sw') return inputs.switches[d.index] ? 1 : 0;
     if (d.kind === 'btn') return inputs.pressed(d.name) ? 1 : 0;
-    if (d.kind === 'reset') return inputs.pressed('CPU_RESETN') ? 0 : 1; // active-low
+    if (d.kind === 'reset') return inputs.pressed(d.name) ? 0 : 1; // active-low
     return 0;
   }
 
@@ -83,8 +97,8 @@ export class Runner {
     this.setDevice((d) => d.kind === 'sw' && d.index === i, on ? 1 : 0);
   }
 
-  setButton(name: ButtonName, pressed: boolean) {
-    if (name === 'CPU_RESETN') this.setDevice((d) => d.kind === 'reset', pressed ? 0 : 1);
+  setButton(name: string, pressed: boolean) {
+    if (name === this.board.io.reset) this.setDevice((d) => d.kind === 'reset', pressed ? 0 : 1);
     else this.setDevice((d) => d.kind === 'btn' && d.name === name, pressed ? 1 : 0);
   }
 
@@ -112,19 +126,21 @@ export class Runner {
     const lit = this.lit;
     lit.fill(0);
     const segRaw = [1, 1, 1, 1, 1, 1, 1, 1];
-    const anRaw = [1, 1, 1, 1, 1, 1, 1, 1];
+    const anRaw = new Array(this.nDig).fill(1);
+    const rgb0 = this.nLed;
+    const seg0 = this.nLed + this.nRgb * 3;
     for (const b of this.outBindings) {
       const bit = (v[b.sig] >>> b.bit) & 1;
       const d = b.device;
       if (d.kind === 'led') lit[d.index] = bit;
-      else if (d.kind === 'rgb') lit[16 + (d.index - 16) * 3 + RGB_INDEX[d.color]] = bit;
+      else if (d.kind === 'rgb') lit[rgb0 + d.index * 3 + RGB_INDEX[d.color]] = bit;
       else if (d.kind === 'seg') segRaw[SEG_INDEX[d.seg]] = bit;
       else if (d.kind === 'an') anRaw[d.index] = bit;
     }
     // common-anode displays: anode and cathode are both active-low
-    for (let dg = 0; dg < 8; dg++) {
+    for (let dg = 0; dg < this.nDig; dg++) {
       if (anRaw[dg]) continue;
-      for (let s = 0; s < 8; s++) lit[22 + dg * 8 + s] = segRaw[s] ? 0 : 1;
+      for (let s = 0; s < 8; s++) lit[seg0 + dg * 8 + s] = segRaw[s] ? 0 : 1;
     }
   }
 
@@ -181,7 +197,7 @@ export class Runner {
       const sumC = this.hzWindow.reduce((s, x) => s + x.c, 0);
       this.achievedHz = spanT > 0.2 ? sumC / spanT : this.achievedHz;
       if (done > 0 && this.speedHz >= 100_000) {
-        const alpha = 1 - Math.exp(-done / TAU_CYCLES);
+        const alpha = 1 - Math.exp(-done / (TAU_SECONDS * this.board.clockHz));
         for (let i = 0; i < this.acc.length; i++) this.bright[i] += (this.acc[i] / done - this.bright[i]) * alpha;
       } else {
         this.bright.set(this.lit);
@@ -198,12 +214,15 @@ export class Runner {
     const on = this.running || !!this.sim;
     const f = (x: number, gain: number) => (x <= 0 ? 0 : Math.min(1, Math.sqrt(x) * gain));
     const led: number[] = [];
-    for (let i = 0; i < 16; i++) led.push(on ? f(b[i], 1.15) : 0);
-    const rgb: [number, number, number][] = [0, 1].map((k) => [0, 1, 2].map((c) => (on ? f(b[16 + k * 3 + c], 1.15) : 0)) as [number, number, number]);
+    const rgb0 = this.nLed;
+    const seg0 = this.nLed + this.nRgb * 3;
+    for (let i = 0; i < this.nLed; i++) led.push(on ? f(b[i], 1.15) : 0);
+    const rgb: [number, number, number][] = [];
+    for (let k = 0; k < this.nRgb; k++) rgb.push([0, 1, 2].map((c) => (on ? f(b[rgb0 + k * 3 + c], 1.15) : 0)) as [number, number, number]);
     const seg: number[][] = [];
-    for (let dg = 0; dg < 8; dg++) {
+    for (let dg = 0; dg < this.nDig; dg++) {
       const row: number[] = [];
-      for (let s = 0; s < 8; s++) row.push(on ? f(b[22 + dg * 8 + s], 1.7) : 0);
+      for (let s = 0; s < 8; s++) row.push(on ? f(b[seg0 + dg * 8 + s], 1.7) : 0);
       seg.push(row);
     }
     return { led, rgb, seg, done: !!this.sim };

@@ -2,14 +2,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-export type ButtonName = 'BTNC' | 'BTNU' | 'BTNL' | 'BTNR' | 'BTND' | 'CPU_RESETN';
+import type { BoardOutputs, BoardView } from '../types';
 
-export interface BoardOutputs {
-  led: number[]; // 16 brightness values 0..1
-  rgb: [number, number, number][]; // LD16, LD17
-  seg: number[][]; // [digit 0..7][a,b,c,d,e,f,g,dp] brightness
-  done: boolean;
-}
+type ButtonName = 'BTNC' | 'BTNU' | 'BTNL' | 'BTNR' | 'BTND' | 'CPU_RESETN';
 
 const W = 13; // board width (x)
 const D = 11; // board depth (z)
@@ -187,14 +182,14 @@ interface Interactive {
   name?: ButtonName;
 }
 
-export class Board3D {
+export class NexysA7Model implements BoardView {
   renderer: THREE.WebGLRenderer;
   scene = new THREE.Scene();
   camera: THREE.PerspectiveCamera;
   controls: OrbitControls;
   switches: boolean[] = new Array(16).fill(false);
   onSwitch: (i: number, on: boolean) => void = () => {};
-  onButton: (b: ButtonName, pressed: boolean) => void = () => {};
+  onButton: (b: string, pressed: boolean) => void = () => {};
   onFrame: (dt: number) => void = () => {};
 
   private knobs: THREE.Mesh[] = [];
@@ -603,8 +598,8 @@ export class Board3D {
     return { x: r.left + ((p.x + 1) / 2) * r.width, y: r.top + ((1 - p.y) / 2) * r.height };
   }
 
-  isPressed(name: ButtonName) {
-    return this.pressed.has(name);
+  isPressed(name: string) {
+    return this.pressed.has(name as ButtonName);
   }
 
   setOutputs(o: BoardOutputs) {
