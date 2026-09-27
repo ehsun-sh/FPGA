@@ -907,7 +907,7 @@ entity top is
     port (
         CLK100MHZ : in  std_logic;
         SW        : in  std_logic_vector(15 downto 0);
-        BTNC      : in  std_logic;
+        BTNC, BTNU, BTNL, BTNR, BTND : in std_logic;
         LED       : out std_logic_vector(15 downto 0)
     );
 end top;
