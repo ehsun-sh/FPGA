@@ -1,0 +1,211 @@
+// Drives a compiled design in real time: feeds board inputs, clocks it, and turns outputs into LED brightness.
+import type { BoardOutputs, ButtonName } from '../board/board3d';
+import type { Binding, Mapping } from '../board/mapping';
+import { compileDesign, type CompiledSim, type Design } from '../hdl';
+
+const SEG_INDEX: Record<string, number> = { a: 0, b: 1, c: 2, d: 3, e: 4, f: 5, g: 6, dp: 7 };
+const RGB_INDEX: Record<string, number> = { r: 0, g: 1, b: 2 };
+// persistence of vision, in simulated clock cycles (10 ms of a real 100 MHz board)
+const TAU_CYCLES = 1_000_000;
+const FRAME_BUDGET_MS = 11;
+
+export class Runner {
+  sim: CompiledSim | null = null;
+  design: Design | null = null;
+  mapping: Mapping | null = null;
+  running = false;
+  speedHz = 100e6; // target simulated clock rate
+  achievedHz = 0;
+  totalCycles = 0;
+  error: string | null = null;
+  onError: (msg: string) => void = () => {};
+
+  private outBindings: Binding[] = [];
+  private inBindings: Binding[] = [];
+  private lit = new Float64Array(16 + 6 + 64);
+  private acc = new Float64Array(16 + 6 + 64);
+  private bright = new Float64Array(16 + 6 + 64);
+  private lastMark = 0;
+  private fractional = 0;
+  private chunk = 2000;
+  private hzWindow: { t: number; c: number }[] = [];
+
+  program(design: Design, mapping: Mapping, inputs: { switches: boolean[]; pressed: (b: ButtonName) => boolean }) {
+    this.design = design;
+    this.mapping = mapping;
+    this.outBindings = mapping.bindings.filter((b) => !['sw', 'btn', 'clk', 'reset'].includes(b.device.kind));
+    this.inBindings = mapping.bindings.filter((b) => ['sw', 'btn', 'reset'].includes(b.device.kind));
+    const watch = [...new Set(this.outBindings.map((b) => b.sig))];
+    this.sim = compileDesign(design, { clock: mapping.clock, watch, onOut: (c) => this.mark(c) });
+    this.error = null;
+    this.reset(inputs);
+    this.running = true;
+  }
+
+  reset(inputs: { switches: boolean[]; pressed: (b: ButtonName) => boolean }) {
+    if (!this.sim) return;
+    this.sim.reset();
+    // apply current board inputs without settling each bit
+    for (const b of this.inBindings) this.writeBit(b, this.inputValue(b, inputs));
+    this.safe(() => this.sim!.settle());
+    this.totalCycles = 0;
+    this.lastMark = 0;
+    this.acc.fill(0);
+    this.computeLit();
+    this.bright.set(this.lit);
+  }
+
+  stop() {
+    this.running = false;
+    this.sim = null;
+    this.design = null;
+    this.mapping = null;
+    this.achievedHz = 0;
+    this.lit.fill(0);
+    this.bright.fill(0);
+  }
+
+  private inputValue(b: Binding, inputs: { switches: boolean[]; pressed: (b: ButtonName) => boolean }): number {
+    const d = b.device;
+    if (d.kind === 'sw') return inputs.switches[d.index] ? 1 : 0;
+    if (d.kind === 'btn') return inputs.pressed(d.name) ? 1 : 0;
+    if (d.kind === 'reset') return inputs.pressed('CPU_RESETN') ? 0 : 1; // active-low
+    return 0;
+  }
+
+  private writeBit(b: Binding, val: number) {
+    const v = this.sim!.v;
+    const m = (1 << b.bit) >>> 0;
+    v[b.sig] = val ? (v[b.sig] | m) >>> 0 : (v[b.sig] & ~m) >>> 0;
+  }
+
+  setSwitch(i: number, on: boolean) {
+    this.setDevice((d) => d.kind === 'sw' && d.index === i, on ? 1 : 0);
+  }
+
+  setButton(name: ButtonName, pressed: boolean) {
+    if (name === 'CPU_RESETN') this.setDevice((d) => d.kind === 'reset', pressed ? 0 : 1);
+    else this.setDevice((d) => d.kind === 'btn' && d.name === name, pressed ? 1 : 0);
+  }
+
+  private setDevice(match: (d: Binding['device']) => boolean, val: number) {
+    if (!this.sim || !this.running) return;
+    const bs = this.inBindings.filter((b) => match(b.device));
+    if (!bs.length) return;
+    for (const b of bs) this.writeBit(b, val);
+    this.safe(() => this.sim!.settle());
+    if (this.sim) this.computeLit();
+  }
+
+  private safe(fn: () => void) {
+    try {
+      fn();
+    } catch (e) {
+      this.running = false;
+      this.error = (e as Error).message;
+      this.onError(this.error);
+    }
+  }
+
+  private computeLit() {
+    const v = this.sim!.v;
+    const lit = this.lit;
+    lit.fill(0);
+    const segRaw = [1, 1, 1, 1, 1, 1, 1, 1];
+    const anRaw = [1, 1, 1, 1, 1, 1, 1, 1];
+    for (const b of this.outBindings) {
+      const bit = (v[b.sig] >>> b.bit) & 1;
+      const d = b.device;
+      if (d.kind === 'led') lit[d.index] = bit;
+      else if (d.kind === 'rgb') lit[16 + (d.index - 16) * 3 + RGB_INDEX[d.color]] = bit;
+      else if (d.kind === 'seg') segRaw[SEG_INDEX[d.seg]] = bit;
+      else if (d.kind === 'an') anRaw[d.index] = bit;
+    }
+    // common-anode displays: anode and cathode are both active-low
+    for (let dg = 0; dg < 8; dg++) {
+      if (anRaw[dg]) continue;
+      for (let s = 0; s < 8; s++) lit[22 + dg * 8 + s] = segRaw[s] ? 0 : 1;
+    }
+  }
+
+  // an output changed at cycle `c` of the current run() call
+  private mark(c: number) {
+    const at = this.runBase + c + 1;
+    const span = at - this.lastMark;
+    if (span > 0) for (let i = 0; i < this.acc.length; i++) this.acc[i] += this.lit[i] * span;
+    this.lastMark = at;
+    if (this.sim) this.computeLit();
+  }
+
+  private runBase = 0;
+
+  // Advance the simulation for one animation frame of `dt` seconds.
+  frame(dt: number): BoardOutputs {
+    if (this.sim && this.running && this.mapping?.clock !== undefined) {
+      let want = this.speedHz * dt + this.fractional;
+      const whole = Math.floor(want);
+      this.fractional = want - whole;
+      want = whole;
+      const t0 = performance.now();
+      let done = 0;
+      this.lastMark = 0;
+      this.acc.fill(0);
+      while (done < want) {
+        const n = Math.min(this.chunk, want - done);
+        this.runBase = done;
+        const ts = performance.now();
+        try {
+          this.sim.run(n);
+        } catch (e) {
+          this.running = false;
+          this.error = (e as Error).message;
+          this.onError(this.error);
+          break;
+        }
+        done += n;
+        const el = performance.now() - ts;
+        // adapt chunk so one chunk takes ~1.5 ms
+        if (el > 0.05) this.chunk = Math.max(100, Math.min(2_000_000, Math.round((n * 1.5) / el)));
+        if (performance.now() - t0 > FRAME_BUDGET_MS) break;
+      }
+      this.runBase = 0;
+      this.totalCycles += done;
+      // close the accumulation window
+      const span = done - this.lastMark;
+      if (span > 0) for (let i = 0; i < this.acc.length; i++) this.acc[i] += this.lit[i] * span;
+      this.lastMark = 0;
+      const now = performance.now();
+      this.hzWindow.push({ t: now, c: done });
+      while (this.hzWindow.length > 1 && now - this.hzWindow[0].t > 1000) this.hzWindow.shift();
+      const spanT = (now - this.hzWindow[0].t) / 1000;
+      const sumC = this.hzWindow.reduce((s, x) => s + x.c, 0);
+      this.achievedHz = spanT > 0.2 ? sumC / spanT : this.achievedHz;
+      if (done > 0 && this.speedHz >= 100_000) {
+        const alpha = 1 - Math.exp(-done / TAU_CYCLES);
+        for (let i = 0; i < this.acc.length; i++) this.bright[i] += (this.acc[i] / done - this.bright[i]) * alpha;
+      } else {
+        this.bright.set(this.lit);
+      }
+    } else if (this.sim && this.running) {
+      this.achievedHz = 0;
+      this.bright.set(this.lit);
+    }
+    return this.outputs();
+  }
+
+  private outputs(): BoardOutputs {
+    const b = this.bright;
+    const on = this.running || !!this.sim;
+    const f = (x: number, gain: number) => (x <= 0 ? 0 : Math.min(1, Math.sqrt(x) * gain));
+    const led: number[] = [];
+    for (let i = 0; i < 16; i++) led.push(on ? f(b[i], 1.15) : 0);
+    const rgb: [number, number, number][] = [0, 1].map((k) => [0, 1, 2].map((c) => (on ? f(b[16 + k * 3 + c], 1.15) : 0)) as [number, number, number]);
+    const seg: number[][] = [];
+    for (let dg = 0; dg < 8; dg++) {
+      const row: number[] = [];
+      for (let s = 0; s < 8; s++) row.push(on ? f(b[22 + dg * 8 + s], 1.7) : 0);
+      seg.push(row);
+    }
+    return { led, rgb, seg, done: !!this.sim };
+  }
+}
