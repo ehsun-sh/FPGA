@@ -90,6 +90,8 @@ export interface Design {
   warnings: { msg: string; loc?: Loc }[];
   // time unit of the top module in ps (Verilog `timescale; 1000 = 1 ns)
   unitPs?: number;
+  // names of the top module's parameters / generics
+  topParams?: string[];
 }
 
 export function mask(w: number): number {

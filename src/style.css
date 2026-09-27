@@ -1422,3 +1422,65 @@ dialog button {
     width: 110px;
   }
 }
+.big-run.check {
+  background: #6a4fc4;
+  margin-top: 4px;
+}
+.big-run.check:hover {
+  background: #5a40b0;
+}
+.ex-done {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f7a35;
+  background: #e2f4e6;
+  border-radius: 10px;
+  padding: 1px 8px;
+  vertical-align: middle;
+}
+.ex-result {
+  margin-top: 10px;
+  font-size: 13px;
+}
+.ex-result:empty {
+  display: none;
+}
+.ex-result.busy {
+  color: #555;
+  font-style: italic;
+}
+.ex-result.pass,
+.ex-result.fail {
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid #cfe8d4;
+}
+.ex-result.fail {
+  border-color: #f0c9c9;
+}
+.ex-result ul {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 0;
+}
+.ex-result li {
+  margin: 3px 0;
+}
+.ex-result li.ok {
+  color: #1f7a35;
+}
+.ex-result li.bad {
+  color: #b3261e;
+}
+.lesson-item .done {
+  color: #2e9e4a;
+  font-weight: 700;
+  margin-inline-start: auto;
+  padding-inline-start: 6px;
+}
+.sec-h .progress {
+  float: right;
+  font-weight: 400;
+  opacity: 0.8;
+}

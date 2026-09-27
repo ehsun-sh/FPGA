@@ -8,10 +8,10 @@ import { parseVhdl } from './vhdl';
 export { HdlError, compileDesign };
 export type { CompiledSim, Design, Lang, TbHost, TbYield };
 
-export function synthesize(src: string, lang: Lang, top?: string): Design {
+export function synthesize(src: string, lang: Lang, top?: string, params?: Record<string, number>): Design {
   const mods = lang === 'verilog' ? parseVerilog(src) : parseVhdl(src);
   if (!mods.length) throw new HdlError(lang === 'verilog' ? 'no module found' : 'no entity/architecture found', undefined, 'Synth 8-439');
-  return elaborate(mods, lang, top);
+  return elaborate(mods, lang, top, params);
 }
 
 // Several source files (design + testbench) elaborated together; errors carry the file name.

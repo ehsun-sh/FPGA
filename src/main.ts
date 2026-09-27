@@ -11,6 +11,8 @@ import { Runner } from './sim/runner';
 import { generateTestbench } from './sim/tbgen';
 import { formatTime, TbSim } from './sim/tbsim';
 import { WaveView } from './wave/view';
+import { EXERCISES } from './grade/exercises';
+import { gradeExercise } from './grade/grade';
 import { CodeEditor } from './ui/editor';
 import { highlight } from './ui/highlight';
 
@@ -614,12 +616,62 @@ function renderLessonList() {
   el.innerHTML = CHAPTERS.map((c, ci) => {
     const items = c.lessons.map((l) => {
       const num = l === PLAYGROUND ? '★' : String(++n);
-      return `<button class="flow-item lesson-item ${l.id === lesson.id ? 'active' : ''}" data-lesson="${l.id}" dir="${dir}"><span class="num">${num}</span>${esc(text(l).title)}</button>`;
+      return `<button class="flow-item lesson-item ${l.id === lesson.id ? 'active' : ''}" data-lesson="${l.id}" dir="${dir}"><span class="num">${num}</span>${esc(text(l).title)}${solved.has(l.id) ? `<span class="done" title="${ui.solved}">✓</span>` : ''}</button>`;
     });
     const soon = (c.soon ?? []).map((s) => `<div class="flow-item lesson-item soon" dir="${dir}"><span class="num">·</span><span>${esc(s[uiLang])} <em>(${ui.soon})</em></span></div>`);
     const head = l10nChapter(ci);
     return `<div class="chapter-h" dir="${dir}">${esc(head)}</div>${items.join('')}${soon.join('')}`;
   }).join('');
+}
+
+// ---------------------------------------------------------------- exercises and progress
+const solved = new Set<string>((store.get('solved') ?? '').split(',').filter((x) => EXERCISES[x]));
+const exerciseCount = () => ALL_LESSONS.filter((l) => EXERCISES[l.id]).length;
+
+function exerciseHtml(): string {
+  const ui = LESSON_UI[uiLang];
+  const ex = EXERCISES[lesson.id];
+  const body = ex ? ex[uiLang] : text(lesson).exercise;
+  if (!body) return '';
+  const done = solved.has(lesson.id) ? ` <span class="ex-done">✓ ${ui.solved}</span>` : '';
+  const btn = ex ? `<button class="big-run check" data-act="check">${ui.check}</button><div id="ex-result"></div>` : '';
+  return `<section class="exercise"><h2>${ui.exercise}${done}</h2>${body}<p class="dim">${ex?.testbench ? ui.exerciseHintTb : ui.exerciseHint}</p>${btn}</section>`;
+}
+
+function checkExercise() {
+  if (!EXERCISES[lesson.id]) return;
+  const ui = LESSON_UI[uiLang];
+  if (tab !== 'lesson') showTab('lesson');
+  const box = document.getElementById('ex-result');
+  if (box) {
+    box.className = 'ex-result busy';
+    box.textContent = ui.checking;
+    box.scrollIntoView({ block: 'nearest' });
+  }
+  const l = lesson;
+  log(`# check_exercise ${l.id}`, 'cmd');
+  setTimeout(() => {
+    const r = gradeExercise(
+      l.id,
+      { lang, src: srcEditor.text, xdc: xdcEditor.text, tb: tbEditor.text, original: lang === 'verilog' ? l.verilog : l.vhdl },
+      boardDef,
+    );
+    for (const i of r.items) log(`${i.ok ? '  ✓' : '  ✗'} ${i[uiLang]}`, i.ok ? 'ok' : 'error');
+    log(r.passed ? ui.passed : ui.failed.replace(/:$/, ''), r.passed ? 'ok' : 'warning');
+    if (r.passed && !solved.has(l.id)) {
+      solved.add(l.id);
+      store.set('solved', [...solved].join(','));
+      renderLessonList();
+      applyUiLang();
+    }
+    if (l !== lesson) return;
+    const sec = document.querySelector('#lesson .exercise h2');
+    if (sec && r.passed && !sec.querySelector('.ex-done')) sec.insertAdjacentHTML('beforeend', ` <span class="ex-done">✓ ${ui.solved}</span>`);
+    const el = document.getElementById('ex-result');
+    if (!el) return;
+    el.className = 'ex-result ' + (r.passed ? 'pass' : 'fail');
+    el.innerHTML = `<b>${r.passed ? ui.passed : ui.failed}</b><ul>${r.items.map((i) => `<li dir="auto" class="${i.ok ? 'ok' : 'bad'}">${i.ok ? '✓' : '✗'} ${esc(i[uiLang])}</li>`).join('')}</ul>`;
+  }, 30);
 }
 
 function l10nChapter(ci: number) {
@@ -658,7 +710,7 @@ function renderLesson() {
   <button class="big-run" data-act="run">${ui.runOn(esc(boardDef.name))}</button>
   <button class="big-run sim" data-act="sim">${ui.simulate}</button>
 </section>
-${tx.exercise ? `<section class="exercise"><h2>${ui.exercise}</h2>${tx.exercise}<p class="dim">${ui.exerciseHint}</p></section>` : ''}
+${exerciseHtml()}
 <nav class="lesson-nav">
   ${prev ? `<button data-lesson="${prev.id}">${rtl ? '→' : '←'} ${esc(text(prev).title)}</button>` : '<span></span>'}
   ${next ? `<button data-lesson="${next.id}">${esc(text(next).title)} ${rtl ? '←' : '→'}</button>` : '<span></span>'}
@@ -723,6 +775,8 @@ function applyUiLang() {
   document.documentElement.lang = uiLang;
   document.querySelectorAll<HTMLElement>('[data-ui]').forEach((b) => b.classList.toggle('active', b.dataset.ui === uiLang));
   $('#learn-h').textContent = `▾ LEARN · ${LESSON_UI[uiLang].learn}`;
+  $('#learn-h').title = LESSON_UI[uiLang].progress(solved.size, exerciseCount());
+  $('#learn-h').insertAdjacentHTML('beforeend', ` <span class="progress">${solved.size}/${exerciseCount()}</span>`);
   $('#bouncy-l').textContent = LESSON_UI[uiLang].bouncy;
 }
 
@@ -841,6 +895,9 @@ function act(name: string) {
       break;
     case 'sim':
       doSim();
+      break;
+    case 'check':
+      checkExercise();
       break;
     case 'new-tb':
       if (!tbDirty || confirm('Replace the testbench with a new one generated from the design?')) {

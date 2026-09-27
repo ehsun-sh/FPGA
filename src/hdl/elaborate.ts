@@ -93,7 +93,7 @@ export class Elaborator {
     this.design = { top: '', lang, sigs: [], mems: [], procs: [], ports: [], modules: [], warnings: [] };
   }
 
-  run(topName?: string): Design {
+  run(topName?: string, params?: Record<string, number>): Design {
     let top: AModule | undefined;
     if (topName) top = this.modules.get(topName);
     if (!top) {
@@ -105,7 +105,11 @@ export class Elaborator {
     if (!top) throw new HdlError('no module or entity found in the design source', undefined, 'Synth 8-439');
     this.design.top = top.name;
     this.design.unitPs = top.unitPs ?? 1000;
-    this.instantiate(top, '', new Map(), true);
+    this.design.topParams = top.params.filter((p) => !p.local).map((p) => p.name);
+    // parameter / generic overrides for the top module (VHDL names are lower case)
+    const ov = new Map<string, number>();
+    for (const [k, v] of Object.entries(params ?? {})) ov.set(top.lang === 'vhdl' ? k.toLowerCase() : k, v);
+    this.instantiate(top, '', ov, true);
     return this.design;
   }
 
@@ -769,6 +773,6 @@ export class Elaborator {
   }
 }
 
-export function elaborate(mods: AModule[], lang: Lang, top?: string): Design {
-  return new Elaborator(mods, lang).run(top);
+export function elaborate(mods: AModule[], lang: Lang, top?: string, params?: Record<string, number>): Design {
+  return new Elaborator(mods, lang).run(top, params);
 }

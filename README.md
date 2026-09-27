@@ -20,6 +20,12 @@ and watch it run on an interactive 3D Digilent Nexys A7-100T on the right.
   `` `timescale `` in Verilog, and `wait for` / `wait until` / `wait on`, `after`, `report` / `assert` and
   `std.env.finish` in VHDL. An event-driven scheduler runs them, and the waveform viewer shows every signal. It has a
   scope and object browser, run for / run all / restart, zoom, pan, a cursor and a radix per signal.
+- **Exercises with automatic checking**: every lesson ends with an exercise and a “Check my solution” button. The
+  checker maps the student's design onto a virtual board, flips switches and buttons, sends UART bytes and reads the
+  LEDs, the seven-segment display and pins (UART, SPI and I²C are decoded). Time-heavy exercises ask for a
+  `parameter` / `generic` (such as `DIV`) that the checker sets to a small value. The testbench exercise runs the
+  student's testbench on the lesson design and on a broken one. Solved exercises are remembered in the browser and
+  marked in the lesson list.
 - **Logic analyzer** (Tools → Logic Analyzer, Ctrl+L): a virtual USB logic analyzer window with up to 32 channels
   sampled every board clock. Probes clip onto Pmod JA–JD pins (drawn as flywires on the 3D board), any on-board
   device pin, or internal design signals. Single / Run / Stop acquisition, edge trigger, time base and position,
@@ -61,6 +67,7 @@ npm run build    # static site in dist/
 | `src/sim/runner.ts` | real-time driver: clocking, inputs, LED/segment brightness (persistence of vision) |
 | `src/sim/tbsim.ts`, `src/sim/tbgen.ts` | behavioral simulation of testbenches (event scheduler, messages) and testbench generator |
 | `src/wave/` | waveform viewer |
+| `src/grade/` | exercises and their checkers (`exercises.ts`), the virtual board they drive (`harness.ts`) |
 | `src/la/` | logic analyzer: `capture.ts` (recording, trigger), `decode.ts` (protocol decoders), `window.ts` (UI) |
 | `src/serial/` | serial console: live UART decoder and terminal window |
 | `src/lessons/` | course content: `course.ts` (chapters), `lessons.ts` and `advanced.ts` (Persian text + code), `en.ts` (English) |
