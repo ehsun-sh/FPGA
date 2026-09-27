@@ -4,6 +4,8 @@ export interface Tok {
   t: 'id' | 'num' | 'str' | 'op' | 'sys' | 'chr' | 'bits' | 'eof';
   v: string;
   loc: Loc;
+  // original text of a VHDL string literal (the lexer also reads it as a bit string)
+  raw?: string;
 }
 
 // Multi-character operators, longest first.
@@ -114,6 +116,10 @@ export function lex(src: string, lang: 'verilog' | 'vhdl'): Tok[] {
           toks.push({ t: 'num', v: src.slice(i, k + 1), loc: start });
           i = k + 1;
         } else {
+          if (src[j] === '.' && /[0-9]/.test(src[j + 1] ?? '')) {
+            j++;
+            while (j < n && /[0-9_]/.test(src[j])) j++;
+          }
           toks.push({ t: 'num', v: src.slice(i, j), loc: start });
           i = j;
         }
@@ -128,9 +134,9 @@ export function lex(src: string, lang: 'verilog' | 'vhdl'): Tok[] {
     }
     if (c === '"') {
       let j = i + 1;
-      while (j < n && src[j] !== '"') j++;
+      while (j < n && src[j] !== '"' && src[j] !== '\n') j += lang === 'verilog' && src[j] === '\\' ? 2 : 1;
       const s = src.slice(i + 1, j);
-      toks.push({ t: lang === 'vhdl' ? 'bits' : 'str', v: lang === 'vhdl' ? 'b:' + s.replace(/_/g, '') : s, loc: start });
+      toks.push({ t: lang === 'vhdl' ? 'bits' : 'str', v: lang === 'vhdl' ? 'b:' + s.replace(/_/g, '') : s, loc: start, raw: s });
       i = j + 1;
       continue;
     }

@@ -15,6 +15,7 @@ export interface Lesson {
   tryIt: string; // HTML, shown under "روی برد امتحان کنید"
   exercise?: string; // HTML
   la?: LaConfig; // logic-analyzer setup for this lesson
+  tb?: { verilog: string; vhdl: string }; // testbench (otherwise one is generated from the ports)
 }
 
 export const VHDL_HEADER = `library ieee;

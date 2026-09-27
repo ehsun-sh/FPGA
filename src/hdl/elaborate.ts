@@ -1,6 +1,6 @@
 // Elaboration: resolves names, evaluates parameters, flattens the module hierarchy into one Design.
-import { HdlError, type ADecl, type AExpr, type AModule, type AStmt, type AType, type Lang, type Loc } from './ast';
-import { bitsFor, mask, type Design, type Expr, type LVal, type Sig, type Stmt } from './ir';
+import { HdlError, type ADecl, type AExpr, type AModule, type APart, type AStmt, type AType, type Lang, type Loc } from './ast';
+import { bitsFor, mask, type Design, type Expr, type LVal, type Part, type Sig, type Stmt } from './ir';
 
 type Entry =
   | { k: 'sig'; id: number }
@@ -23,6 +23,48 @@ interface Ctx {
   prefix: string;
   scope: Scope;
   mod: AModule;
+  // inside a testbench thread (delays and waits allowed, 'after' is honoured)
+  tb?: boolean;
+}
+
+const SEV = { note: 0, warning: 1, error: 2, failure: 3 } as const;
+
+// statements that only make sense in simulation: a process containing them becomes a testbench thread
+function hasTiming(list: AStmt[], waitsOnly: boolean): boolean {
+  return list.some((s) => {
+    switch (s.k) {
+      case 'delay':
+      case 'wait':
+        return true;
+      case 'print':
+      case 'finish':
+      case 'sched':
+      case 'loop':
+        return !waitsOnly || (s.k === 'loop' && hasTiming(s.body, true));
+      case 'if':
+        return hasTiming(s.then, waitsOnly) || hasTiming(s.els, waitsOnly);
+      case 'case':
+        return s.items.some((i) => hasTiming(i.body, waitsOnly)) || (s.def ? hasTiming(s.def, waitsOnly) : false);
+      case 'block':
+      case 'for':
+      case 'vfor':
+        return hasTiming(s.body, waitsOnly);
+      default:
+        return false;
+    }
+  });
+}
+
+// signals an IR expression / statement list reads (for wait on implicit sensitivity)
+function readsOf(o: unknown, out: Set<number>) {
+  if (!o || typeof o !== 'object') return;
+  if (Array.isArray(o)) {
+    o.forEach((x) => readsOf(x, out));
+    return;
+  }
+  const r = o as Record<string, unknown>;
+  if ((r.k === 'sig' || r.k === 'edge' || r.k === 'event') && typeof r.id === 'number' && !('lhs' in r)) out.add(r.id);
+  for (const [key, val] of Object.entries(r)) if (key !== 'lhs' && val && typeof val === 'object') readsOf(val, out);
 }
 
 const CAST_FUNCS = new Set([
@@ -62,6 +104,7 @@ export class Elaborator {
     }
     if (!top) throw new HdlError('no module or entity found in the design source', undefined, 'Synth 8-439');
     this.design.top = top.name;
+    this.design.unitPs = top.unitPs ?? 1000;
     this.instantiate(top, '', new Map(), true);
     return this.design;
   }
@@ -200,6 +243,7 @@ export class Elaborator {
   }
 
   declare(d: { name: string; type: AType; init?: AExpr; loc: Loc }, ctx: Ctx, scope: Scope): Entry {
+    if (scope.map.has(d.name)) throw new HdlError(`'${d.name}' is already declared${ctx.lang === 'vhdl' ? ' (VHDL names are not case-sensitive)' : ''}`, d.loc, 'Synth 8-2611');
     const info = this.typeInfo(d.type, ctx, d.loc);
     const full = ctx.prefix + d.name;
     if (d.type.arr) {
@@ -231,6 +275,15 @@ export class Elaborator {
   // ---------------- instantiation ----------------
   // aliases: input ports connected to a whole parent signal share that signal (keeps one clock net across the hierarchy)
   instantiate(mod: AModule, prefix: string, paramOverrides: Map<string, number>, isTop: boolean, aliases = new Map<string, number>()): Map<string, number> {
+    try {
+      return this.instantiateModule(mod, prefix, paramOverrides, isTop, aliases);
+    } catch (e) {
+      if (e instanceof HdlError && !e.file) e.file = mod.file;
+      throw e;
+    }
+  }
+
+  instantiateModule(mod: AModule, prefix: string, paramOverrides: Map<string, number>, isTop: boolean, aliases: Map<string, number>): Map<string, number> {
     if (++this.depth > 32) throw new HdlError(`recursive instantiation of '${mod.name}'`, mod.loc);
     if (!this.design.modules.includes(mod.name)) this.design.modules.push(mod.name);
     const scope = new Scope();
@@ -268,7 +321,9 @@ export class Elaborator {
     for (const d of mod.decls) this.declare(d, ctx, scope);
 
     let procNo = 0;
-    for (const it of mod.items) {
+    // instances first, so that processes can refer to signals inside them (dut.count)
+    const items = [...mod.items.filter((i) => i.k === 'inst'), ...mod.items.filter((i) => i.k !== 'inst')];
+    for (const it of items) {
       switch (it.k) {
         case 'assign': {
           const lhs = this.lval(it.lhs, ctx);
@@ -285,7 +340,11 @@ export class Elaborator {
               pscope.set(d.name, { k: 'const', value: v.value, width: v.width, signed: v.signed });
             } else this.declare(d as ADecl, pctx, pscope);
           }
-          if (it.sens === 'comb') {
+          if (it.sens === 'comb' && hasTiming(it.body, true)) {
+            // always #5 clk = ~clk;  or a VHDL process with wait statements: a thread that loops forever
+            const tctx = { ...pctx, tb: true };
+            this.design.procs.push({ kind: 'tb', triggers: [], body: [{ k: 'loop', body: this.stmts(it.body, tctx, false, false) }], loc: it.loc });
+          } else if (it.sens === 'comb') {
             this.design.procs.push({ kind: 'comb', triggers: [], body: this.stmts(it.body, pctx, false, true), loc: it.loc });
           } else {
             const triggers = it.sens.edges.map((ed) => {
@@ -298,7 +357,8 @@ export class Elaborator {
           break;
         }
         case 'initial':
-          this.design.procs.push({ kind: 'init', triggers: [], body: this.stmts(it.body, ctx, false, true), loc: it.loc });
+          if (hasTiming(it.body, false)) this.design.procs.push({ kind: 'tb', triggers: [], body: this.stmts(it.body, { ...ctx, tb: true }, false, false), loc: it.loc });
+          else this.design.procs.push({ kind: 'init', triggers: [], body: this.stmts(it.body, ctx, false, true), loc: it.loc });
           break;
         case 'inst': {
           const child = this.modules.get(it.module);
@@ -350,7 +410,42 @@ export class Elaborator {
 
   // ---------------- statements ----------------
   stmts(list: AStmt[], ctx: Ctx, clocked: boolean, comb: boolean): Stmt[] {
-    return list.map((s) => this.stmt(s, ctx, clocked, comb));
+    const out: Stmt[] = [];
+    for (const s of list) {
+      const st = this.stmt(s, ctx, clocked, comb);
+      if (s.k === 'wait' && s.auto && st.k === 'wait') {
+        // implicit sensitivity: everything the statements before it read
+        const r = new Set<number>();
+        readsOf(out, r);
+        st.on = [...r].map((id) => ({ id, edge: 'any' as const }));
+      }
+      out.push(st);
+    }
+    return out;
+  }
+
+  // name lookup with hierarchical names (dut.count) as a fallback
+  lookup(name: string, ctx: Ctx) {
+    const en = ctx.scope.get(name);
+    if (en || !name.includes('.')) return en;
+    const full = ctx.prefix + name;
+    const sig = this.design.sigs.find((x) => x.name === full);
+    if (sig) return { k: 'sig' as const, id: sig.id };
+    const m = this.design.mems.find((x) => x.name === full);
+    return m ? { k: 'mem' as const, id: m.id } : undefined;
+  }
+
+  part(p: APart, ctx: Ctx): Part {
+    if ('s' in p) return { s: p.s };
+    if (p.e.k === 'str') return { s: p.e.value };
+    const e = this.expr(p.e, ctx, false);
+    const sig = e.k === 'sig' ? this.design.sigs[e.id] : undefined;
+    const f = p.f === 't' && ctx.lang === 'vhdl' ? 'T' : p.f;
+    return { e, f, w: p.w, signed: this.exprSigned(e), width: this.selfWidth(e), lits: sig?.enumLits };
+  }
+
+  simOnly(what: string, ctx: Ctx, loc?: Loc) {
+    if (!ctx.tb) throw new HdlError(`${what} can only be used in a testbench (an initial block or a process without a sensitivity list)`, loc, 'Synth 8-9999');
   }
 
   stmt(s: AStmt, ctx: Ctx, clocked: boolean, comb: boolean): Stmt {
@@ -402,6 +497,42 @@ export class Elaborator {
       }
       case 'block':
         return { k: 'block', body: this.stmts(s.body, ctx, clocked, comb) };
+      case 'delay':
+        this.simOnly('a delay', ctx, s.loc);
+        return { k: 'delay', t: this.expr(s.t, ctx, false) };
+      case 'wait': {
+        this.simOnly(`'wait' / '@'`, ctx, s.loc);
+        const on = s.on.map((o) => {
+          const en = this.lookup(o.name, ctx);
+          if (!en || en.k !== 'sig') throw new HdlError(`'${o.name}' is not a signal`, o.loc, 'Synth 8-1031');
+          return { id: en.id, edge: o.edge };
+        });
+        const until = s.until ? this.expr(s.until, ctx, false) : undefined;
+        if (until && !on.length) {
+          const r = new Set<number>();
+          readsOf(until, r);
+          r.forEach((id) => on.push({ id, edge: 'any' }));
+        }
+        return { k: 'wait', on, until, level: s.level };
+      }
+      case 'print':
+        return { k: 'print', parts: s.parts.map((p) => this.part(p, ctx)), sev: SEV[s.sev], monitor: s.monitor, loc: s.loc };
+      case 'finish':
+        return { k: 'finish' };
+      case 'loop':
+        if (!s.count && !ctx.tb) this.simOnly(s.cond ? `'while'` : `'forever'`, ctx, s.loc);
+        return {
+          k: 'loop',
+          count: s.count ? this.expr(s.count, ctx, false) : undefined,
+          cond: s.cond ? this.expr(s.cond, ctx, false) : undefined,
+          body: this.stmts(s.body, ctx, clocked, comb),
+        };
+      case 'sched': {
+        const lhs = this.lval(s.lhs, ctx);
+        // in synthesizable code 'after' is ignored, as Vivado does
+        if (!ctx.tb) return { k: 'assign', lhs, rhs: this.expr(s.items[0].rhs, ctx, clocked), nb: !comb, loc: s.loc };
+        return { k: 'sched', lhs, items: s.items.map((i) => ({ rhs: this.expr(i.rhs, ctx, false), t: i.t ? this.expr(i.t, ctx, false) : { k: 'const', value: 0, width: 32 } })) };
+      }
     }
   }
 
@@ -409,7 +540,7 @@ export class Elaborator {
   lval(e: AExpr, ctx: Ctx): LVal {
     switch (e.k) {
       case 'id': {
-        const en = ctx.scope.get(e.name);
+        const en = this.lookup(e.name, ctx);
         if (!en) throw new HdlError(`'${e.name}' is not declared`, e.loc, 'Synth 8-1031');
         if (en.k !== 'sig') throw new HdlError(`cannot assign to '${e.name}'`, e.loc, 'Synth 8-2576');
         return { k: 'sig', id: en.id };
@@ -476,7 +607,7 @@ export class Elaborator {
       case 'num':
         return { k: 'const', value: e.value >>> 0, width: e.width ?? (ctx.lang === 'vhdl' ? 0 : 32), dc: e.dc };
       case 'id': {
-        const en = ctx.scope.get(e.name);
+        const en = this.lookup(e.name, ctx);
         if (!en) throw new HdlError(`'${e.name}' is not declared`, e.loc, 'Synth 8-1031');
         if (en.k === 'const') {
           const unsized = ctx.lang === 'vhdl' && en.width >= 32;
@@ -534,6 +665,12 @@ export class Elaborator {
       }
       case 'others':
         return { k: 'others', bit: this.expr(e.bit, ctx, clocked) };
+      case 'str':
+        throw new HdlError('strings can only be used in $display / report messages', e.loc, 'Synth 8-9999');
+      case 'now':
+        return { k: 'now', div: ctx.lang === 'vhdl' ? 1 : (ctx.mod.unitPs ?? 1000) };
+      case 'random':
+        return { k: 'random' };
       case 'attr': {
         const base = e.base.k === 'id' ? ctx.scope.get(e.base.name) : undefined;
         if (!base || base.k !== 'sig') throw new HdlError(`attribute '${e.attr}' needs a signal`, e.loc);

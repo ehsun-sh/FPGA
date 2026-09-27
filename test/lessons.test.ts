@@ -151,6 +151,15 @@ const checks: Record<string, (h: Harness) => void> = {
     h.sim.run(50_000_000);
     expect(h.led()).toBe(0x0200);
   },
+  testbench(h) {
+    h.reset(1);
+    h.sw(1);
+    h.sim.run(100_000_000);
+    expect(h.led()).toBe(2);
+    h.sw(0);
+    h.sim.run(50_000_000);
+    expect(h.led()).toBe(2);
+  },
   multiplex(h) {
     h.sw(0x3a7f);
     const seen = new Map<number, number>();

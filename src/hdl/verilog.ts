@@ -1,5 +1,5 @@
 // Recursive-descent parser for a synthesizable Verilog-2001 subset (+ a few SystemVerilog keywords).
-import { HdlError, type ASens, type ADecl, type AExpr, type AItem, type AModule, type APort, type AStmt, type AType, type Loc } from './ast';
+import { HdlError, type ASens, type ADecl, type AExpr, type AItem, type AModule, type APart, type APort, type AStmt, type AType, type Loc, type Severity } from './ast';
 import { lex, TokStream } from './lexer';
 
 export function parseVerilogNumber(text: string, loc: Loc): AExpr {
@@ -65,10 +65,164 @@ const BIN_PREC: Record<string, number> = {
   '**': 11,
 };
 
+const TIME_UNITS: Record<string, number> = { s: 1e12, ms: 1e9, us: 1e6, ns: 1e3, ps: 1, fs: 1e-3 };
+
+// Splits a $display format string into text and formatted values.
+function formatParts(args: AExpr[], loc: Loc): APart[] {
+  const parts: APart[] = [];
+  let rest = args;
+  const text = (s: string) => {
+    if (!s) return;
+    const last = parts[parts.length - 1];
+    if (last && 's' in last) last.s += s;
+    else parts.push({ s });
+  };
+  if (args[0]?.k === 'str') {
+    const f = args[0].value;
+    rest = args.slice(1);
+    let k = 0;
+    for (let i = 0; i < f.length; i++) {
+      const c = f[i];
+      if (c === '\\') {
+        const n = f[++i];
+        text(n === 'n' ? '\n' : n === 't' ? '\t' : n ?? '');
+      } else if (c === '%') {
+        const m = /^(-?\d*)([a-zA-Z%])/.exec(f.slice(i + 1));
+        if (!m) {
+          text('%');
+          continue;
+        }
+        i += m[0].length;
+        const conv = m[2].toLowerCase();
+        if (conv === '%') text('%');
+        else if (conv === 'm') text('top');
+        else {
+          const e = rest[k++];
+          if (!e) throw new HdlError(`missing argument for '%${m[2]}' in format string`, loc);
+          parts.push({ e, f: conv === 'x' ? 'h' : conv === 'u' ? 'd' : conv, w: m[1] === '' ? -1 : Math.abs(Number(m[1])) });
+        }
+      } else text(c);
+    }
+    rest = rest.slice(k);
+  }
+  rest.forEach((e, i) => {
+    if (i || parts.length) text(' ');
+    if (e.k === 'str') text(e.value);
+    else parts.push({ e, f: 'd', w: -1 });
+  });
+  return parts;
+}
+
 class VerilogParser {
   s: TokStream;
-  constructor(src: string) {
+  constructor(
+    src: string,
+    public unitPs = 1000,
+  ) {
     this.s = new TokStream(lex(src, 'verilog'));
+  }
+
+  // delay after '#': a number (possibly with a fraction), a name or a parenthesised expression; returned in ps
+  delayValue(): AExpr {
+    const t = this.s.peek();
+    const loc = t.loc;
+    let e: AExpr;
+    if (t.t === 'num') {
+      this.s.next();
+      let v = Number(t.v.replace(/_/g, ''));
+      if (!/^[\d_]+$/.test(t.v)) v = parseVerilogNumber(t.v, loc).k === 'num' ? (parseVerilogNumber(t.v, loc) as { value: number }).value : 0;
+      if (this.s.is('.') && this.s.peek(1).t === 'num') {
+        this.s.next();
+        v = Number(`${v}.${this.s.next().v}`);
+      }
+      const unit = this.s.peek().t === 'id' && TIME_UNITS[this.s.peek().v] !== undefined ? TIME_UNITS[this.s.next().v] : this.unitPs;
+      return { k: 'num', value: Math.round(v * unit), width: null, loc };
+    }
+    if (t.t === 'id') {
+      this.s.next();
+      e = { k: 'id', name: t.v, loc };
+    } else {
+      this.s.expect('(');
+      e = this.expr();
+      this.s.expect(')');
+    }
+    return this.unitPs === 1 ? e : { k: 'bin', op: '*', a: e, b: num(this.unitPs, loc), loc };
+  }
+
+  // @(posedge clk or negedge rst) / @(a or b) / @* / @clk
+  eventControl(loc: Loc): AStmt {
+    if (this.s.accept('*')) return { k: 'wait', on: [], auto: true, loc };
+    const on: { name: string; edge: 'pos' | 'neg' | 'any'; loc: Loc }[] = [];
+    if (!this.s.accept('(')) {
+      const id = this.s.ident();
+      return { k: 'wait', on: [{ name: id.v, edge: 'any', loc: id.loc }], loc };
+    }
+    if (this.s.accept('*')) {
+      this.s.expect(')');
+      return { k: 'wait', on: [], auto: true, loc };
+    }
+    for (;;) {
+      let edge: 'pos' | 'neg' | 'any' = 'any';
+      if (this.s.accept('posedge')) edge = 'pos';
+      else if (this.s.accept('negedge')) edge = 'neg';
+      const id = this.s.ident();
+      let name = id.v;
+      while (this.s.is('.') && this.s.peek(1).t === 'id') {
+        this.s.next();
+        name += '.' + this.s.next().v;
+      }
+      on.push({ name, edge, loc: id.loc });
+      if (!this.s.accept('or') && !this.s.accept(',')) break;
+    }
+    this.s.expect(')');
+    return { k: 'wait', on, loc };
+  }
+
+  // statement after a timing control: '#10;' alone or '#10 x = 1;'
+  withBody(ctl: AStmt, loc: Loc): AStmt {
+    if (this.s.accept(';')) return ctl;
+    return { k: 'block', body: [ctl, this.stmt()], loc };
+  }
+
+  sysTask(): AStmt {
+    const t = this.s.next();
+    const loc = t.loc;
+    const name = t.v;
+    const args: AExpr[] = [];
+    if (this.s.accept('(')) {
+      while (!this.s.is(')')) {
+        if (this.s.is(',')) args.push({ k: 'str', value: '', loc: this.s.peek().loc });
+        else args.push(this.expr());
+        if (!this.s.accept(',')) break;
+      }
+      this.s.expect(')');
+    }
+    this.s.expect(';');
+    switch (name) {
+      case '$display':
+      case '$displayh':
+      case '$displayb':
+      case '$write':
+      case '$strobe':
+      case '$monitor':
+      case '$info':
+      case '$warning':
+      case '$error':
+      case '$fatal': {
+        let a = args;
+        if (name === '$fatal' && a[0] && a[0].k !== 'str') a = a.slice(1);
+        const parts = formatParts(a, loc);
+        if (name !== '$write') parts.push({ s: '\n' });
+        const sev: Severity = name === '$warning' ? 'warning' : name === '$error' ? 'error' : name === '$fatal' ? 'failure' : 'note';
+        const p: AStmt = { k: 'print', parts, sev, monitor: name === '$monitor', loc };
+        return name === '$fatal' ? { k: 'block', body: [p, { k: 'finish', loc }], loc } : p;
+      }
+      case '$finish':
+      case '$stop':
+        return { k: 'finish', loc };
+    }
+    // $dumpfile, $dumpvars, $timeformat ... have no effect here
+    return { k: 'block', body: [], loc };
   }
 
   parseFile(): AModule[] {
@@ -86,7 +240,7 @@ class VerilogParser {
   module(): AModule {
     const loc = this.s.expect('module').loc;
     const name = this.s.ident().v;
-    const mod: AModule = { name, lang: 'verilog', params: [], ports: [], decls: [], enums: {}, arrayTypes: {}, items: [], loc };
+    const mod: AModule = { name, lang: 'verilog', params: [], ports: [], decls: [], enums: {}, arrayTypes: {}, items: [], loc, unitPs: this.unitPs };
     if (this.s.accept('#')) {
       this.s.expect('(');
       while (!this.s.is(')')) {
@@ -396,28 +550,46 @@ class VerilogParser {
       return { k: 'for', init, cond, step, body: [this.stmt()], loc };
     }
     if (this.s.accept(';')) return { k: 'block', body: [], loc };
-    if (t.t === 'sys') {
-      // $display / $finish ... ignored
-      while (!this.s.is(';') && this.s.peek().t !== 'eof') this.s.next();
-      this.s.expect(';');
-      return { k: 'block', body: [], loc };
+    if (t.t === 'sys') return this.sysTask();
+    if (this.s.accept('#')) return this.withBody({ k: 'delay', t: this.delayValue(), loc }, loc);
+    if (this.s.accept('@')) return this.withBody(this.eventControl(loc), loc);
+    if (this.s.accept('wait')) {
+      this.s.expect('(');
+      const until = this.expr();
+      this.s.expect(')');
+      return this.withBody({ k: 'wait', on: [], until, level: true, loc }, loc);
     }
-    const lhs = this.lvalue();
-    let nb = false;
-    if (this.s.accept('<=')) nb = true;
-    else if (this.s.is('++') || (this.s.is('+') && this.s.is('+', 1))) {
-      throw new HdlError(`use 'x = x + 1' instead of '++'`, loc);
-    } else this.s.expect('=');
-    const rhs = this.expr();
+    if (this.s.accept('forever')) return { k: 'loop', body: [this.stmt()], loc };
+    if (this.s.accept('repeat') || this.s.is('while')) {
+      const isWhile = this.s.accept('while');
+      this.s.expect('(');
+      const e = this.expr();
+      this.s.expect(')');
+      return isWhile ? { k: 'loop', cond: e, body: [this.stmt()], loc } : { k: 'loop', count: e, body: [this.stmt()], loc };
+    }
+    const st = this.simpleAssign(true);
     this.s.expect(';');
-    return { k: 'assign', lhs, rhs, nb, loc };
+    return st;
   }
 
-  simpleAssign(): AStmt {
+  // x = e | x <= e | x++ | x-- | x += e (the last three only as blocking)
+  simpleAssign(allowNb = false): AStmt {
     const loc = this.s.peek().loc;
     const lhs = this.lvalue();
-    this.s.expect('=');
-    return { k: 'assign', lhs, rhs: this.expr(), nb: false, loc };
+    if ((this.s.is('+') && this.s.is('+', 1)) || (this.s.is('-') && this.s.is('-', 1))) {
+      const op = this.s.next().v;
+      this.s.next();
+      return { k: 'assign', lhs, rhs: { k: 'bin', op, a: lhs, b: num(1, loc), loc }, nb: false, loc };
+    }
+    if ((this.s.is('+') || this.s.is('-')) && this.s.is('=', 1)) {
+      const op = this.s.next().v;
+      this.s.next();
+      return { k: 'assign', lhs, rhs: { k: 'bin', op, a: lhs, b: this.expr(), loc }, nb: false, loc };
+    }
+    let nb = false;
+    if (allowNb && this.s.accept('<=')) nb = true;
+    else this.s.expect('=');
+    return { k: 'assign', lhs, rhs: this.expr(), nb, loc };
   }
 
   lvalue(): AExpr {
@@ -468,6 +640,15 @@ class VerilogParser {
     if (t.t === 'num') {
       // "4 'b0101" handled by lexer; also handle unsized followed by sized part, e.g. 4'b1
       e = parseVerilogNumber(t.v, loc);
+    } else if (t.t === 'str') {
+      return { k: 'str', value: t.v, loc };
+    } else if (t.t === 'sys' && ['$time', '$realtime', '$stime'].includes(t.v)) {
+      e = { k: 'now', loc };
+    } else if (t.t === 'sys' && (t.v === '$random' || t.v === '$urandom')) {
+      if (this.s.accept('(')) {
+        while (!this.s.accept(')')) this.s.next();
+      }
+      e = { k: 'random', loc };
     } else if (t.t === 'sys') {
       const args: AExpr[] = [];
       if (this.s.accept('(')) {
@@ -479,7 +660,13 @@ class VerilogParser {
       }
       e = { k: 'call', name: t.v, args, loc };
     } else if (t.t === 'id') {
-      e = { k: 'id', name: t.v, loc };
+      let name = t.v;
+      // hierarchical name: dut.count
+      while (this.s.is('.') && this.s.peek(1).t === 'id') {
+        this.s.next();
+        name += '.' + this.s.next().v;
+      }
+      e = { k: 'id', name, loc };
     } else if (t.v === '(') {
       e = this.expr();
       this.s.expect(')');
@@ -530,5 +717,8 @@ function num(value: number, loc: Loc): AExpr {
 }
 
 export function parseVerilog(src: string): AModule[] {
-  return new VerilogParser(src).parseFile();
+  // `timescale 1ns / 1ps: the first number is the unit of # delays and $time
+  const ts = /`timescale\s+(1|10|100)\s*(s|ms|us|ns|ps|fs)\b/.exec(src);
+  const unit = ts ? Number(ts[1]) * TIME_UNITS[ts[2]] : 1000;
+  return new VerilogParser(src, Math.max(1, unit)).parseFile();
 }

@@ -1,6 +1,6 @@
 // Compiles an elaborated Design into a JavaScript cycle simulator (2-state, event-driven delta cycles).
 import { HdlError } from './ast';
-import { mask, type Design, type Expr, type LVal, type Proc, type Stmt } from './ir';
+import { mask, type Design, type Expr, type LVal, type Part, type Proc, type Stmt } from './ir';
 
 interface Gen {
   design: Design;
@@ -10,6 +10,13 @@ interface Gen {
   tmp: number;
   // non-blocking targets that nothing else writes: committed unconditionally (keeps n[i] === v[i] between cycles)
   staticNb: Set<number>;
+  // generating a testbench thread (a JS generator): delays and waits become yields
+  inTb: boolean;
+  // generating a combinational process: messages are dropped (it re-runs many times per step)
+  inComb: boolean;
+  // message templates referenced by H.pr / H.mon
+  prints: Part[][];
+  printSev: number[];
 }
 
 const M = (code: string, w: number): string => (w >= 32 ? `((${code})>>>0)` : `((${code})&${mask(w)})`);
@@ -45,6 +52,9 @@ function selfW(e: Expr, g: Gen): number {
       return 1;
     case 'others':
       return 0;
+    case 'now':
+    case 'random':
+      return 32;
   }
 }
 
@@ -241,6 +251,10 @@ function ex(e: Expr, W: number, g: Gen): string {
     }
     case 'others':
       return `(${ex(e.bit, 1, g)}!==0?${mask(W)}:0)`;
+    case 'now':
+      return M(`Math.floor(H.t/${e.div})`, W);
+    case 'random':
+      return M(`(Math.random()*4294967296)`, W);
   }
 }
 
@@ -309,7 +323,48 @@ function stmtCode(s: Stmt, g: Gen): string {
       if (W > 32) throw new HdlError(`assignment wider than 32 bits is not supported`, s.loc, 'Synth 8-9999');
       let val = ex(s.rhs, W, g);
       if (W > lw) val = M(val, lw);
-      return writeCode(s.lhs, val, s.nb, g);
+      // testbench threads update signals immediately; the scheduler settles the design after each step
+      return writeCode(s.lhs, val, s.nb && !g.inTb, g);
+    }
+    case 'delay':
+      if (!g.inTb) throw new HdlError('delays are only allowed in testbench code', undefined, 'Synth 8-9999');
+      return `yield ${ex(s.t, 32, g)};lg=0;`;
+    case 'wait': {
+      if (!g.inTb) throw new HdlError(`'wait' is only allowed in testbench code`, undefined, 'Synth 8-9999');
+      if (!s.on.length && !s.until) return 'yield -1;';
+      const edge = { pos: 1, neg: 2, any: 0 };
+      const u = s.until ? `()=>${ex(s.until, selfW(s.until, g) || 32, g)}!==0` : 'null';
+      return `yield {w:[${s.on.map((o) => o.id).join(',')}],e:[${s.on.map((o) => edge[o.edge]).join(',')}],u:${u},l:${s.level ? 1 : 0}};lg=0;`;
+    }
+    case 'print': {
+      if (g.inComb) return '';
+      const idx = g.prints.length;
+      g.prints.push(s.parts.map((p) => ('s' in p ? p : { ...p, e: { k: 'const', value: 0, width: 0 } })));
+      g.printSev.push(s.sev);
+      const vals = s.parts.filter((p) => !('s' in p)).map((p) => ('e' in p ? ex(p.e, Math.max(p.width, 1), g) : '0'));
+      return s.monitor ? `H.mon(${idx},()=>[${vals.join(',')}]);` : `H.pr(${idx},[${vals.join(',')}]);`;
+    }
+    case 'finish':
+      return g.inTb ? 'H.fin();return;' : 'H.fin();';
+    case 'loop': {
+      const guard = `if(++lg>1000000)throw new Error('a loop runs forever without a delay or wait');`;
+      const body = s.body.map((x) => stmtCode(x, g)).join('');
+      if (s.count) {
+        const t = `rp${g.tmp++}`;
+        return `for(let ${t}=${ex(s.count, selfW(s.count, g) || 32, g)};${t}>0;${t}--){${guard}${body}}`;
+      }
+      if (s.cond) return `while(${ex(s.cond, selfW(s.cond, g) || 32, g)}!==0){${guard}${body}}`;
+      return `for(;;){${guard}${body}}`;
+    }
+    case 'sched': {
+      const t = `sv${g.tmp++}`;
+      const lw = lvalWidth(s.lhs, g);
+      const vals = s.items.map((i) => M(ex(i.rhs, Math.max(lw, selfW(i.rhs, g)), g), lw));
+      let code = `{const ${t}=[${vals.join(',')}];`;
+      s.items.forEach((i, k) => {
+        code += `H.sch(${ex(i.t, 32, g)},()=>{${writeCode(s.lhs, `${t}[${k}]`, false, g)}});`;
+      });
+      return code + '}';
     }
     case 'if':
       return `if(${ex(s.c, selfW(s.c, g) || 32, g)}!==0){${s.t.map((x) => stmtCode(x, g)).join('')}}${s.f.length ? `else{${s.f.map((x) => stmtCode(x, g)).join('')}}` : ''}`;
@@ -428,6 +483,28 @@ function analyzeStmts(list: Stmt[], reads: Set<number>, writes: Set<number>, nSi
       case 'block':
         analyzeStmts(s.body, reads, writes, nSigs);
         break;
+      case 'delay':
+        collectReads(s.t, reads, nSigs);
+        break;
+      case 'wait':
+        s.on.forEach((o) => reads.add(o.id));
+        if (s.until) collectReads(s.until, reads, nSigs);
+        break;
+      case 'print':
+        s.parts.forEach((p) => 'e' in p && collectReads(p.e, reads, nSigs));
+        break;
+      case 'loop':
+        if (s.count) collectReads(s.count, reads, nSigs);
+        if (s.cond) collectReads(s.cond, reads, nSigs);
+        analyzeStmts(s.body, reads, writes, nSigs);
+        break;
+      case 'sched':
+        s.items.forEach((i) => {
+          collectReads(i.rhs, reads, nSigs);
+          collectReads(i.t, reads, nSigs);
+        });
+        collectLval(s.lhs, reads, writes, nSigs);
+        break;
     }
   }
 }
@@ -448,7 +525,8 @@ function assignTargets(list: Stmt[], nb: boolean, out: Set<number>) {
       s.items.forEach((it) => assignTargets(it.body, nb, out));
       if (s.def) assignTargets(s.def, nb, out);
     } else if (s.k === 'for') assignTargets([s.init, s.step, ...s.body], nb, out);
-    else if (s.k === 'block') assignTargets(s.body, nb, out);
+    else if (s.k === 'block' || s.k === 'loop') assignTargets(s.body, nb, out);
+    else if (s.k === 'sched' && !nb) lvalIds(s.lhs, out);
   }
 }
 
@@ -487,12 +565,30 @@ export interface CompiledSim {
   run(cycles: number): number;
   // call after writing v/mems from another instance of the same design (between cycles) to adopt that state
   sync(): void;
+  // testbench threads (generators); each yields a delay in ps, -1 to stop, or a wait descriptor
+  threads: (() => Generator<TbYield, void, void>)[];
+  // message templates for H.pr / H.mon, and their severities (0 note .. 3 failure)
+  prints: Part[][];
+  printSev: number[];
   source: string;
 }
 
+export type TbYield = number | { w: number[]; e: number[]; u: (() => boolean) | null; l: number };
+
+// Callbacks the generated code uses for simulation-only statements.
+export interface TbHost {
+  t: number; // current simulation time in ps
+  pr(template: number, vals: number[]): void;
+  mon(template: number, vals: () => number[]): void;
+  sch(delay: number, fn: () => void): void;
+  fin(): void;
+}
+
+const NO_HOST: TbHost = { t: 0, pr() {}, mon() {}, sch() {}, fin() {} };
+
 export function compileDesign(
   design: Design,
-  opts: { clock?: number; watch?: number[]; onOut?: (cycle: number) => void; probe?: number[]; onProbe?: (cycle: number) => void } = {},
+  opts: { clock?: number; watch?: number[]; onOut?: (cycle: number) => void; probe?: number[]; onProbe?: (cycle: number) => void; host?: TbHost } = {},
 ): CompiledSim {
   const nSigs = design.sigs.length;
   const slots = new Map<number, number>();
@@ -516,7 +612,7 @@ export function compileDesign(
     assignTargets(p.body, false, blocking);
   }
   const staticNb = new Set([...nbTargets].filter((id) => !blocking.has(id)));
-  const g: Gen = { design, slots, inSeq: false, tmp: 0, staticNb };
+  const g: Gen = { design, slots, inSeq: false, tmp: 0, staticNb, inTb: false, inComb: true, prints: [], printSev: [] };
   const comb = design.procs.filter((p) => p.kind === 'comb');
   const seq = design.procs.filter((p) => p.kind === 'seq');
   const inits = design.procs.filter((p) => p.kind === 'init');
@@ -537,6 +633,7 @@ export function compileDesign(
       });
   const combClkFn = cyclic ? 'function combClk(){comb();}' : `function combClk(){let lg=0;${clkOrder.map((p) => stmtCode({ k: 'block', body: p.body }, g)).join('\n')}}`;
 
+  g.inComb = false;
   g.inSeq = true;
   const slotIds = [...slots.keys()];
   let settleBody = '';
@@ -556,6 +653,12 @@ export function compileDesign(
   }
   g.inSeq = false;
   const initBody = inits.map((p) => stmtCode({ k: 'block', body: p.body }, g)).join('\n');
+  g.inTb = true;
+  const tbCode = design.procs
+    .filter((p) => p.kind === 'tb')
+    .map((p) => `function*(){let lg=0;${stmtCode({ k: 'block', body: p.body }, g)}}`)
+    .join(',\n');
+  g.inTb = false;
   const decl = slotIds.map((_, s) => `let p${s}=0;`).join('');
   const resetPrev = slotIds.map((id, s) => `p${s}=v[${id}];`).join('');
 
@@ -597,17 +700,18 @@ function reset(){for(let i=0;i<v.length;i++)v[i]=init[i];for(let m=0;m<M.length;
 comb();n.set(v);${resetPrev}settle();}
 function sync(){n.set(v);d.fill(0);dn=0;mq.length=0;${resetPrev}}
 ${runFn}
-return {reset, settle, run, sync};`;
+const threads=[${tbCode}];
+return {reset, settle, run, sync, threads};`;
 
   const v = new Uint32Array(nSigs);
   const init = new Uint32Array(design.sigs.map((s) => s.init >>> 0));
   const mems = design.mems.map((m) => new Uint32Array(m.length));
   const minit = design.mems.map((m) => m.init >>> 0);
-  let fns: { reset(): void; settle(): void; run(n: number): number; sync(): void };
+  let fns: { reset(): void; settle(): void; run(n: number): number; sync(): void; threads: CompiledSim['threads'] };
   try {
-    fns = new Function('v', 'M', 'init', 'minit', 'onOut', 'onProbe', source)(v, mems, init, minit, opts.onOut ?? (() => {}), opts.onProbe ?? (() => {}));
+    fns = new Function('v', 'M', 'init', 'minit', 'onOut', 'onProbe', 'H', source)(v, mems, init, minit, opts.onOut ?? (() => {}), opts.onProbe ?? (() => {}), opts.host ?? NO_HOST);
   } catch (err) {
     throw new HdlError(`internal simulator compile error: ${(err as Error).message}`);
   }
-  return { v, mems, reset: fns.reset, settle: fns.settle, run: fns.run, sync: fns.sync, source };
+  return { v, mems, reset: fns.reset, settle: fns.settle, run: fns.run, sync: fns.sync, threads: fns.threads, prints: g.prints, printSev: g.printSev, source };
 }

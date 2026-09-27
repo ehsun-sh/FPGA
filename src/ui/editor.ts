@@ -26,6 +26,8 @@ export class CodeEditor {
   private lang = new Compartment();
   private readOnly = new Compartment();
   onChange: (text: string) => void = () => {};
+  // true while setText() is replacing the document (so onChange can tell user edits apart)
+  programmatic = false;
 
   constructor(parent: HTMLElement, lang: EditorLang, doc = '') {
     this.view = new EditorView({
@@ -54,7 +56,9 @@ export class CodeEditor {
 
   setText(text: string, lang?: EditorLang) {
     const effects = lang ? [this.lang.reconfigure(langExt(lang))] : [];
+    this.programmatic = true;
     this.view.dispatch({ changes: { from: 0, to: this.view.state.doc.length, insert: text }, effects });
+    this.programmatic = false;
     this.view.dispatch(setDiagnostics(this.view.state, []));
   }
 

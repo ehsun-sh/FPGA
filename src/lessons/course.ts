@@ -2,6 +2,7 @@
 // gate-level basics, RT-level combinational circuits, regular sequential circuits, FSM, FSMD, memory, I/O.
 import { ADVANCED } from './advanced';
 import { LESSONS, PLAYGROUND, type Lesson } from './lessons';
+import { TESTBENCH_LESSON } from './sim';
 
 type Text = { fa: string; en: string };
 
@@ -11,7 +12,7 @@ export interface Chapter {
   soon?: Text[]; // planned lessons, shown greyed out
 }
 
-const pool = new Map([...LESSONS, ...ADVANCED, PLAYGROUND].map((l) => [l.id, l]));
+const pool = new Map([...LESSONS, ...ADVANCED, TESTBENCH_LESSON, PLAYGROUND].map((l) => [l.id, l]));
 const pick = (...ids: string[]) =>
   ids.map((id) => {
     const l = pool.get(id);
@@ -22,7 +23,7 @@ const pick = (...ids: string[]) =>
 export const CHAPTERS: Chapter[] = [
   { title: { fa: 'مبانی: گیت‌ها و مدارهای ترکیبی ساده', en: 'Basics: gates and simple combinational circuits' }, lessons: pick('intro', 'gates', 'mux', 'adder', 'seg7') },
   { title: { fa: 'مدارهای ترکیبی در سطح RT', en: 'RT-level combinational circuits' }, lessons: pick('decoder', 'shifter', 'alu') },
-  { title: { fa: 'مدارهای ترتیبی منظم', en: 'Regular sequential circuits' }, lessons: pick('ff', 'counter', 'shiftreg', 'multiplex', 'stopwatch') },
+  { title: { fa: 'مدارهای ترتیبی منظم', en: 'Regular sequential circuits' }, lessons: pick('ff', 'counter', 'testbench', 'shiftreg', 'multiplex', 'stopwatch') },
   { title: { fa: 'ماشین حالت متناهی (FSM)', en: 'Finite state machines (FSM)' }, lessons: pick('fsm', 'debounce') },
   { title: { fa: 'FSMD: مسیر داده و کنترل', en: 'FSMD: datapath and control' }, lessons: pick('bin2bcd') },
   { title: { fa: 'حافظه', en: 'Memory' }, lessons: pick('ram') },

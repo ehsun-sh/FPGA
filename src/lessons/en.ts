@@ -331,6 +331,37 @@ ${truth(
     tryIt: `<p>Run the design, open the logic analyzer and press <b>Run</b>. Set a number with SW7..SW0 and press BTNC: the I²C decoder shows start and stop, the address, the ACKs and the data, and the same number comes back on LD7..LD0. Now turn on SW14 and press BTNC again: this time no device answers, and you see a <b>NAK</b> and LD15 lights.</p>`,
     exercise: `<p>Connect a second device with address 0x49 to the same two wires (another <code>i2c_device</code> instance, OR its <code>sda_low</code> into the bus). SW14 should now select the second device.</p>`,
   },
+  testbench: {
+    title: 'Simulation with a testbench and waveforms',
+    summary: 'Test the design with a testbench before it goes on the board, and watch its signals over time.',
+    body: `
+<p>So far every design went straight onto the board. In real projects a design is <b>simulated</b> before the FPGA is programmed. A second HDL program, the <b>testbench</b>, changes the inputs at chosen times and checks the outputs, and every signal can be inspected in a <b>waveform</b> view. In Vivado this is <b>Run Behavioral Simulation</b>, and it works the same way here.</p>
+<h3>What a testbench contains</h3>
+<ol>
+  <li><b>A module with no ports</b>: the testbench is the top level and connects to no pins.</li>
+  <li><b>Signals</b> for the inputs (<code>reg</code> in Verilog) and the outputs (<code>wire</code>).</li>
+  <li><b>An instance of the design</b> (the DUT, Design Under Test) connected to those signals.</li>
+  <li><b>A clock generator</b>: <code>always #5 clk = ~clk;</code>, or in VHDL <code>clk &lt;= not clk after 5 ns;</code></li>
+  <li><b>Stimulus</b> in an <code>initial</code> block or a <code>process</code> without a sensitivity list: delays with <code>#100</code> or <code>wait for 100 ns</code>, and waiting for an edge with <code>@(posedge clk)</code> or <code>wait until rising_edge(clk)</code>.</li>
+  <li><b>Checks</b>: <code>$display</code> and <code>$error</code> in Verilog, <code>report</code> and <code>assert</code> in VHDL. The messages appear in the Tcl Console.</li>
+  <li><b>The end</b>: <code>$finish</code> or <code>std.env.finish</code>.</li>
+</ol>
+<div class="note">These statements exist only for simulation and are not synthesized. A <code>#10</code> or <code>wait</code> in the design itself is a synthesis error.</div>
+<h3>A speed trick: shrink the parameters</h3>
+<p>This lesson's counter steps every 0.5 s, which is every 50 million clocks. Simulating that many clocks takes a long time, so the divider is a <b>parameter</b> (<code>parameter DIV</code> or <code>generic DIV</code>) and the testbench sets it to 4 (<code>#(.DIV(4))</code> or <code>generic map (DIV =&gt; 4)</code>). On the board the default of 50 million is used.</p>
+<h3>Using the waveform viewer</h3>
+<ul>
+  <li><b>Run for</b> advances the simulation by the given time, <b>Run All</b> continues until <code>$finish</code>, and <b>Restart</b> goes back to time zero (the same as <code>run 1us</code>, <code>run all</code> and <code>restart</code> in the Tcl Console).</li>
+  <li>Zoom with the mouse wheel, drag to pan, and press <b>Fit</b> to see the whole run.</li>
+  <li>Click in the waveform to place the yellow <b>cursor</b>. The Value column shows every signal's value at that moment.</li>
+  <li>Right-click a signal name to change its radix: binary, hex, decimal or ASCII.</li>
+  <li>Click <code>dut</code> under <b>Scope</b> to add the design's internal signals, such as <code>prescaler</code> and <code>count</code>.</li>
+</ul>
+<p>Every other lesson also gets a ready-made testbench in the <code>tb.v</code> / <code>tb.vhd</code> tab. It is generated from the design's ports, and you can edit it.</p>`,
+    tryIt: `<p>Press <span class="kbd">∿ Simulate</span>. The Tcl Console prints <code>PASS</code> and the waveform opens on the right with the clock, reset, SW and LED. Press <b>Fit</b> and watch LED step once every 4 clocks. Then change <code>10</code> to <code>11</code> in the testbench tab and simulate again to see the error message.</p>
+<p>It works on the board too: press <span class="kbd">▶ Run</span> and turn on SW0. The LEDs count up every half second.</p>`,
+    exercise: `<p>Assert the reset again in the middle of the testbench (<code>CPU_RESETN = 0</code>) and check that the counter returns to zero. Then add a check that the counter stays put for 100 clocks while SW0 is off.</p>`,
+  },
   playground: {
     title: 'Playground',
     summary: 'Write any design you like and run it on the board.',
@@ -586,6 +617,7 @@ export const LESSON_UI = {
     chapter: (n: number) => `فصل ${n}`,
     soon: 'به‌زودی',
     bouncy: 'لرزش دکمه‌ها',
+    simulate: '∿ شبیه‌سازی با Testbench',
   },
   en: {
     explain: '📖 Explanation',
@@ -599,5 +631,6 @@ export const LESSON_UI = {
     chapter: (n: number) => `Chapter ${n}`,
     soon: 'coming soon',
     bouncy: 'Bouncy buttons',
+    simulate: '∿ Simulate with the testbench',
   },
 };

@@ -1,13 +1,16 @@
 import './style.css';
 import { BOARDS, deviceLabel, getBoard } from './boards';
 import { mapPorts, type Mapping } from './boards/mapping';
-import { estimateUtilization, HdlError, synthesize, type Design, type Lang } from './hdl';
+import { estimateUtilization, HdlError, synthesize, synthesizeFiles, type Design, type Lang } from './hdl';
 import { EN, LESSON_UI, type LessonText } from './lessons/en';
 import { ALL_LESSONS, CHAPTERS, chapterOf } from './lessons/course';
 import { LESSONS, PLAYGROUND, type Lesson } from './lessons/lessons';
 import { defaultConfig, LogicAnalyzer, type LaConfig } from './la/window';
 import { SerialConsole } from './serial/console';
 import { Runner } from './sim/runner';
+import { generateTestbench } from './sim/tbgen';
+import { formatTime, TbSim } from './sim/tbsim';
+import { WaveView } from './wave/view';
 import { CodeEditor } from './ui/editor';
 import { highlight } from './ui/highlight';
 
@@ -58,12 +61,16 @@ app.innerHTML = `
     <button data-act="reset-code">Reset lesson code</button>
     <hr/>
     <button data-act="download-src">Download design source</button>
+    <button data-act="download-tb">Download testbench</button>
     <button data-act="download-xdc">Download constraints (.xdc)</button>
   </div></div>
   <div class="menu"><button>Flow</button><div class="dropdown">
     <button data-act="synth">Run Synthesis</button>
     <button data-act="impl">Run Implementation</button>
     <button data-act="run">Generate Bitstream &amp; Program Device <kbd>Ctrl+Enter</kbd></button>
+    <hr/>
+    <button data-act="sim">Run Behavioral Simulation <kbd>Shift+F6</kbd></button>
+    <button data-act="new-tb">Regenerate testbench from the design</button>
     <hr/>
     <button data-act="stop">Close Hardware Target</button>
   </div></div>
@@ -85,6 +92,7 @@ app.innerHTML = `
   <button class="tb run" data-act="run" title="Synthesize, implement and program the board (Ctrl+Enter)"><span class="ico">▶</span> Run on Board</button>
   <button class="tb" data-act="stop" title="Stop"><span class="ico stop">■</span> Stop</button>
   <button class="tb" data-act="reset" title="Reset the design (like re-programming)"><span class="ico">↺</span> Reset</button>
+  <button class="tb" data-act="sim" id="sim-btn" title="Run the testbench and show the waveforms (Shift+F6)"><span class="ico">∿</span> Simulate</button>
   <button class="tb" data-act="la" id="la-btn" title="Open the logic analyzer (Ctrl+L)"><span class="ico">⎍</span> Logic Analyzer</button>
   <button class="tb" data-act="serial" id="serial-btn" title="Open the serial console on the USB-UART (Ctrl+M)"><span class="ico">⌨</span> Serial Console</button>
   <span class="sep"></span>
@@ -119,10 +127,12 @@ app.innerHTML = `
       <div class="sec-h">▾ PROJECT MANAGER</div>
       <button class="flow-item" data-act="tab-source">Design Sources</button>
       <button class="flow-item" data-act="tab-xdc">Constraints</button>
+      <button class="flow-item" data-act="tab-tb">Simulation Sources</button>
     </div>
     <div class="flow-sec">
       <div class="sec-h">▾ SIMULATION</div>
-      <button class="flow-item" data-act="run">Run Simulation on Board</button>
+      <button class="flow-item" data-act="sim">Run Behavioral Simulation</button>
+      <button class="flow-item" data-act="run">Run on Board</button>
     </div>
     <div class="flow-sec">
       <div class="sec-h">▾ RTL ANALYSIS</div>
@@ -147,17 +157,19 @@ app.innerHTML = `
       <button data-tab="lesson" class="active">📘 Lesson</button>
       <button data-tab="source"><span id="src-name">top.v</span></button>
       <button data-tab="xdc">${xdcName}</button>
+      <button data-tab="tb"><span id="tb-name">tb.v</span></button>
     </div>
     <div class="tab-body">
       <article class="lesson" id="lesson"></article>
       <div class="editor-host hidden" id="src-editor"></div>
       <div class="editor-host hidden" id="xdc-editor"></div>
+      <div class="editor-host hidden" id="tb-editor"></div>
     </div>
   </section>
   <div class="splitter v" id="split-v" title="Drag to resize"></div>
   <section class="pane right">
     <div class="hw-title">
-      <span><b>HARDWARE MANAGER</b> — localhost/xilinx_tcf/Digilent/210292A</span>
+      <span class="rtabs"><button data-rtab="hw" class="active"><b>HARDWARE MANAGER</b> <span class="dim">— localhost/xilinx_tcf/Digilent</span></button><button data-rtab="sim"><b>SIMULATION</b> <span class="dim">— Behavioral</span></button></span>
       <span class="hw-dev" id="hw-dev">${hwDev} (not programmed)</span>
     </div>
     <div class="board-host" id="board">
@@ -202,7 +214,7 @@ app.innerHTML = `
 // ---------------------------------------------------------------- state
 let lang: Lang = store.get('lang') === 'vhdl' ? 'vhdl' : 'verilog';
 let lesson: Lesson = ALL_LESSONS.find((l) => l.id === store.get('lesson')) ?? LESSONS[0];
-let tab: 'lesson' | 'source' | 'xdc' = 'lesson';
+let tab: 'lesson' | 'source' | 'xdc' | 'tb' = 'lesson';
 type UiLang = 'fa' | 'en';
 let uiLang: UiLang = store.get('ui-lang') === 'en' ? 'en' : 'fa';
 // lesson text in the selected site language (Persian lives in lessons.ts, English in en.ts)
@@ -213,6 +225,23 @@ const xdcKey = (l: Lesson) => `xdc:${boardDef.id}:${l.id}`;
 const sourceFor = (l: Lesson, lg: Lang) => store.get(srcKey(l, lg)) ?? (lg === 'verilog' ? l.verilog : l.vhdl);
 const xdcFor = (l: Lesson) => store.get(xdcKey(l)) ?? boardDef.masterXdc(l.xdc);
 const fileName = () => (lang === 'verilog' ? 'top.v' : 'top.vhd');
+const tbName = () => (lang === 'verilog' ? 'tb.v' : 'tb.vhd');
+const tbKey = (l: Lesson, lg: Lang) => `tb:${l.id}:${lg}`;
+// a stored testbench, the lesson's own, or one generated from the design's ports
+function tbFor(l: Lesson, lg: Lang): string {
+  const own = store.get(tbKey(l, lg)) ?? l.tb?.[lg];
+  if (own) return own;
+  return newTestbench(sourceFor(l, lg), lg);
+}
+function newTestbench(src: string, lg: Lang): string {
+  try {
+    return generateTestbench(synthesize(src, lg), lg);
+  } catch {
+    return lg === 'verilog'
+      ? '`timescale 1ns / 1ps\n// Fix the design first (it does not compile), then use Flow > Regenerate testbench.\nmodule tb;\n    initial begin\n        #100 $finish;\n    end\nendmodule\n'
+      : '-- Fix the design first (it does not compile), then use Flow > Regenerate testbench.\nentity tb is\nend tb;\narchitecture sim of tb is\nbegin\n    process\n    begin\n        wait for 100 ns;\n        std.env.finish;\n    end process;\nend sim;\n';
+  }
+}
 
 const srcEditor = new CodeEditor($('#src-editor'), lang, sourceFor(lesson, lang));
 const xdcEditor = new CodeEditor($('#xdc-editor'), 'xdc', xdcFor(lesson));
@@ -224,6 +253,14 @@ srcEditor.onChange = (t) => {
 xdcEditor.onChange = (t) => {
   clearTimeout(saveTimer);
   saveTimer = window.setTimeout(() => store.set(xdcKey(lesson), t), 300);
+};
+const tbEditor = new CodeEditor($('#tb-editor'), lang, tbFor(lesson, lang));
+let tbDirty = false; // the user edited the testbench (only then is it saved)
+tbEditor.onChange = (t) => {
+  if (!tbDirty && !tbEditor.programmatic) tbDirty = true;
+  if (!tbDirty) return;
+  clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(() => store.set(tbKey(lesson, lang), t), 300);
 };
 
 const board = boardDef.createView($('#board'));
@@ -257,7 +294,7 @@ interface Msg {
   level: 'info' | 'warning' | 'error';
   code: string;
   text: string;
-  file?: 'src' | 'xdc';
+  file?: 'src' | 'xdc' | 'tb';
   line?: number;
   col?: number;
 }
@@ -273,9 +310,12 @@ function log(text: string, level: Level = 'plain') {
   logEl.scrollTop = logEl.scrollHeight;
 }
 
+const fileLabel = (f?: Msg['file']) => (f === 'xdc' ? xdcName : f === 'tb' ? tbName() : fileName());
+const editorFor = (f?: Msg['file']) => (f === 'xdc' ? xdcEditor : f === 'tb' ? tbEditor : srcEditor);
+
 function msg(m: Msg) {
   messages.push(m);
-  const loc = m.line ? ` [${m.file === 'xdc' ? xdcName : fileName()}:${m.line}]` : '';
+  const loc = m.line ? ` [${fileLabel(m.file)}:${m.line}]` : '';
   log(`${m.level.toUpperCase()}: [${m.code}] ${m.text}${loc}`, m.level);
 }
 
@@ -295,7 +335,7 @@ function renderMessages() {
       .map(
         (m, i) =>
           `<div class="msg ${m.level}" data-i="${i}"><span class="mi">${m.level === 'error' ? '⛔' : m.level === 'warning' ? '⚠️' : 'ℹ️'}</span><span>[${esc(m.code)}] ${esc(m.text)}${
-            m.line ? ` <a href="#" class="loc">${m.file === 'xdc' ? xdcName : fileName()}:${m.line}</a>` : ''
+            m.line ? ` <a href="#" class="loc">${fileLabel(m.file)}:${m.line}</a>` : ''
           }</span></div>`,
       )
       .join('');
@@ -307,8 +347,8 @@ $('#messages').addEventListener('click', (ev) => {
   ev.preventDefault();
   const m = messages[Number(t.dataset.i)];
   if (!m?.line) return;
-  showTab(m.file === 'xdc' ? 'xdc' : 'source');
-  (m.file === 'xdc' ? xdcEditor : srcEditor).goto(m.line);
+  showTab(m.file === 'xdc' ? 'xdc' : m.file === 'tb' ? 'tb' : 'source');
+  editorFor(m.file).goto(m.line);
 });
 
 // ---------------------------------------------------------------- flow
@@ -417,6 +457,99 @@ function runFlow() {
   if (messages.some((m) => m.level === 'warning')) showBottom('messages');
 }
 
+// ---------------------------------------------------------------- behavioral simulation
+let tbsim: TbSim | null = null;
+const wave = new WaveView($('#board'));
+wave.onRestart = () => simRestart();
+wave.onRunAll = () => simRun(Infinity);
+wave.onRunFor = (ps) => simRun(ps);
+
+function doSim() {
+  messages = [];
+  srcEditor.clearMarks();
+  tbEditor.clearMarks();
+  log(`# launch_simulation   (${stamp()})`, 'cmd');
+  log(`INFO: [SIM-utils-51] Simulation object is 'sim_1'`, 'info');
+  log(`INFO: [USF-XSim-7] Compiling ${fileName()} and ${tbName()} (behavioral)`, 'info');
+  let d: Design;
+  try {
+    d = synthesizeFiles(
+      [
+        { name: fileName(), src: srcEditor.text },
+        { name: tbName(), src: tbEditor.text },
+      ],
+      lang,
+    );
+  } catch (e) {
+    if (!(e instanceof HdlError)) console.error(e);
+    const he = e as HdlError;
+    const file = he.file === tbName() ? 'tb' : 'src';
+    msg({ level: 'error', code: he.code ?? 'XSIM 43-3322', text: he.message, file, line: he.loc?.line, col: he.loc?.col });
+    editorFor(file).markError(he.loc?.line, he.loc?.col, he.message);
+    log(`ERROR: [USF-XSim-62] 'compile' step failed with error(s). Please check the Tcl console output or messages for more information.`, 'error');
+    renderMessages();
+    showTab(file === 'tb' ? 'tb' : 'source');
+    showBottom('messages');
+    return;
+  }
+  for (const w of d.warnings) msg({ level: 'warning', code: 'VRFC 10-3091', text: w.msg });
+  if (!d.procs.some((p) => p.kind === 'tb')) {
+    msg({ level: 'warning', code: 'XSIM 43-4099', text: `module '${d.top}' has no initial block or process with delays: nothing drives the inputs over time` });
+  }
+  try {
+    tbsim = new TbSim(d);
+  } catch (e) {
+    msg({ level: 'error', code: 'XSIM 43-3225', text: (e as Error).message });
+    renderMessages();
+    showBottom('messages');
+    return;
+  }
+  renderMessages();
+  tbsim.onLine = (l) => log(l.text, l.sev >= 2 ? 'error' : l.sev === 1 ? 'warning' : 'plain');
+  log(`INFO: [USF-XSim-96] XSim completed. Design snapshot '${d.top}_behav' loaded.`, 'ok');
+  wave.setSim(tbsim);
+  showRight('sim');
+  showBottom('console');
+  simRun(1e6, true); // Vivado runs 1000 ns after launching
+}
+
+function simRun(ps: number, fit = false) {
+  if (!tbsim) {
+    doSim();
+    return;
+  }
+  log(Number.isFinite(ps) ? `run ${formatTime(ps).replace(' ', '')}` : 'run all', 'cmd');
+  if (tbsim.finished) {
+    log(`INFO: the simulation has finished (${tbsim.error ? 'error' : '$finish'} at ${formatTime(tbsim.now)}). Press Restart to run it again.`, 'info');
+    return;
+  }
+  const r = tbsim.run(ps, 2500);
+  if (r === 'finish' && !tbsim.error) log(`$finish called at time : ${formatTime(tbsim.now)}`, 'info');
+  if (r === 'error') {
+    msg({ level: 'error', code: 'XSIM 43-3225', text: tbsim.error ?? 'simulation error' });
+    renderMessages();
+  }
+  if (r === 'budget') log(`INFO: simulation paused at ${formatTime(tbsim.now)} (it keeps running forever); press Run All again to continue`, 'info');
+  if (r === 'idle') log(`INFO: no more events after ${formatTime(tbsim.now)}`, 'info');
+  if (tbsim.errors) log(`WARNING: the testbench reported ${tbsim.errors} error(s)`, 'warning');
+  wave.refresh(fit || r === 'finish');
+}
+
+function simRestart() {
+  if (!tbsim) return;
+  log('restart', 'cmd');
+  tbsim.restart();
+  log(`INFO: [Simtcl 6-17] Simulation restarted`, 'info');
+  wave.refresh();
+}
+
+function showRight(t: 'hw' | 'sim') {
+  document.querySelectorAll<HTMLElement>('[data-rtab]').forEach((b) => b.classList.toggle('active', b.dataset.rtab === t));
+  if (t === 'sim') wave.show();
+  else wave.hide();
+  $('#hw-dev').classList.toggle('hidden', t === 'sim');
+}
+
 function stop() {
   runner.stop();
   la.setDesign(null, null);
@@ -523,6 +656,7 @@ function renderLesson() {
 </section>
 <section class="try"><h2>${ui.tryIt}</h2>${tx.tryIt}
   <button class="big-run" data-act="run">${ui.runOn(esc(boardDef.name))}</button>
+  <button class="big-run sim" data-act="sim">${ui.simulate}</button>
 </section>
 ${tx.exercise ? `<section class="exercise"><h2>${ui.exercise}</h2>${tx.exercise}<p class="dim">${ui.exerciseHint}</p></section>` : ''}
 <nav class="lesson-nav">
@@ -547,6 +681,7 @@ function openLesson(l: Lesson, switchTab = true) {
   store.set('lesson', l.id);
   srcEditor.setText(sourceFor(l, lang), lang);
   xdcEditor.setText(xdcFor(l), 'xdc');
+  loadTb();
   renderLessonList();
   renderLesson();
   loadLa();
@@ -560,11 +695,20 @@ function setLang(lg: Lang) {
   lang = lg;
   store.set('lang', lg);
   srcEditor.setText(sourceFor(lesson, lang), lang);
+  loadTb();
   $('#src-name').textContent = fileName();
   document.querySelectorAll<HTMLElement>('[data-lang]').forEach((b) => b.classList.toggle('active', b.dataset.lang === lang));
   document.querySelectorAll<HTMLElement>('.code-tabs [data-code]').forEach((b) => b.classList.toggle('active', b.dataset.code === lang));
   document.querySelectorAll<HTMLElement>('.code-panel').forEach((p) => (p.hidden = p.dataset.panel !== lang));
   log(`# set_property TARGET_LANGUAGE ${lang === 'verilog' ? 'Verilog' : 'VHDL'} [current_project]`, 'cmd');
+}
+
+function loadTb() {
+  tbEditor.setText(tbFor(lesson, lang), lang);
+  tbDirty = store.get(tbKey(lesson, lang)) !== null;
+  $('#tb-name').textContent = tbName();
+  tbsim = null;
+  wave.setSim(null);
 }
 
 function setUiLang(l: UiLang) {
@@ -590,6 +734,8 @@ function showTab(t: typeof tab) {
   $('#xdc-editor').classList.toggle('hidden', t !== 'xdc');
   if (t === 'source') srcEditor.view.requestMeasure();
   if (t === 'xdc') xdcEditor.view.requestMeasure();
+  $('#tb-editor').classList.toggle('hidden', t !== 'tb');
+  if (t === 'tb') tbEditor.view.requestMeasure();
 }
 
 function showBottom(t: 'console' | 'messages' | 'reports') {
@@ -677,8 +823,10 @@ function act(name: string) {
       if (confirm('Reset this lesson’s code and constraints to the original version?')) {
         store.del(srcKey(lesson, lang));
         store.del(xdcKey(lesson));
+        store.del(tbKey(lesson, lang));
         srcEditor.setText(sourceFor(lesson, lang), lang);
         xdcEditor.setText(xdcFor(lesson), 'xdc');
+        loadTb();
         log('# reset lesson sources', 'cmd');
       }
       break;
@@ -687,6 +835,24 @@ function act(name: string) {
       break;
     case 'download-xdc':
       download(xdcName, xdcEditor.text);
+      break;
+    case 'download-tb':
+      download(tbName(), tbEditor.text);
+      break;
+    case 'sim':
+      doSim();
+      break;
+    case 'new-tb':
+      if (!tbDirty || confirm('Replace the testbench with a new one generated from the design?')) {
+        store.del(tbKey(lesson, lang));
+        tbEditor.setText(newTestbench(srcEditor.text, lang), lang);
+        tbDirty = false;
+        showTab('tb');
+        log('# generate testbench from the design ports', 'cmd');
+      }
+      break;
+    case 'tab-tb':
+      showTab('tb');
       break;
     case 'view-reset':
       board.resetView();
@@ -723,6 +889,8 @@ document.addEventListener('click', (ev) => {
   if (tb) showTab(tb.dataset.tab as typeof tab);
   const bt = t.closest('[data-btab]') as HTMLElement | null;
   if (bt) showBottom(bt.dataset.btab as 'console');
+  const rt = t.closest('[data-rtab]') as HTMLElement | null;
+  if (rt) showRight(rt.dataset.rtab as 'hw');
 });
 
 document.addEventListener('keydown', (ev) => {
@@ -733,6 +901,10 @@ document.addEventListener('keydown', (ev) => {
   if (ev.key === 'F5') {
     ev.preventDefault();
     runFlow();
+  }
+  if (ev.key === 'F6' && ev.shiftKey) {
+    ev.preventDefault();
+    doSim();
   }
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'l') {
     ev.preventDefault();
@@ -806,7 +978,7 @@ $('#tcl-form').addEventListener('submit', (ev) => {
   const [c, ...args] = cmd.split(/\s+/);
   switch (c) {
     case 'help':
-      log('Commands: synth_design, place_design, launch_simulation (run), program_hw_devices, close_hw, reset, clear, set_lang verilog|vhdl, get_ports, open_lesson <n>', 'plain');
+      log('Commands: synth_design, place_design, launch_simulation, run <time>|all, restart, program_hw_devices (run), close_hw, reset, clear, set_lang verilog|vhdl, get_ports, open_lesson <n>', 'plain');
       break;
     case 'synth_design':
       act('synth');
@@ -815,8 +987,16 @@ $('#tcl-form').addEventListener('submit', (ev) => {
     case 'route_design':
       act('impl');
       break;
-    case 'run':
     case 'launch_simulation':
+      act('sim');
+      break;
+    case 'run':
+      if (args[0] && tbsim) simRun(args[0] === 'all' ? Infinity : parseTime(args.join('')));
+      else act('run');
+      break;
+    case 'restart':
+      simRestart();
+      break;
     case 'program_hw_devices':
       act('run');
       break;
@@ -850,6 +1030,13 @@ $('#tcl-form').addEventListener('submit', (ev) => {
       log(`ERROR: [Common 17-9] invalid command name "${c}". Type help.`, 'error');
   }
 });
+
+function parseTime(s: string): number {
+  const m = /^([\d.]+)\s*(fs|ps|ns|us|ms|s)?$/.exec(s);
+  if (!m) return 1e6;
+  const u: Record<string, number> = { fs: 1e-3, ps: 1, ns: 1e3, us: 1e6, ms: 1e9, s: 1e12 };
+  return Math.round(Number(m[1]) * u[m[2] ?? 'ns']);
+}
 
 // ---------------------------------------------------------------- splitters
 function dragSplit(el: HTMLElement, onMove: (dx: number, dy: number) => void) {

@@ -1,17 +1,36 @@
 import { HdlError, type Lang } from './ast';
-import { compileDesign, type CompiledSim } from './compile';
+import { compileDesign, type CompiledSim, type TbHost, type TbYield } from './compile';
 import { elaborate } from './elaborate';
 import type { Design } from './ir';
 import { parseVerilog } from './verilog';
 import { parseVhdl } from './vhdl';
 
 export { HdlError, compileDesign };
-export type { CompiledSim, Design, Lang };
+export type { CompiledSim, Design, Lang, TbHost, TbYield };
 
 export function synthesize(src: string, lang: Lang, top?: string): Design {
   const mods = lang === 'verilog' ? parseVerilog(src) : parseVhdl(src);
   if (!mods.length) throw new HdlError(lang === 'verilog' ? 'no module found' : 'no entity/architecture found', undefined, 'Synth 8-439');
   return elaborate(mods, lang, top);
+}
+
+// Several source files (design + testbench) elaborated together; errors carry the file name.
+export function synthesizeFiles(files: { name: string; src: string }[], lang: Lang, top?: string): Design {
+  const mods = files.flatMap((f) => {
+    try {
+      const mods = lang === 'verilog' ? parseVerilog(f.src) : parseVhdl(f.src);
+      for (const m of mods) m.file = f.name;
+      return mods;
+    } catch (e) {
+      if (e instanceof HdlError) e.file = f.name;
+      throw e;
+    }
+  });
+  try {
+    return elaborate(mods, lang, top);
+  } catch (e) {
+    throw e;
+  }
 }
 
 export interface Utilization {

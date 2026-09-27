@@ -1235,3 +1235,190 @@ dialog button {
     height: 60vh;
   }
 }
+
+/* right pane tabs: hardware manager / simulation */
+.rtabs {
+  display: flex;
+  gap: 2px;
+  overflow: hidden;
+}
+.rtabs button {
+  border: 0;
+  background: none;
+  padding: 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  border-radius: 3px;
+}
+.rtabs button.active {
+  color: var(--text);
+  background: var(--panel);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.big-run.sim {
+  background: #3b4b61;
+  margin-inline-start: 8px;
+}
+
+/* waveform viewer */
+.wv {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  background: #0b0d10;
+  color: #d7dde5;
+  outline: none;
+}
+.wv-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  background: #1a1f26;
+  border-bottom: 1px solid #2b3138;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.wv-tools button,
+.wv-tools select,
+.wv-tools input {
+  background: #262d36;
+  color: #e3e8ee;
+  border: 1px solid #3a434e;
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.wv-tools button:hover {
+  background: #313a45;
+}
+.wv-tools input {
+  width: 48px;
+  font-family: var(--mono);
+}
+.wv-sep {
+  width: 1px;
+  height: 18px;
+  background: #3a434e;
+  margin: 0 4px;
+}
+.wv-info {
+  color: #9aa6b4;
+  font-family: var(--mono);
+  margin-inline-start: auto;
+}
+.wv-main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.wv-side {
+  width: 150px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #2b3138;
+  background: #12161b;
+  font-size: 12px;
+  min-height: 0;
+}
+.wv-h {
+  padding: 4px 6px;
+  background: #1a1f26;
+  color: #9aa6b4;
+  font-weight: 600;
+  border-bottom: 1px solid #2b3138;
+}
+.wv-scopes {
+  max-height: 35%;
+  overflow: auto;
+}
+.wv-objs {
+  flex: 1;
+  overflow: auto;
+}
+.wv-scope,
+.wv-obj {
+  padding: 2px 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: var(--mono);
+}
+.wv-scope:hover,
+.wv-obj:hover {
+  background: #1d2630;
+}
+.wv-scope.active {
+  background: #173452;
+}
+.wv-obj.on {
+  color: #3ddc4b;
+}
+.wv-plot {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+.wv-plot canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: crosshair;
+  touch-action: none;
+}
+.wv-menu {
+  position: absolute;
+  z-index: 10;
+  background: #1f252d;
+  border: 1px solid #3a434e;
+  border-radius: 4px;
+  padding: 4px 0;
+  min-width: 150px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  font-size: 12px;
+}
+.wv-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: none;
+  color: #e3e8ee;
+  padding: 3px 12px;
+}
+.wv-menu button:hover {
+  background: #2d3a48;
+}
+.wv-menu button.on::before {
+  content: '✓ ';
+}
+.wv-menu hr {
+  border: 0;
+  border-top: 1px solid #3a434e;
+  margin: 4px 0;
+}
+.wv-mh {
+  padding: 2px 12px;
+  color: #7c8794;
+}
+.wv-empty {
+  position: absolute;
+  inset: 40px 0 0 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #7c8794;
+  pointer-events: none;
+  text-align: center;
+  padding: 20px;
+}
+@media (max-width: 800px) {
+  .wv-side {
+    width: 110px;
+  }
+}

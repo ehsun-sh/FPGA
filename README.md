@@ -14,6 +14,12 @@ and watch it run on an interactive 3D Digilent Nexys A7-100T on the right.
 - **In-browser HDL simulator**: Verilog-2001 and VHDL subsets are parsed, elaborated (hierarchy, parameters/generics,
   enums) and compiled to JavaScript. Single-clock designs run at close to the real 100 MHz clock, so counters and
   multiplexed displays behave like on hardware. Clock can be slowed to 1 Hz to watch every step.
+- **Behavioral simulation** (Flow → Run Behavioral Simulation, Shift+F6), like Vivado's simulator: each lesson has a
+  testbench tab (`tb.v` / `tb.vhd`), written for the lesson or generated from the design's ports. Testbenches can use
+  `#` delays, `@(posedge clk)`, `wait`, `forever` / `repeat`, `$display` / `$monitor` / `$error` / `$finish` and
+  `` `timescale `` in Verilog, and `wait for` / `wait until` / `wait on`, `after`, `report` / `assert` and
+  `std.env.finish` in VHDL. An event-driven scheduler runs them, and the waveform viewer shows every signal. It has a
+  scope and object browser, run for / run all / restart, zoom, pan, a cursor and a radix per signal.
 - **Logic analyzer** (Tools → Logic Analyzer, Ctrl+L): a virtual USB logic analyzer window with up to 32 channels
   sampled every board clock. Probes clip onto Pmod JA–JD pins (drawn as flywires on the 3D board), any on-board
   device pin, or internal design signals. Single / Run / Stop acquisition, edge trigger, time base and position,
@@ -26,7 +32,7 @@ and watch it run on an interactive 3D Digilent Nexys A7-100T on the right.
   text and code are original):
   1. Basics: what is an FPGA, logic gates, multiplexers, adders and hierarchy, seven-segment decoder
   2. RT-level combinational: decoder and priority encoder, barrel shifter, 4-bit ALU
-  3. Regular sequential: flip-flops, counters, shift register and LFSR, multiplexed display, BCD stopwatch
+  3. Regular sequential: flip-flops, counters, simulation with a testbench and waveforms, shift register and LFSR, multiplexed display, BCD stopwatch
   4. FSM: traffic light, button debouncing (with an optional contact-bounce simulation)
   5. FSMD: binary to BCD (double dabble)
   6. Memory: synchronous RAM
@@ -53,6 +59,8 @@ npm run build    # static site in dist/
 | `src/boards/` | board plug-ins (`types.ts` interface, `index.ts` registry), XDC parser / port mapping |
 | `src/boards/nexys-a7/` | Nexys A7-100T: pin table, master XDC, Three.js model |
 | `src/sim/runner.ts` | real-time driver: clocking, inputs, LED/segment brightness (persistence of vision) |
+| `src/sim/tbsim.ts`, `src/sim/tbgen.ts` | behavioral simulation of testbenches (event scheduler, messages) and testbench generator |
+| `src/wave/` | waveform viewer |
 | `src/la/` | logic analyzer: `capture.ts` (recording, trigger), `decode.ts` (protocol decoders), `window.ts` (UI) |
 | `src/serial/` | serial console: live UART decoder and terminal window |
 | `src/lessons/` | course content: `course.ts` (chapters), `lessons.ts` and `advanced.ts` (Persian text + code), `en.ts` (English) |

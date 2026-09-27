@@ -1,6 +1,6 @@
 // Recursive-descent parser for a synthesizable VHDL-93/2008 subset.
 // The lexer lower-cases identifiers, since VHDL is case-insensitive.
-import { HdlError, type ADecl, type AExpr, type AItem, type AModule, type APort, type AStmt, type AType, type Loc } from './ast';
+import { HdlError, type ADecl, type AExpr, type AItem, type AModule, type APart, type APort, type AStmt, type AType, type Loc, type Severity } from './ast';
 import { lex, TokStream, type Tok } from './lexer';
 
 const LOGICAL = ['and', 'or', 'nand', 'nor', 'xor', 'xnor'];
@@ -8,6 +8,8 @@ const RELATIONAL = ['=', '/=', '<', '<=', '>', '>='];
 const SHIFT = ['sll', 'srl', 'sla', 'sra', 'rol', 'ror'];
 const ADDING = ['+', '-', '&'];
 const MULT = ['*', '/', 'mod', 'rem'];
+// physical time units, in ps
+const TIME_UNITS: Record<string, number> = { fs: 1e-3, ps: 1, ns: 1e3, us: 1e6, ms: 1e9, sec: 1e12 };
 
 interface Entity {
   name: string;
@@ -155,6 +157,8 @@ class VhdlParser {
         this.s.expect(')');
         return { left, right, signed: name === 'signed' };
       }
+      case 'time':
+        return { signed: true, intRange: 'integer' };
       case 'integer':
       case 'natural':
       case 'positive': {
@@ -287,8 +291,10 @@ class VhdlParser {
       this.s.expect('process');
       if (this.s.peek().t === 'id') this.s.next();
       this.s.expect(';');
-      if (!all && sensNames.length === 0) throw new HdlError(`processes need a sensitivity list (wait statements are not supported)`, loc, 'Synth 8-9999');
-      const clocked = !all && usesEdge(body);
+      const waits = hasWait(body);
+      if (!all && sensNames.length === 0 && !waits) throw new HdlError(`a process without a sensitivity list needs a 'wait' statement`, loc, 'Synth 8-9999');
+      if ((all || sensNames.length) && waits) throw new HdlError(`a process with a sensitivity list cannot contain 'wait'`, loc, 'Synth 8-9999');
+      const clocked = !all && sensNames.length > 0 && usesEdge(body);
       const sens: AItem & { k: 'always' } = {
         k: 'always',
         sens: clocked ? { edges: sensNames.map((n) => ({ name: n.v, edge: 'any' as const, loc: n.loc })) } : 'comb',
@@ -350,7 +356,14 @@ class VhdlParser {
     // concurrent signal assignment, possibly conditional
     const lhs = this.target();
     this.s.expect('<=');
-    let rhs = this.waveform();
+    const wave = this.waveformItems();
+    if (wave.some((w) => w.t) && !this.s.is('when')) {
+      // clk <= not clk after 5 ns;  runs like a process: schedule, then wait for an input to change
+      this.s.expect(';');
+      mod.items.push({ k: 'always', sens: 'comb', body: [{ k: 'sched', lhs, items: wave, loc }, { k: 'wait', on: [], auto: true, loc }], decls: [], loc });
+      return;
+    }
+    let rhs = wave[0].rhs;
     if (this.s.is('when')) {
       const chain: { c: AExpr; v: AExpr }[] = [];
       let last = rhs;
@@ -376,11 +389,77 @@ class VhdlParser {
 
   waveform(): AExpr {
     const e = this.expr();
-    if (this.s.accept('after')) {
-      this.expr();
-      if (this.s.peek().t === 'id' && ['ns', 'ps', 'us', 'ms', 'fs', 'sec'].includes(this.s.peek().v)) this.s.next();
-    }
+    if (this.s.accept('after')) this.expr();
     return e;
+  }
+
+  // a, b after 10 ns, c after 20 ns
+  waveformItems(): { rhs: AExpr; t: AExpr | null }[] {
+    const r: { rhs: AExpr; t: AExpr | null }[] = [];
+    for (;;) {
+      const rhs = this.expr();
+      r.push({ rhs, t: this.s.accept('after') ? this.expr() : null });
+      if (!this.s.accept(',')) return r;
+    }
+  }
+
+  // report message: "text" & integer'image(x) & ...
+  message(): APart[] {
+    const parts: APart[] = [];
+    for (;;) {
+      const t = this.s.peek();
+      if (t.t === 'bits' && t.raw !== undefined) {
+        this.s.next();
+        parts.push({ s: t.raw });
+      } else if (t.t === 'chr') {
+        this.s.next();
+        parts.push({ s: t.v });
+      } else {
+        const e = this.term();
+        if (e.k === 'index' && e.base.k === 'attr' && e.base.attr === 'image' && e.base.base.k === 'id') {
+          parts.push({ e: e.index, f: e.base.base.name === 'time' ? 't' : 'img', w: -1 });
+        } else if (e.k === 'call' && e.args.length === 1 && (e.name === 'to_hstring' || e.name === 'to_hex_string')) {
+          parts.push({ e: e.args[0], f: 'h', w: 0 });
+        } else if (e.k === 'call' && e.args.length === 1 && e.name === 'to_string') {
+          parts.push({ e: e.args[0], f: 'str', w: -1 });
+        } else if (e.k === 'id' && e.name === 'lf') {
+          parts.push({ s: '\n' });
+        } else parts.push({ e, f: 'str', w: -1 });
+      }
+      if (!this.s.accept('&')) return parts;
+    }
+  }
+
+  severity(def: Severity): Severity {
+    if (!this.s.accept('severity')) return def;
+    const t = this.s.ident();
+    if (!['note', 'warning', 'error', 'failure'].includes(t.v)) throw new HdlError(`unknown severity '${t.v}'`, t.loc);
+    return t.v as Severity;
+  }
+
+  // wait; | wait for t; | wait until c; | wait on a, b [until c];
+  waitStmt(loc: Loc): AStmt {
+    this.s.expect('wait');
+    if (this.s.accept('for')) {
+      const t = this.expr();
+      this.s.expect(';');
+      return { k: 'delay', t, loc };
+    }
+    const on: { name: string; edge: 'pos' | 'neg' | 'any'; loc: Loc }[] = [];
+    if (this.s.accept('on')) for (const n of this.identList()) on.push({ name: n.v, edge: 'any', loc: n.loc });
+    let until: AExpr | undefined;
+    if (this.s.accept('until')) {
+      until = this.expr();
+      if (until.k === 'call' && (until.name === 'rising_edge' || until.name === 'falling_edge') && until.args[0]?.k === 'id') {
+        on.push({ name: until.args[0].name, edge: until.name === 'rising_edge' ? 'pos' : 'neg', loc: until.loc });
+        until = undefined;
+      } else if (exprUsesEdge(until)) {
+        throw new HdlError(`use 'wait until rising_edge(clk);' on its own line`, until.loc, 'Synth 8-9999');
+      }
+    }
+    if (this.s.accept('for')) this.expr(); // timeout clause: ignored
+    this.s.expect(';');
+    return { k: 'wait', on, until, loc };
   }
 
   assocList(): { port?: string; expr?: AExpr }[] {
@@ -492,19 +571,62 @@ class VhdlParser {
       this.s.expect(';');
       return { k: 'vfor', v, from, to, down, body, loc };
     }
-    if (this.s.is('report') || this.s.is('assert') || this.s.is('wait')) {
-      if (this.s.is('wait')) throw new HdlError(`'wait' statements are not supported in synthesizable code`, loc, 'Synth 8-9999');
+    if (this.s.is('wait')) return this.waitStmt(loc);
+    if (this.s.accept('report')) {
+      const parts = this.message();
+      const sev = this.severity('note');
+      this.s.expect(';');
+      return { k: 'print', parts: [...parts, { s: '\n' }], sev, loc };
+    }
+    if (this.s.accept('assert')) {
+      const cond = this.expr();
+      const parts = this.s.accept('report') ? this.message() : [{ s: 'Assertion violation.' }];
+      const sev = this.severity('error');
+      this.s.expect(';');
+      return { k: 'if', cond: { k: 'un', op: '!', a: cond, loc }, then: [{ k: 'print', parts: [...parts, { s: '\n' }], sev, loc }], els: [], loc };
+    }
+    if (this.s.accept('while')) {
+      const cond = this.expr();
+      this.s.expect('loop');
+      const body = this.seqList(['end']);
+      this.endLoop();
+      return { k: 'loop', cond, body, loc };
+    }
+    if (this.s.is('loop')) {
+      this.s.next();
+      const body = this.seqList(['end']);
+      this.endLoop();
+      return { k: 'loop', body, loc };
+    }
+    if (this.isFinish()) {
       this.skipTo(';');
-      return null;
+      return { k: 'finish', loc };
     }
     const lhs = this.target();
     let nb: boolean;
     if (this.s.accept('<=')) nb = true;
     else if (this.s.accept(':=')) nb = false;
     else throw new HdlError(`syntax error near '${this.s.peek().v}': expected '<=' or ':='`, this.s.peek().loc);
-    const rhs = this.waveform();
+    const wave = nb ? this.waveformItems() : [{ rhs: this.expr(), t: null }];
     this.s.expect(';');
-    return { k: 'assign', lhs, rhs, nb, loc };
+    if (wave.length > 1 || wave[0].t) return { k: 'sched', lhs, items: wave, loc };
+    return { k: 'assign', lhs, rhs: wave[0].rhs, nb, loc };
+  }
+
+  endLoop() {
+    this.s.expect('end');
+    this.s.expect('loop');
+    if (this.s.peek().t === 'id') this.s.next();
+    this.s.expect(';');
+  }
+
+  // std.env.finish;  finish;  stop(0);
+  isFinish(): boolean {
+    const t = this.s.peek();
+    if (t.t !== 'id') return false;
+    if (t.v === 'std' && this.s.is('.', 1) && this.s.peek(2).v === 'env') return true;
+    if (t.v !== 'finish' && t.v !== 'stop') return false;
+    return this.s.is(';', 1) || (this.s.is('(', 1) && this.s.peek(2).t === 'num' && this.s.is(')', 3) && this.s.is(';', 4));
   }
 
   // Parses "if cond then ... [elsif ...] [else ...]" without consuming the final "end if;" (shared by the outer if).
@@ -619,7 +741,15 @@ class VhdlParser {
       this.s.next();
       const m = /^(\d+)#([0-9a-fA-F_]+)#$/.exec(t.v);
       if (m) return { k: 'num', value: parseInt(m[2].replace(/_/g, ''), Number(m[1])), width: null, loc };
-      return { k: 'num', value: Number(t.v.replace(/_/g, '')), width: null, loc };
+      const value = Number(t.v.replace(/_/g, ''));
+      const u = this.s.peek();
+      if (u.t === 'id' && TIME_UNITS[u.v] !== undefined) {
+        // physical literal: 10 ns (times are integers in ps)
+        this.s.next();
+        return { k: 'num', value: Math.round(value * TIME_UNITS[u.v]), width: null, loc };
+      }
+      if (!Number.isInteger(value)) throw new HdlError(`real numbers are not supported ('${t.v}')`, loc, 'Synth 8-9999');
+      return { k: 'num', value, width: null, loc };
     }
     if (t.t === 'chr') {
       this.s.next();
@@ -646,6 +776,10 @@ class VhdlParser {
       return e;
     }
     if (t.t === 'id') {
+      if (t.v === 'now') {
+        this.s.next();
+        return { k: 'now', loc };
+      }
       if (t.v === 'true' || t.v === 'false') {
         this.s.next();
         return { k: 'num', value: t.v === 'true' ? 1 : 0, width: 1, loc };
@@ -708,6 +842,27 @@ function exprUsesEdge(e: AExpr | undefined): boolean {
     default:
       return false;
   }
+}
+
+function hasWait(body: AStmt[]): boolean {
+  return body.some((s) => {
+    switch (s.k) {
+      case 'wait':
+      case 'delay':
+        return true;
+      case 'if':
+        return hasWait(s.then) || hasWait(s.els);
+      case 'case':
+        return s.items.some((i) => hasWait(i.body)) || (s.def ? hasWait(s.def) : false);
+      case 'block':
+      case 'vfor':
+      case 'for':
+      case 'loop':
+        return hasWait(s.body);
+      default:
+        return false;
+    }
+  });
 }
 
 function usesEdge(body: AStmt[]): boolean {
