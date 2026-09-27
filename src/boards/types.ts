@@ -55,6 +55,7 @@ export interface BoardDef {
   name: string; // e.g. "Nexys A7-100T"
   vendor: string;
   part: string; // FPGA part number, e.g. xc7a100tcsg324-1
+  boardPart?: string; // Vivado board part (needs the vendor's board files)
   clockHz: number;
   // device capacity, for the utilization report
   resources: { luts: number; ffs: number; iob: number; bram: number };

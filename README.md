@@ -11,6 +11,13 @@ and watch it run on an interactive 3D Digilent Nexys A7-100T on the right.
   clickable switches and buttons, glowing LEDs, RGB LEDs and 8-digit seven-segment display.
 - **Vivado-style flow**: Flow Navigator, Synthesis → Implementation → Bitstream → Program Device, Tcl console,
   Messages with clickable file:line, utilization and I/O placement reports, XDC constraints based on Digilent's master file.
+- **RTL schematic and synthesis reports**: Open Elaborated Design / Schematic draws the design as gates, multiplexers,
+  adders, comparators and registers (with clock enable and reset pins), per instance, with pan, zoom and click-to-source.
+  Synthesis maps the netlist onto 7-series primitives (LUT1–LUT6, CARRY4, FDRE/FDCE, DSP48E1, RAMB36, …) and reports
+  utilization per hierarchy, a timing summary with the worst register-to-register path and estimated Fmax, inferred
+  FSMs with their encoding, latches and removed (unused) registers. These are estimates, not a real Vivado run.
+- **Vivado project download** (File → Download Vivado project): a zip with the sources, the XDC, the testbench and a
+  `create_project.tcl` that re-creates the project in real Vivado (`-tclargs build` runs it through to a bitstream).
 - **In-browser HDL simulator**: Verilog-2001 and VHDL subsets are parsed, elaborated (hierarchy, parameters/generics,
   enums) and compiled to JavaScript. Single-clock designs run at close to the real 100 MHz clock, so counters and
   multiplexed displays behave like on hardware. Clock can be slowed to 1 Hz to watch every step.
@@ -76,6 +83,7 @@ npm run build    # static site in dist/
 | `src/sim/tbsim.ts`, `src/sim/tbgen.ts` | behavioral simulation of testbenches (event scheduler, messages) and testbench generator |
 | `src/wave/` | waveform viewer |
 | `src/modules/` | external modules: the pin bus (`bus.ts`), module models (`library.ts`), the Modules panel (`panel.ts`) |
+| `src/synth/` | RTL netlist (`netlist.ts`), primitive mapping, timing and FSM estimate (`techmap.ts`), schematic layout and SVG (`schematic.ts`, `panel.ts`), Vivado project export (`project.ts`) |
 | `src/vga/` | VGA monitor: sync decoding and picture (`monitor.ts`), the screen and its window (`screen.ts`) |
 | `src/grade/` | exercises and their checkers (`exercises.ts`), the virtual board they drive (`harness.ts`) |
 | `src/la/` | logic analyzer: `capture.ts` (recording, trigger), `decode.ts` (protocol decoders), `window.ts` (UI) |

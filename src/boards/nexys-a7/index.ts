@@ -7,6 +7,7 @@ export const nexysA7: BoardDef = {
   name: 'Nexys A7-100T',
   vendor: 'Digilent',
   part: 'xc7a100tcsg324-1',
+  boardPart: 'digilentinc.com:nexys-a7-100t:part0:1.3',
   clockHz: 100e6,
   resources: { luts: 63400, ffs: 126800, iob: 210, bram: 135 },
   io: {
