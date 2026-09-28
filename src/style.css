@@ -1982,3 +1982,34 @@ table.rep.path td:nth-child(4) {
   font-weight: normal;
   color: var(--muted);
 }
+.mod-keys {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0;
+  direction: ltr;
+}
+.mod-keys > div {
+  display: flex;
+  gap: 2px;
+}
+.mod-key {
+  min-width: 22px;
+  padding: 2px 3px;
+  font: 11px var(--mono);
+  color: #e3e8ee;
+  border: 1px solid #454e59;
+  border-radius: 3px;
+  background: #313842;
+  box-shadow: 0 1px 0 #15191e;
+  cursor: pointer;
+  user-select: none;
+}
+.mod-key.wide {
+  padding: 2px 6px;
+}
+.mod-key.down {
+  background: #4b8bd6;
+  transform: translateY(1px);
+  box-shadow: none;
+}

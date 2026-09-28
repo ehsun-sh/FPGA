@@ -2,7 +2,7 @@
 import { HEX_CASE_V, HEX_CASE_VHDL, VHDL_NUMERIC, type Lesson } from './lessons';
 import { truth } from './helpers';
 
-const HEX7SEG_V = `module hex7seg (
+export const HEX7SEG_V = `module hex7seg (
     input  wire [3:0] x,
     output reg  [6:0] seg    // {g,f,e,d,c,b,a}, active-low
 );
@@ -12,7 +12,7 @@ ${HEX_CASE_V}
 endmodule
 `;
 
-const HEX7SEG_VHDL = `${VHDL_NUMERIC}
+export const HEX7SEG_VHDL = `${VHDL_NUMERIC}
 entity hex7seg is
     port (
         x   : in  std_logic_vector(3 downto 0);

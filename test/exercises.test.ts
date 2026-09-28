@@ -237,6 +237,52 @@ endmodule`,
       ['output wire [15:0] LED,', 'output wire [15:0] LED,\n    output wire        LED16_R, LED16_G, LED16_B,'],
       ["assign LED = {nack, 2'b00, t16};", "assign LED = {nack, 2'b00, t16};\n    wire hot = !neg && (t16 >= 13'd480);   // 30.0 degrees = 480 sixteenths\n    assign LED16_R = hot;\n    assign LED16_G = !hot;\n    assign LED16_B = 1'b0;"],
     ]),
+  ps2: () =>
+    edit('ps2', [
+      [
+        'wire [15:0] show = {before, last};',
+        `reg  [15:0] num = 0;
+    reg  [3:0]  d;
+    reg         isd;
+    always @(*) begin
+        isd = 1'b1;
+        case (code)
+            8'h45: d = 4'd0;  8'h16: d = 4'd1;  8'h1E: d = 4'd2;  8'h26: d = 4'd3;  8'h25: d = 4'd4;
+            8'h2E: d = 4'd5;  8'h36: d = 4'd6;  8'h3D: d = 4'd7;  8'h3E: d = 4'd8;  8'h46: d = 4'd9;
+            default: begin d = 4'd0; isd = 1'b0; end
+        endcase
+    end
+    always @(posedge CLK100MHZ)
+        if (done && !brk && code != 8'hF0 && code != 8'hE0) begin
+            if (isd)                num <= {num[11:0], d};
+            else if (code == 8'h66) num <= 0;
+        end
+    wire [15:0] show = num;`,
+      ],
+    ]),
+  softcore: () =>
+    edit('softcore', [
+      [
+        /6'd0: {2}rom = \{LDI, {2}8'd0\};[\s\S]*?6'd11: rom = \{JMP, {2}8'd2\};/,
+        `6'd0:  rom = {LDI,  8'd1};
+            6'd1:  rom = {ST,   8'd0};     // x = 1
+            6'd2:  rom = {LDI,  8'd2};
+            6'd3:  rom = {ST,   8'd1};     // y = 2
+            6'd4:  rom = {LD,   8'd0};     // loop: A = x
+            6'd5:  rom = {OUT,  8'd0};
+            6'd6:  rom = {WAIT, 8'd0};
+            6'd7:  rom = {XORI, 8'd233};   // x == 233: start again
+            6'd8:  rom = {JZ,   8'd0};
+            6'd9:  rom = {LD,   8'd0};
+            6'd10: rom = {ADD,  8'd1};
+            6'd11: rom = {ST,   8'd2};     // t = x + y
+            6'd12: rom = {LD,   8'd1};
+            6'd13: rom = {ST,   8'd0};     // x = y
+            6'd14: rom = {LD,   8'd2};
+            6'd15: rom = {ST,   8'd1};     // y = t
+            6'd16: rom = {JMP,  8'd4};`,
+      ],
+    ]),
   vga: () =>
     edit('vga', [
       [

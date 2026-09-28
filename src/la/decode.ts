@@ -1,4 +1,5 @@
 // Protocol decoders for the logic analyzer. They work on a captured Trace (times in clock cycles).
+import { scanName } from '../modules/ps2codes';
 import type { Trace } from './capture';
 
 export interface Ann {
@@ -239,5 +240,52 @@ export function decodeBus(tr: Trace, chans: number[]): Ann[] {
     since = tr.times[i];
   }
   out.push({ t0: since, t1: tr.t1, text: hex(cur, chans.length), short: hex(cur, chans.length), kind: 'data' });
+  return out;
+}
+
+export interface Ps2Cfg {
+  clk: number;
+  data: number;
+}
+
+// PS/2 device-to-host frames: the data line is read on every falling clock edge; 11 bits per byte
+// (start 0, 8 data bits LSB first, odd parity, stop 1). Scan codes are named (1C = A, F0 = break).
+export function decodePs2(tr: Trace, c: Ps2Cfg): Ann[] {
+  const clk = new Bits(tr, c.clk);
+  const data = new Bits(tr, c.data);
+  const out: Ann[] = [];
+  const falls = clk.ts.filter((_, i) => clk.lv[i] === 0);
+  let i = 0;
+  let ext = false; // an E0 came before (an F0 may sit between: E0 F0 75 is the release of Up)
+  while (i < falls.length) {
+    const t = falls[i];
+    if (data.at(t - 0.5) !== 0) {
+      i++;
+      continue; // waiting for a start bit
+    }
+    const bits: number[] = [];
+    let k = 1;
+    for (; k < 11 && i + k < falls.length; k++) {
+      // a gap of more than 3 bit times breaks the frame
+      if (falls[i + k] - falls[i + k - 1] > 3 * (falls[i + 1] - falls[i] || 1) && k > 1) break;
+      bits.push(data.at(falls[i + k] - 0.5));
+    }
+    if (bits.length < 10) {
+      out.push({ t0: t, t1: falls[Math.min(falls.length - 1, i + k - 1)], text: `partial frame (${bits.length + 1} bits)`, short: '?', kind: 'err' });
+      i += k;
+      continue;
+    }
+    const byte = bits.slice(0, 8).reduce((v, b, j) => v | (b << j), 0);
+    const ones = bits.slice(0, 9).reduce((s, b) => s + b, 0);
+    const bitT = (falls[i + 10] - t) / 10;
+    let err = '';
+    if (ones % 2 !== 1) err = ' parity error';
+    if (bits[9] !== 1) err += ' framing error';
+    const name = scanName(byte, ext);
+    out.push({ t0: t - bitT / 2, t1: falls[i + 10] + bitT / 2, text: `${hex(byte, 8)}${name ? ' ' + name : ''}${err}`, short: name && name.length <= 6 ? `${byte.toString(16).toUpperCase().padStart(2, '0')} ${name}` : hex(byte, 8), kind: err ? 'err' : byte === 0xf0 || byte === 0xe0 ? 'ctrl' : 'data' });
+    if (byte === 0xe0) ext = true;
+    else if (byte !== 0xf0) ext = false;
+    i += 11;
+  }
   return out;
 }

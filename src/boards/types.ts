@@ -48,7 +48,7 @@ export interface BoardView {
   updateMonitor?(signal: boolean): void;
 }
 
-export type XdcGroup = 'clk' | 'sw' | 'led' | 'rgb' | 'seg' | 'btn' | 'reset' | 'pmod' | 'uart' | 'vga' | 'tmp' | 'acl';
+export type XdcGroup = 'clk' | 'sw' | 'led' | 'rgb' | 'seg' | 'btn' | 'reset' | 'pmod' | 'uart' | 'vga' | 'tmp' | 'acl' | 'ps2';
 
 export interface BoardDef {
   id: string;

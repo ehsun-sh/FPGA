@@ -30,8 +30,9 @@ and watch it run on an interactive 3D Digilent Nexys A7-100T on the right.
 - **VGA output and a virtual monitor**: a design that drives the VGA connector (`VGA_R/G/B[3:0]`, `VGA_HS`, `VGA_VS`)
   gets a monitor next to the 3D board, plus a bigger **VGA Monitor** window. Like a real monitor it measures the sync
   timing, picks the mode (640×480, 800×600 or 1024×768 at 60 Hz) and shows "No signal" or "Out of range" otherwise.
-- **Modules** (🧩 in the board area): the on-board ADT7420 temperature sensor (I²C) and ADXL362 accelerometer (SPI) are
-  always connected, with sliders for temperature and acceleration. **Add Module** wires more parts to the Pmod headers,
+- **Modules** (🧩 in the board area): the on-board ADT7420 temperature sensor (I²C), ADXL362 accelerometer (SPI) and
+  the USB keyboard behind the PS/2 port are always connected, with sliders for temperature and acceleration and a
+  clickable keyboard that sends scan codes (or forwards your own keyboard). **Add Module** wires more parts to the Pmod headers,
   on pins you choose: HC-SR04 distance sensor, Pmod BTN / SWT / 8LD, Pmod ENC rotary encoder and an SG90 servo. Each
   card can append the matching XDC lines. Modules are behavioural models that react to the design's pins cycle by
   cycle, and the lines resolve like real wires (open-drain lines with pull-ups for I²C).
@@ -44,7 +45,7 @@ and watch it run on an interactive 3D Digilent Nexys A7-100T on the right.
 - **Logic analyzer** (Tools → Logic Analyzer, Ctrl+L): a virtual USB logic analyzer window with up to 32 channels
   sampled every board clock. Probes clip onto Pmod JA–JD pins (drawn as flywires on the 3D board), any on-board
   device pin, or internal design signals. Single / Run / Stop acquisition, edge trigger, time base and position,
-  wheel zoom and drag pan, two measurement cursors, and UART, SPI, I²C and parallel-bus decoders with an event list.
+  wheel zoom and drag pan, two measurement cursors, and UART, SPI, I²C, PS/2 and parallel-bus decoders with an event list.
 - **Serial console** (Tools → Serial Console, Ctrl+M): the PC end of the board's USB-UART. It decodes what the design
   sends on `UART_RXD_OUT` and types bytes into `UART_TXD_IN` with bit-accurate timing. Selectable baud rate and
   format (8N1, 8E1, 8O1, 8N2, 7E1), text or hex view, line ending, local echo, or typing straight into the terminal.
@@ -57,8 +58,9 @@ and watch it run on an interactive 3D Digilent Nexys A7-100T on the right.
   4. FSM: traffic light, button debouncing (with an optional contact-bounce simulation)
   5. FSMD: binary to BCD (double dabble)
   6. Memory: synchronous RAM
-  7. I/O: PWM, UART transmitter with the logic analyzer, UART receiver with the serial console, SPI master and slave, I²C write and read back, the on-board temperature sensor with open-drain pins, VGA colour bars on the monitor (PS/2 and a soft-core processor are planned)
-  8. Playground
+  7. I/O: PWM, UART transmitter with the logic analyzer, UART receiver with the serial console, SPI master and slave, I²C write and read back, the on-board temperature sensor with open-drain pins, a PS/2 keyboard receiver with scan codes, VGA colour bars on the monitor
+  8. Soft-core processor: Tiny8, a small original 8-bit CPU (accumulator, 16 instructions, program ROM, data RAM) running a program from its ROM
+  9. Playground
 
 Real Vivado cannot run in a browser; this project imitates its look and workflow. The lesson code and XDC files are
 standard and also work in real Vivado on a real board.

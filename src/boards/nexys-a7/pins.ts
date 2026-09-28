@@ -12,7 +12,7 @@ const VGA: Record<'r' | 'g' | 'b', string[]> = {
   b: ['B7', 'C7', 'D7', 'D8'],
 };
 // on-board sensors: ADT7420 temperature sensor (I²C) and ADXL362 accelerometer (SPI)
-const SENSORS: [string, string, 'tmp' | 'acl'][] = [
+const SENSORS: [string, string, 'tmp' | 'acl' | 'ps2'][] = [
   ['TMP_SCL', 'C14', 'tmp'],
   ['TMP_SDA', 'C15', 'tmp'],
   ['TMP_INT', 'D13', 'tmp'],
@@ -23,6 +23,9 @@ const SENSORS: [string, string, 'tmp' | 'acl'][] = [
   ['ACL_CSN', 'D15', 'acl'],
   ['ACL_INT[1]', 'B13', 'acl'],
   ['ACL_INT[2]', 'C16', 'acl'],
+  // USB HID host (PIC24): a USB keyboard appears as a PS/2 device
+  ['PS2_CLK', 'F4', 'ps2'],
+  ['PS2_DATA', 'B2', 'ps2'],
 ];
 // Pmod signal pins 1-4 and 7-10 (5/11 = GND, 6/12 = VCC)
 const PMOD_NUMS = [1, 2, 3, 4, 7, 8, 9, 10];
@@ -163,6 +166,9 @@ export function masterXdc(enabled: Partial<Record<XdcGroup, boolean>>): string {
     '',
     '## Accelerometer (ADXL362, SPI)',
     ...SENSORS.filter((x) => x[2] === 'acl').map(([n, p]) => c(enabled.acl && !n.includes('INT'), line(n, p))),
+    '',
+    '## USB HID (PS/2)',
+    ...SENSORS.filter((x) => x[2] === 'ps2').map(([n, p]) => c(enabled.ps2, line(n, p))),
     '',
     '## USB-RS232 Interface',
     c(enabled.uart, line('UART_TXD_IN', 'C4')),

@@ -1,5 +1,6 @@
 // English text for the lessons. Code and constraints are shared with the Persian version (lessons.ts).
 import { truth } from './helpers';
+import { TINY8_ISA } from './softcore';
 
 export interface LessonText {
   title: string;
@@ -639,6 +640,65 @@ TMP_SDA <= '0' when sda_low = '1' else 'Z';  -- VHDL</pre>
 <div class="note">The virtual monitor works like a real one: it finds the video mode from the spacing of the HS and VS pulses. If the timing is wrong it shows <b>No signal</b> or <b>Out of range</b>, and wrong porches shift the picture.</div>`,
     tryIt: `<p>Press <span class="kbd">▶ Run</span>. A monitor with a VGA cable appears next to the board and shows the colour bars. For a bigger picture press <span class="kbd">🖥 VGA Monitor</span> in the toolbar. Turn on SW0 to see the checkerboard. One whole frame is about 1.7 million clocks, so on a slow browser you see the picture being drawn line by line.</p>
 <p>You can also look at the HS pulses in the logic analyzer and measure their spacing (it should be 32 µs).</p>`,
+  },
+  ps2: {
+    title: 'The PS/2 keyboard',
+    summary: 'Receive keyboard scan codes over the PS/2 interface and show them on the display.',
+    body: `
+<p>The Nexys A7 has a <b>USB HID</b> port. The microcontroller next to it translates a USB keyboard into the old and simple <b>PS/2</b> protocol and hands it to the FPGA on two wires: <code>PS2_CLK</code> (F4) and <code>PS2_DATA</code> (B2). In this simulator the keyboard lives in the <span class="kbd">🧩 Modules</span> panel: click its keys, or turn on “type on my own keyboard”.</p>
+<h3>The PS/2 frame</h3>
+<p>Unlike UART, the keyboard makes the clock itself (about 12.5 kHz). Every byte is 11 bits, and the FPGA reads each bit on the <b>falling edge of the clock</b>:</p>
+<table class="truth"><tr><th>Bit</th><th>0</th><th>1 to 8</th><th>9</th><th>10</th></tr>
+<tr><td>Meaning</td><td>start (0)</td><td>data, LSB first</td><td>odd parity</td><td>stop (1)</td></tr></table>
+<p>“Odd parity” means the number of ones in the eight data bits and the parity bit together is odd. Both lines are <b>open-drain</b>: when nobody pulls them low, a pull-up resistor keeps them at 1.</p>
+<h3>Scan codes</h3>
+<p>The keyboard does not send letters; it sends the number of the key. Pressing a key sends its <b>make code</b> (for example A = <code>1C</code> and 1 = <code>16</code>). Releasing it sends <code>F0</code> and then the same code. “Extended” keys such as the arrows have an <code>E0</code> before the code. Turning codes into letters is your design's job.</p>
+<h3>The receiver</h3>
+<ul>
+  <li>The keyboard clock is far slower than the FPGA clock, so we <b>synchronise</b> and <b>filter</b> it: a new level is accepted only after 8 equal samples in a row.</li>
+  <li>On every falling edge the data bit enters an 11-bit shift register from the top, because the bits arrive LSB first.</li>
+  <li>After the eleventh bit, bits 8 to 1 are the code. Start, parity and stop are checked and a <code>done</code> pulse is made.</li>
+  <li>If no edge comes for 1.3 ms, the bit counter goes back to zero, so a half-finished frame cannot spoil the next ones.</li>
+</ul>
+<p>This lesson's design shows the last two bytes on four digits of the display (after releasing A, for example: <b>F0 1C</b>). The last code is on LD7..LD0, LD14 is on while a key is held down, and LD15 shows a frame error.</p>`,
+    tryIt: `<p>Press <span class="kbd">▶ Run</span> and open <span class="kbd">🧩 Modules</span>. Click the keys of the USB keyboard. While you hold a key the display shows its make code, and after you let go it shows <b>F0</b> and the same code. Try the arrow keys too to see <b>E0</b>.</p>
+<p>In the logic analyzer, <code>PS2_CLK</code> and <code>PS2_DATA</code> are ready with the PS/2 decoder. The trigger is on the falling edge of the clock: press a key and see the frames with the key names.</p>`,
+  },
+  softcore: {
+    title: 'A soft-core processor: Tiny8',
+    summary: 'Build a small 8-bit processor inside the FPGA and run the program written in its ROM.',
+    body: `
+<p>So far we built a separate circuit for every job. Another way is to build a <b>processor</b> inside the FPGA and tell it the job with a <b>program</b>. A processor made of FPGA logic is called a <b>soft core</b>. Xilinx has the MicroBlaze and PicoBlaze processors. Here we build a small, simple processor called <b>Tiny8</b> that fits on one page.</p>
+<h3>Inside Tiny8</h3>
+<ul>
+  <li><b>Program ROM</b>: 64 instructions of 12 bits. Each one is a 4-bit operation code (opcode) and an 8-bit number <code>k</code>.</li>
+  <li><b>PC</b> (program counter): the address of the next instruction.</li>
+  <li><b>A</b> (accumulator): the only register for arithmetic. Next to it are the <b>Z</b> flag (the result was zero) and the <b>C</b> flag (carry or borrow).</li>
+  <li><b>Data RAM</b>: 16 bytes for variables.</li>
+  <li><b>Input/output</b>: <code>IN</code> reads the switches and <code>OUT</code> writes to the LEDs or the display.</li>
+</ul>
+<h3>Fetch and execute</h3>
+<p>The processor is a two-state FSM. In the <b>fetch</b> state the instruction <code>rom[pc]</code> is stored in the instruction register (<code>ir</code>) and the PC moves one step on. In the <b>execute</b> state the instruction runs; a jump only changes the PC. So every instruction takes two clocks, and at 100 MHz Tiny8 runs 50 million instructions per second.</p>
+<h3>The instruction set</h3>
+${TINY8_ISA('en')}
+<h3>The program</h3>
+<p>The program is written in the <code>case</code> inside the ROM. This lesson's program adds the value of switches SW7..SW0 to a variable on every tick and shows it on the LEDs and the display:</p>
+<pre class="formula" dir="ltr">0: LDI 0      ; A = 0
+1: ST  0      ; x = 0          (ram[0])
+2: IN  0      ; loop: A = SW[7:0]
+3: OUT 1      ; LD15..LD8 = step
+4: ST  1      ; step = A       (ram[1])
+5: LD  0
+6: ADD 1      ; A = x + step
+7: ST  0
+8: OUT 0      ; LD7..LD0 = x
+9: OUT 2      ; display = x
+10: WAIT      ; 0.25 s
+11: JMP 2</pre>
+<p>To give the processor a new job you do not change the circuit, only the program in the ROM. Real processors work the same way: the hardware stays fixed and the software changes.</p>
+<div class="note">In real Vivado, the program for big processors such as MicroBlaze is written in C, compiled and placed in BRAM. The idea is the same as here.</div>`,
+    tryIt: `<p>Press <span class="kbd">▶ Run</span> and turn on SW0: every 0.25 s the number on the LEDs and the display goes up by one. Change the step with SW7..SW0. <span class="kbd">CPU_RESET</span> starts the program again from the top.</p>
+<p>In the schematic (RTL Analysis → Schematic), choose the <code>cpu</code> instance to see the processor's datapath: the PC register, the instruction register, the accumulator and the RAM.</p>`,
   },
 };
 

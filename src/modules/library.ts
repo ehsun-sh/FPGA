@@ -1,6 +1,7 @@
 // The modules that can be attached to the board. The two on-board sensors of the Nexys A7 are always there, on
 // fixed pins; the others plug into a Pmod header or are wired to any header pins.
 import type { ModuleCtx, ModuleInst, PinIo } from './bus';
+import { scanBytes, scanName } from './ps2codes';
 
 type Text = { fa: string; en: string };
 
@@ -9,7 +10,9 @@ export type Control =
   | { kind: 'button'; key: string; label: string }
   | { kind: 'toggle'; key: string; label: string }
   | { kind: 'leds'; key: string; n: number }
-  | { kind: 'readout'; key: string; label: Text };
+  | { kind: 'readout'; key: string; label: Text }
+  // an on-screen keyboard: sends set('k:<key name>', 1 / 0)
+  | { kind: 'keys'; key: string };
 
 export interface ModuleDef {
   type: string;
@@ -550,6 +553,66 @@ const SERVO: ModuleDef = {
   },
 };
 
-export const ONBOARD_MODULES: ModuleDef[] = [ADT7420, ADXL362];
-export const MODULES: ModuleDef[] = [ADT7420, ADXL362, HCSR04, PMOD_BTN, PMOD_SWT, PMOD_8LD, PMOD_ENC, SERVO];
+// ---------------------------------------------------------------- PS/2 keyboard (USB HID host)
+const PS2KBD: ModuleDef = {
+  type: 'ps2kbd',
+  name: 'USB keyboard (PS/2)',
+  title: { fa: 'صفحه‌کلید USB (PS/2، روی برد)', en: 'USB keyboard (PS/2, on board)' },
+  desc: {
+    fa: 'میکروکنترلر USB HID برد، صفحه‌کلید USB را به شکل یک دستگاه PS/2 روی <code>PS2_CLK</code> و <code>PS2_DATA</code> نشان می‌دهد. هر بایت یک فریم ۱۱ بیتی است: بیت شروع 0، هشت بیت داده (اول LSB)، بیت توازن فرد و بیت پایان 1. کلاک حدود ۱۲٫۵ کیلوهرتز است و FPGA داده را در لبهٔ پایین‌روندهٔ کلاک می‌خواند. فشردن کلید کد make (مثلاً A = 1C) و رها کردن آن F0 و سپس همان کد را می‌فرستد.',
+    en: "The board's USB HID controller presents a USB keyboard as a PS/2 device on <code>PS2_CLK</code> and <code>PS2_DATA</code>. Each byte is an 11-bit frame: start bit 0, eight data bits (LSB first), odd parity and stop bit 1. The clock runs at about 12.5 kHz and the FPGA reads data on the falling clock edge. Pressing a key sends its make code (A = 1C), releasing it sends F0 and the code again.",
+  },
+  color: '#6c7a89',
+  timed: true,
+  roles: [
+    { role: 'clk', io: 'od', label: 'PS2_CLK' },
+    { role: 'data', io: 'od', label: 'PS2_DATA' },
+  ],
+  onboard: { clk: 'F4', data: 'B2' },
+  controls: [
+    { kind: 'keys', key: 'k' },
+    { kind: 'readout', key: 'sent', label: { fa: 'آخرین بایت‌ها', en: 'Last bytes' } },
+  ],
+  create(ctx) {
+    const queue: number[] = [];
+    let free = 0; // board cycle when the line is idle again
+    const sent: string[] = [];
+    const frame = (byte: number) => {
+      let ones = 0;
+      for (let i = 0; i < 8; i++) ones += (byte >> i) & 1;
+      const bits = [0, ...Array.from({ length: 8 }, (_, i) => (byte >> i) & 1), ones % 2 ? 0 : 1, 1];
+      let t = Math.max(ctx.now() + 1, free);
+      for (const b of bits) {
+        ctx.at(t, () => ctx.drive('data', b ? null : 0));
+        ctx.at(t + us(ctx, 20), () => ctx.drive('clk', 0));
+        ctx.at(t + us(ctx, 60), () => ctx.drive('clk', null));
+        t += us(ctx, 80);
+      }
+      ctx.at(t, () => ctx.drive('data', null));
+      free = t + us(ctx, 120);
+      const n = scanName(byte, sent[sent.length - 1] === 'E0');
+      sent.push(byte.toString(16).toUpperCase().padStart(2, '0') + (n && n !== 'ext' && n !== 'break' ? ` (${n})` : ''));
+      if (sent.length > 6) sent.shift();
+    };
+    const send = (bytes: number[]) => {
+      queue.push(...bytes);
+      while (queue.length) frame(queue.shift()!);
+    };
+    return {
+      reset() {
+        free = ctx.now();
+        ctx.drive('clk', null);
+        ctx.drive('data', null);
+      },
+      set(key, v) {
+        if (key === 'byte') send([v & 0xff]);
+        else if (key.startsWith('k:')) send(scanBytes(key.slice(2), !!v));
+      },
+      read: () => sent.join(' ') || '—',
+    };
+  },
+};
+
+export const ONBOARD_MODULES: ModuleDef[] = [ADT7420, ADXL362, PS2KBD];
+export const MODULES: ModuleDef[] = [ADT7420, ADXL362, PS2KBD, HCSR04, PMOD_BTN, PMOD_SWT, PMOD_8LD, PMOD_ENC, SERVO];
 export const moduleDef = (type: string) => MODULES.find((m) => m.type === type);

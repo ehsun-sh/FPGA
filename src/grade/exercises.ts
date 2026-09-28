@@ -602,6 +602,61 @@ export const EXERCISES: Record<string, Exercise> = {
       t.ok(!!m2 && m2.pixel(320, 240) === 0x00f, 'رنگ مربع با کلیدها عوض می‌شود (00F)', 'the square changes colour with the switches (00F)');
     },
   },
+  ps2: {
+    fa: `<p>یک «ماشین‌حساب» کوچک بسازید: نمایشگر <b>چهار رقم آخری</b> را نشان دهد که با کلیدهای عددی <b>0 تا 9</b> تایپ شده‌اند. هر رقم تازه از راست وارد می‌شود و بقیه یک رقم به چپ می‌روند (بعد از تایپ 1، 2 و 3: <b>0123</b>). <b>Backspace</b> همه را صفر می‌کند. کلیدهای دیگر و کد رها کردن (بعد از F0) نادیده گرفته می‌شوند. کدهای make ارقام: <code>0 = 45</code>، <code>1 = 16</code>، <code>2 = 1E</code>، <code>3 = 26</code>، <code>4 = 25</code>، <code>5 = 2E</code>، <code>6 = 36</code>، <code>7 = 3D</code>، <code>8 = 3E</code>، <code>9 = 46</code> و Backspace = <code>66</code>.</p>`,
+    en: `<p>Build a small “calculator” display: it shows the <b>last four digits</b> typed with the number keys <b>0 to 9</b>. Each new digit comes in on the right and the others move one place left (after typing 1, 2 and 3: <b>0123</b>). <b>Backspace</b> clears everything to zero. Other keys and release codes (after F0) are ignored. The digits' make codes: <code>0 = 45</code>, <code>1 = 16</code>, <code>2 = 1E</code>, <code>3 = 26</code>, <code>4 = 25</code>, <code>5 = 2E</code>, <code>6 = 36</code>, <code>7 = 3D</code>, <code>8 = 3E</code>, <code>9 = 46</code> and Backspace = <code>66</code>.</p>`,
+    check(h, t) {
+      t.need(h.hasPin('F4') && h.hasPin('B2'), 'PS2_CLK و PS2_DATA به صفحه‌کلید وصل‌اند', 'PS2_CLK and PS2_DATA are connected to the keyboard');
+      const k = h.attach('ps2kbd');
+      h.run(1000);
+      const type = (...keys: string[]) => {
+        for (const key of keys) {
+          k.set!(`k:${key}`, 1);
+          h.run(150_000);
+          k.set!(`k:${key}`, 0);
+          h.run(250_000);
+        }
+        return h.text(3, 0, 1 << 18);
+      };
+      const steps: [string[], string, string, string][] = [
+        [['1', '2', '3'], '0123', 'بعد از تایپ 1، 2 و 3', 'after typing 1, 2 and 3'],
+        [['4', '5'], '2345', 'بعد از 4 و 5', 'after 4 and 5'],
+        [['A', 'Space', 'Up'], '2345', 'کلیدهای A، Space و جهت بالا چیزی را عوض نمی‌کنند', 'the A, Space and Up keys change nothing'],
+        [['Backspace'], '0000', 'Backspace همه را صفر می‌کند', 'Backspace clears everything'],
+        [['9', '0'], '0090', 'بعد از 9 و 0', 'after 9 and 0'],
+      ];
+      for (const [keys, want, fa, en] of steps) {
+        const got = type(...keys);
+        if (!t.ok(got === want, `${fa} نمایشگر ${want} است (شما: ${got})`, `${en} the display shows ${want} (yours: ${got})`)) break;
+      }
+    },
+  },
+  softcore: {
+    fa: `<p>فقط برنامه‌ی ROM را عوض کنید: پردازنده اعداد <b>فیبوناچی</b> ‎1، 2، 3، 5، 8، …، 233 را روی <b>LD7..LD0</b> نشان دهد، در هر تیک (<code>WAIT</code>) یک عدد، و بعد از 233 دوباره از 1 شروع کند. راهنمایی: دو عدد آخر را در RAM نگه دارید؛ 233 آخرین عدد فیبوناچی است که در ۸ بیت جا می‌شود. بررسی‌کننده <code>PERIOD</code> را کوچک می‌کند.</p>`,
+    en: `<p>Change only the program in the ROM: the processor shows the <b>Fibonacci</b> numbers 1, 2, 3, 5, 8, …, 233 on <b>LD7..LD0</b>, one number per tick (<code>WAIT</code>), and after 233 it starts again from 1. Hint: keep the last two numbers in RAM; 233 is the last Fibonacci number that fits in 8 bits. The checker makes <code>PERIOD</code> small.</p>`,
+    params: { PERIOD: 400 },
+    check(h, t) {
+      const want = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 1, 2, 3];
+      const seen: number[] = [];
+      const at: number[] = [];
+      let prev = h.led() & 0xff;
+      for (let i = 0; i < 4000 && seen.length < want.length; i++) {
+        h.run(10);
+        const v = h.led() & 0xff;
+        if (v !== prev) {
+          seen.push(v);
+          at.push(h.cycles);
+        }
+        prev = v;
+      }
+      const list = (a: number[]) => a.join(', ');
+      t.need(seen.length >= 3, 'LD7..LD0 عوض می‌شود', 'LD7..LD0 changes');
+      const per = Math.round((at[at.length - 1] - at[0]) / (at.length - 1));
+      t.ok(Math.abs(per - 400) <= 20, `در هر تیک یک عدد می‌آید (هر ${per} کلاک یک عدد، تیک = 400 کلاک)`, `one number comes per tick (one every ${per} clocks, tick = 400 clocks)`);
+      t.ok(list(seen.slice(0, 12)) === list(want.slice(0, 12)), `دنباله ${list(want.slice(0, 12))} است (شما: ${list(seen.slice(0, 12))})`, `the sequence is ${list(want.slice(0, 12))} (yours: ${list(seen.slice(0, 12))})`);
+      t.ok(list(seen.slice(12)) === list(want.slice(12)), `بعد از 233 دوباره از 1 شروع می‌شود (شما: ${list(seen.slice(11))})`, `after 233 it starts again from 1 (yours: ${list(seen.slice(11))})`);
+    },
+  },
 };
 
 // types "text" into UART_TXD_IN (C4) and decodes what comes back on UART_RXD_OUT (D4) at the same time

@@ -5,7 +5,7 @@ import type { Mapping } from '../boards/mapping';
 import type { Design } from '../hdl';
 import type { Runner } from '../sim/runner';
 import { Acquisition, type Edge, type Source, type Trace } from './capture';
-import { decodeBus, decodeI2c, decodeSpi, decodeUart, type Ann } from './decode';
+import { decodeBus, decodeI2c, decodePs2, decodeSpi, decodeUart, type Ann } from './decode';
 
 export interface ChanCfg {
   name: string;
@@ -16,6 +16,7 @@ export type DecCfg =
   | { type: 'uart'; name: string; ch: number; baud: number; bits: number; parity: 'none' | 'even' | 'odd'; stop: 1 | 2 }
   | { type: 'spi'; name: string; clk: number; mosi: number; miso: number | null; cs: number | null; mode: 0 | 1 | 2 | 3; bits: number; msbFirst: boolean }
   | { type: 'i2c'; name: string; scl: number; sda: number }
+  | { type: 'ps2'; name: string; clk: number; data: number }
   | { type: 'bus'; name: string; chans: number[] };
 
 export interface LaConfig {
@@ -89,7 +90,7 @@ export class LogicAnalyzer {
   <span class="sep"></span>
   <div class="la-add"><button data-la="add">＋ Add ▾</button><div class="la-menu" hidden>
     <button data-add="signal">Signal</button><button data-add="bus">Bus</button><hr/>
-    <button data-add="uart">UART decoder</button><button data-add="spi">SPI decoder</button><button data-add="i2c">I²C decoder</button><hr/>
+    <button data-add="uart">UART decoder</button><button data-add="spi">SPI decoder</button><button data-add="i2c">I²C decoder</button><button data-add="ps2">PS/2 decoder</button><hr/>
     <button data-add="outputs">Probe all design outputs</button><button data-add="preset">Load lesson setup</button><button data-add="clear">Remove all</button>
   </div></div>
   <span class="grow"></span>
@@ -388,6 +389,7 @@ export class LogicAnalyzer {
     this.cfg.decs = this.cfg.decs.flatMap((d): DecCfg[] => {
       if (d.type === 'uart') return fix(d.ch) < 0 ? [] : [{ ...d, ch: fix(d.ch) }];
       if (d.type === 'i2c') return fix(d.scl) < 0 || fix(d.sda) < 0 ? [] : [{ ...d, scl: fix(d.scl), sda: fix(d.sda) }];
+      if (d.type === 'ps2') return fix(d.clk) < 0 || fix(d.data) < 0 ? [] : [{ ...d, clk: fix(d.clk), data: fix(d.data) }];
       if (d.type === 'spi') {
         if (fix(d.clk) < 0 || fix(d.mosi) < 0) return [];
         const o = (x: number | null) => (x === null || fix(x) < 0 ? null : fix(x));
@@ -411,6 +413,7 @@ export class LogicAnalyzer {
     else if (what === 'uart') this.cfg.decs.push({ type: 'uart', name: 'UART', ch: 0, baud: 115200, bits: 8, parity: 'none', stop: 1 });
     else if (what === 'spi') this.cfg.decs.push({ type: 'spi', name: 'SPI', clk: 0, mosi: ch(1), miso: n > 2 ? 2 : null, cs: n > 3 ? 3 : null, mode: 0, bits: 8, msbFirst: true });
     else if (what === 'i2c') this.cfg.decs.push({ type: 'i2c', name: 'I2C', scl: 0, sda: ch(1) });
+    else if (what === 'ps2') this.cfg.decs.push({ type: 'ps2', name: 'PS/2', clk: 0, data: ch(1) });
     else if (what === 'outputs') {
       const outs = (this.mapping?.bindings ?? []).filter((b) => !isBoardInput(b.device)).slice(0, MAX_CH);
       if (outs.length) {
@@ -438,13 +441,13 @@ export class LogicAnalyzer {
       groups.get(g)!.push(`<option value="${esc(value)}">${esc(label)}</option>`);
     };
     for (const h of this.board.headers) for (const [num, pin] of Object.entries(h.pins)) add(`Pmod ${h.name}`, `pin:${pin}`, `${h.name}${num} (${pin})`);
-    const kinds: Record<string, string> = { uart: 'USB-UART', pin: 'Other pins', led: 'LEDs', rgb: 'RGB LEDs', seg: '7-segment', an: '7-segment', sw: 'Switches', btn: 'Buttons', reset: 'Buttons' };
+    const kinds: Record<string, string> = { uart: 'USB-UART', pin: 'Other pins', led: 'LEDs', rgb: 'RGB LEDs', seg: '7-segment', an: '7-segment', sw: 'Switches', btn: 'Buttons', reset: 'Buttons', vga: 'VGA' };
     const inHeader = new Set(this.board.headers.flatMap((h) => Object.values(h.pins)));
-    const order = ['uart', 'pin', 'led', 'rgb', 'seg', 'an', 'sw', 'btn', 'reset'];
+    const order = ['uart', 'pin', 'vga', 'led', 'rgb', 'seg', 'an', 'sw', 'btn', 'reset'];
     const entries = Object.entries(this.board.pins)
       .filter(([p, d]) => d.kind !== 'clk' && !inHeader.has(p))
       .sort((a, b) => order.indexOf(a[1].kind) - order.indexOf(b[1].kind) || ('index' in a[1] && 'index' in b[1] ? a[1].index - b[1].index : 0));
-    for (const [pin, d] of entries) add(kinds[d.kind], `pin:${pin}`, `${deviceLabel(d, this.board)} (${pin})`);
+    for (const [pin, d] of entries) add(kinds[d.kind] ?? 'Other pins', `pin:${pin}`, `${deviceLabel(d, this.board)} (${pin})`);
     let count = 0;
     for (const s of this.design?.sigs ?? []) {
       if (s.width > 32 || count > 600 || s.id === this.mapping?.clock) continue;
@@ -496,6 +499,7 @@ export class LogicAnalyzer {
           num('Bits', 'bits', d.bits) +
           f('Order', 'msbFirst', `<option value="1" ${d.msbFirst ? 'selected' : ''}>MSB first</option><option value="0" ${d.msbFirst ? '' : 'selected'}>LSB first</option>`);
       else if (d.type === 'i2c') form = f('SCL', 'scl', chOpts(d.scl)) + f('SDA', 'sda', chOpts(d.sda));
+      else if (d.type === 'ps2') form = f('CLK', 'clk', chOpts(d.clk)) + f('DATA', 'data', chOpts(d.data));
       else form = `<label>Channels (LSB first)<input data-f="chans" value="${d.chans.join(' ')}"></label>`;
       html += `<div class="la-row dec ${isOpen ? 'open' : ''}" data-row="${key}"><div class="la-dec-line" style="height:${DEC_H * this.decRows(d)}px"><b class="tag">${d.type.toUpperCase()}</b><input data-f="name" value="${esc(d.name)}"><button class="cfg" title="Settings">⚙</button><button class="x" title="Remove">✕</button></div><div class="la-form">${form}</div></div>`;
     });
@@ -660,6 +664,7 @@ export class LogicAnalyzer {
     if (d.type === 'uart') return decodeUart(tr, d, hz);
     if (d.type === 'spi') return decodeSpi(tr, d);
     if (d.type === 'i2c') return decodeI2c(tr, d);
+    if (d.type === 'ps2') return decodePs2(tr, d);
     return decodeBus(tr, d.chans);
   }
 

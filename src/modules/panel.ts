@@ -4,6 +4,16 @@ import type { BoardDef, BoardView } from '../boards';
 import type { Runner } from '../sim/runner';
 import type { ModuleInst } from './bus';
 import { MODULES, moduleDef, ONBOARD_MODULES, type ModuleDef } from './library';
+import { keyFromCode } from './ps2codes';
+
+const KEY_ROWS = [
+  ['Esc', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'Backspace'],
+  ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
+  ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'Enter'],
+  ['Shift', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', 'Up'],
+  ['Space', 'Left', 'Down', 'Right'],
+];
+const KEY_LABEL: Record<string, string> = { Backspace: '⌫', Enter: '⏎', Shift: '⇧', Up: '↑', Down: '↓', Left: '←', Right: '→', Space: 'Space', Esc: 'Esc' };
 
 type UiLang = 'fa' | 'en';
 
@@ -31,6 +41,7 @@ const L = {
     plug: 'وصل به هدر:',
     xdc: '＋ خطوط XDC',
     xdcDone: 'به XDC اضافه شد',
+    capture: 'تایپ با صفحه‌کلید خودم',
     conflict: (pin: string, other: string) => `پایهٔ ${pin} به ${other} هم وصل است`,
     empty: 'ماژول‌های بیرونی را با «افزودن ماژول» به هدرهای Pmod وصل کنید. پایه‌ها را از فهرست انتخاب کنید و در XDC همان پایه‌ها را به پورت‌های طرح بدهید.',
   },
@@ -42,6 +53,7 @@ const L = {
     plug: 'Plug into:',
     xdc: '＋ XDC lines',
     xdcDone: 'added to the XDC',
+    capture: 'type on my own keyboard',
     conflict: (pin: string, other: string) => `pin ${pin} is also wired to ${other}`,
     empty: 'Connect external modules to the Pmod headers with “Add Module”. Pick their pins from the lists and give the same pins to your design’s ports in the XDC.',
   },
@@ -53,6 +65,7 @@ export class ModulePanel {
   private list: HTMLElement;
   private menu: HTMLElement;
   private lastRead = 0;
+  private capture: Item | null = null;
   onSave: (mods: SavedModule[]) => void = () => {};
   onXdc: (lines: string) => void = () => {};
 
@@ -89,6 +102,11 @@ export class ModulePanel {
   show() {
     this.el.hidden = false;
     this.render();
+    // scroll to the first module the running design is wired to (the keyboard in the PS/2 lesson, ...)
+    const used = new Set(this.runner.mapping?.bindings.map((b) => b.pin));
+    const i = this.items.findIndex((it) => Object.values(it.saved.pins).some((p) => used.has(p)));
+    const row = this.list.children[i] as HTMLElement | undefined;
+    if (row) this.list.scrollTop = row.offsetTop - this.list.offsetTop;
   }
   hide() {
     this.el.hidden = true;
@@ -264,6 +282,8 @@ export class ModulePanel {
                   return `<div class="mod-leds" data-leds="${c.key}">${Array.from({ length: c.n }, (_, i) => `<span title="LD${i}"></span>`).join('')}</div>`;
                 case 'readout':
                   return `<div class="mod-read"><span>${esc(c.label[lg])}:</span> <b data-read="${c.key}">…</b></div>`;
+                case 'keys':
+                  return `<div class="mod-keys">${KEY_ROWS.map((row) => `<div>${row.map((k) => `<button class="mod-key${k.length > 1 ? ' wide' : ''}" data-press="${c.key}:${k}">${KEY_LABEL[k] ?? k}</button>`).join('')}</div>`).join('')}</div><label class="mod-toggle"><input type="checkbox" data-capture ${this.capture === it ? 'checked' : ''}> ⌨ ${esc(ui.capture)}</label>`;
               }
             })
             .join('');
@@ -290,7 +310,21 @@ export class ModulePanel {
       if (!it) return;
       if (t.dataset.role) this.setPin(it.saved.id, t.dataset.role, t.value);
       if (t.dataset.toggle) this.control(it, t.dataset.toggle, t.checked ? 1 : 0);
+      if (t.hasAttribute('data-capture')) this.capture = t.checked ? it : null;
     });
+    // "use my keyboard": keys typed anywhere outside the editors go to the PS/2 keyboard
+    const onKey = (e: KeyboardEvent, v: number) => {
+      const it = this.capture;
+      if (!it || !this.items.includes(it) || e.repeat) return;
+      const t = e.target as HTMLElement;
+      if (t.closest('input, textarea, select, [contenteditable="true"], .cm-editor')) return;
+      const k = keyFromCode(e.code);
+      if (!k) return;
+      e.preventDefault();
+      this.control(it, `k:${k}`, v, false);
+    };
+    window.addEventListener('keydown', (e) => onKey(e, 1));
+    window.addEventListener('keyup', (e) => onKey(e, 0));
     this.list.addEventListener('input', (e) => {
       const t = e.target as HTMLInputElement;
       const it = card(e);

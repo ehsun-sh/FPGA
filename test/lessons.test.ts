@@ -4,15 +4,15 @@ import { BoardHarness } from '../src/grade/harness';
 import { mapPorts } from '../src/boards/mapping';
 import { compileDesign, synthesize } from '../src/hdl';
 import { Acquisition, Recorder } from '../src/la/capture';
-import { decodeI2c, decodeSpi, decodeUart } from '../src/la/decode';
+import { decodeI2c, decodePs2, decodeSpi, decodeUart } from '../src/la/decode';
 import { ADVANCED } from '../src/lessons/advanced';
 import { ALL_LESSONS } from '../src/lessons/course';
 import { LESSONS, PLAYGROUND } from '../src/lessons/lessons';
 
 type Harness = ReturnType<typeof harness>;
 
-function harness(src: string, lang: 'verilog' | 'vhdl', xdc: string) {
-  const d = synthesize(src, lang);
+function harness(src: string, lang: 'verilog' | 'vhdl', xdc: string, params?: Record<string, number>) {
+  const d = synthesize(src, lang, undefined, params);
   const map = mapPorts(d, xdc, DEFAULT_BOARD);
   const errors = map.messages.filter((m) => m.level === 'error');
   if (errors.length) throw new Error(errors.map((e) => e.msg).join('\n'));
@@ -447,17 +447,59 @@ const checks: Record<string, (h: Harness) => void> = {
     m = bh.vga(1)!;
     expect([m.pixel(0, 0), m.pixel(32, 0), m.pixel(32, 32), m.pixel(639, 479)]).toEqual([0, 0xfff, 0, 0xfff]);
   },
+  ps2(h) {
+    const bh = new BoardHarness(h.d, DEFAULT_BOARD.masterXdc({ clk: true, led: true, seg: true, ps2: true }), DEFAULT_BOARD);
+    const k = bh.attach('ps2kbd');
+    bh.run(1000);
+    k.set!('k:A', 1);
+    bh.run(150_000);
+    expect(bh.led()).toBe(0x401c); // held, code 1C
+    expect(bh.text(3, 0, 1 << 18)).toBe('001C');
+    k.set!('k:A', 0);
+    bh.run(250_000);
+    expect(bh.led()).toBe(0x001c);
+    expect(bh.text(3, 0, 1 << 18)).toBe('F01C');
+    k.set!('k:Up', 1);
+    bh.run(250_000);
+    expect(bh.text(3, 0, 1 << 18)).toBe('E075');
+    expect(k.read!('sent')).toBe('1C (A) F0 1C (A) E0 75 (Up)');
+    const tr = bh.capture(['F4', 'B2'], 320_000, () => k.set!('k:Up', 0));
+    expect(decodePs2(tr, { clk: 0, data: 1 }).map((x) => x.text).join(' | ')).toBe('0xE0 ext | 0xF0 break | 0x75 Up');
+  },
+  softcore(h) {
+    // PERIOD = 2^19 clocks per tick; the display is read over 2^18 clocks right after a tick
+    const bh = new BoardHarness(h.d, DEFAULT_BOARD.masterXdc({ clk: true, reset: true, sw: true, led: true, seg: true }), DEFAULT_BOARD);
+    bh.sw(3);
+    bh.run(1000);
+    expect(bh.led()).toBe(0x0303);
+    expect(bh.text(3, 0, 1 << 18)).toBe('0003');
+    bh.run((1 << 19) - bh.cycles + 1000);
+    expect(bh.led()).toBe(0x0306);
+    expect(bh.text(3, 0, 1 << 18)).toBe('0006');
+    bh.sw(0x80);
+    bh.run(2 * (1 << 19) - bh.cycles + 1000);
+    expect(bh.led()).toBe(0x8086);
+    expect(bh.text(3, 0, 1 << 18)).toBe('0086');
+    bh.reset(0);
+    bh.run(10);
+    bh.reset(1);
+    bh.run(1000);
+    expect(bh.led() & 0xff).toBe(0x80);
+  },
   playground(h) {
     h.sw(0x00ff);
     expect(h.led()).toBe(0x00ff);
   },
 };
 
+// lessons whose delays are shortened for the test
+const PARAMS: Record<string, Record<string, number>> = { softcore: { PERIOD: 1 << 19 } };
+
 describe('lessons', () => {
   for (const l of ALL_LESSONS) {
     for (const lang of ['verilog', 'vhdl'] as const) {
       it(`${l.id} (${lang})`, () => {
-        const h = harness(lang === 'verilog' ? l.verilog : l.vhdl, lang, DEFAULT_BOARD.masterXdc(l.xdc));
+        const h = harness(lang === 'verilog' ? l.verilog : l.vhdl, lang, DEFAULT_BOARD.masterXdc(l.xdc), PARAMS[l.id]);
         const check = checks[l.id];
         expect(check, 'missing behaviour check').toBeTruthy();
         check(h);
