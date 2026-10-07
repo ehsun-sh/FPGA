@@ -1,0 +1,1658 @@
+import "./style.css";
+import { BOARDS, deviceLabel, getBoard } from "./boards";
+import { mapPorts, type Mapping } from "./boards/mapping";
+import {
+  HdlError,
+  synthesize,
+  synthesizeFiles,
+  type Design,
+  type Lang,
+} from "./hdl";
+import { EN, LESSON_UI, type LessonText } from "./lessons/en";
+import { ALL_LESSONS, CHAPTERS, chapterOf } from "./lessons/course";
+import { LESSONS, PLAYGROUND, type Lesson } from "./lessons/lessons";
+import { defaultConfig, LogicAnalyzer, type LaConfig } from "./la/window";
+import { SerialConsole } from "./serial/console";
+import { Runner } from "./sim/runner";
+import { generateTestbench } from "./sim/tbgen";
+import { formatTime, TbSim } from "./sim/tbsim";
+import { WaveView } from "./wave/view";
+import { VgaScreen } from "./vga/screen";
+import { ModulePanel, type SavedModule } from "./modules/panel";
+import { EXERCISES } from "./grade/exercises";
+import { gradeExercise } from "./grade/grade";
+import { buildNetlist, type Netlist } from "./synth/netlist";
+import { SchematicPanel } from "./synth/panel";
+import { projectZip } from "./synth/project";
+import { techMap, utilizationText, type SynthResult } from "./synth/techmap";
+import { CodeEditor } from "./ui/editor";
+import { highlight } from "./ui/highlight";
+
+// ---------------------------------------------------------------- storage
+const store = {
+  get(k: string): string | null {
+    try {
+      return localStorage.getItem("fpgalab:" + k);
+    } catch {
+      return null;
+    }
+  },
+  set(k: string, v: string) {
+    try {
+      localStorage.setItem("fpgalab:" + k, v);
+    } catch {
+      /* private mode */
+    }
+  },
+  del(k: string) {
+    try {
+      localStorage.removeItem("fpgalab:" + k);
+    } catch {
+      /* ignore */
+    }
+  },
+};
+
+const esc = (s: string) =>
+  s.replace(
+    /[&<>"]/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!,
+  );
+const $ = <T extends HTMLElement = HTMLElement>(
+  sel: string,
+  root: ParentNode = document,
+) => root.querySelector(sel) as T;
+
+// ---------------------------------------------------------------- board
+const boardDef = getBoard(store.get("board"));
+const xdcName = `${boardDef.id}.xdc`;
+const hwDev = `${boardDef.part.replace(/csg.*|cpg.*|ftg.*|fgg.*/, "")}_0`;
+const clockLabel =
+  boardDef.clockHz >= 1e6
+    ? `${boardDef.clockHz / 1e6} MHz`
+    : `${boardDef.clockHz / 1e3} kHz`;
+
+// ---------------------------------------------------------------- layout
+const app = $("#app");
+app.innerHTML = `
+<header class="titlebar">
+  <div class="brand"><span class="logo"></span><b>FPGA Lab</b><span class="dim">— a Vivado-style learning environment</span></div>
+  <div class="project">Board: <b>${boardDef.vendor} ${boardDef.name}</b> · Part: <b>${boardDef.part}</b></div>
+</header>
+<nav class="menubar">
+  <div class="menu"><button>File</button><div class="dropdown">
+    <button data-act="playground">Open Playground</button>
+    <button data-act="reset-code">Reset lesson code</button>
+    <hr/>
+    <button data-act="download-src">Download design source</button>
+    <button data-act="download-tb">Download testbench</button>
+    <button data-act="download-xdc">Download constraints (.xdc)</button>
+    <button data-act="download-project">Download Vivado project (.zip)</button>
+  </div></div>
+  <div class="menu"><button>Flow</button><div class="dropdown">
+    <button data-act="synth">Run Synthesis</button>
+    <button data-act="impl">Run Implementation</button>
+    <button data-act="schematic">Open RTL Schematic</button>
+    <button data-act="run">Generate Bitstream &amp; Program Device <kbd>Ctrl+Enter</kbd></button>
+    <hr/>
+    <button data-act="sim">Run Behavioral Simulation <kbd>Shift+F6</kbd></button>
+    <button data-act="new-tb">Regenerate testbench from the design</button>
+    <hr/>
+    <button data-act="stop">Close Hardware Target</button>
+  </div></div>
+  <div class="menu"><button>View</button><div class="dropdown">
+    <button data-act="view-reset">Board: perspective view</button>
+    <button data-act="view-top">Board: top view</button>
+    <button data-act="toggle-flow">Toggle Flow Navigator</button>
+  </div></div>
+  <div class="menu"><button>Tools</button><div class="dropdown">
+    <button data-act="la">Logic Analyzer <kbd>Ctrl+L</kbd></button>
+    <button data-act="serial">Serial Console <kbd>Ctrl+M</kbd></button>
+    <button data-act="vga">VGA Monitor</button>
+  </div></div>
+  <div class="menu"><button>Help</button><div class="dropdown">
+    <button data-act="about">About FPGA Lab</button>
+    <button data-act="lesson-intro">Getting started</button>
+  </div></div>
+</nav>
+<div class="toolbar">
+  <button class="tb run" data-act="run" title="Synthesize, implement and program the board (Ctrl+Enter)"><span class="ico">▶</span> Run on Board</button>
+  <button class="tb" data-act="stop" title="Stop"><span class="ico stop">■</span> Stop</button>
+  <button class="tb" data-act="reset" title="Reset the design (like re-programming)"><span class="ico">↺</span> Reset</button>
+  <button class="tb" data-act="sim" id="sim-btn" title="Run the testbench and show the waveforms (Shift+F6)"><span class="ico">∿</span> Simulate</button>
+  <button class="tb" data-act="la" id="la-btn" title="Open the logic analyzer (Ctrl+L)"><span class="ico">⎍</span> Logic Analyzer</button>
+  <button class="tb" data-act="serial" id="serial-btn" title="Open the serial console on the USB-UART (Ctrl+M)"><span class="ico">⌨</span> Serial Console</button>
+  <button class="tb" data-act="vga" id="vga-btn" title="Show the picture on the VGA connector in a bigger window"><span class="ico">🖥</span> VGA Monitor</button>
+  <span class="sep"></span>
+  <div class="seg-ctl" role="group" aria-label="Site language">
+    <button data-ui="fa">فارسی</button><button data-ui="en">English</button>
+  </div>
+  <span class="sep"></span>
+  <div class="seg-ctl" role="group" aria-label="HDL language">
+    <button data-lang="verilog">Verilog</button><button data-lang="vhdl">VHDL</button>
+  </div>
+  <span class="sep"></span>
+  <label class="clock">Clock <select id="speed">
+    <option value="${boardDef.clockHz}">${clockLabel} (real time)</option>
+    <option value="1000000">1 MHz</option>
+    <option value="10000">10 kHz</option>
+    <option value="100">100 Hz</option>
+    <option value="10">10 Hz</option>
+    <option value="1">1 Hz</option>
+  </select></label>
+  <label class="bouncy" title="Simulate mechanical contact bounce on the push buttons"><input type="checkbox" id="bouncy"> <span id="bouncy-l"></span></label>
+  <span class="grow"></span>
+  <span class="run-state" id="run-state">Ready</span>
+</div>
+<main class="workspace">
+  <aside class="flow" id="flow">
+    <div class="flow-title">FLOW NAVIGATOR</div>
+    <div class="flow-sec">
+      <div class="sec-h" id="learn-h">▾ LEARN</div>
+      <div id="lesson-list"></div>
+    </div>
+    <div class="flow-sec">
+      <div class="sec-h">▾ PROJECT MANAGER</div>
+      <button class="flow-item" data-act="tab-source">Design Sources</button>
+      <button class="flow-item" data-act="tab-xdc">Constraints</button>
+      <button class="flow-item" data-act="tab-tb">Simulation Sources</button>
+    </div>
+    <div class="flow-sec">
+      <div class="sec-h">▾ SIMULATION</div>
+      <button class="flow-item" data-act="sim">Run Behavioral Simulation</button>
+      <button class="flow-item" data-act="run">Run on Board</button>
+    </div>
+    <div class="flow-sec">
+      <div class="sec-h">▾ RTL ANALYSIS</div>
+      <button class="flow-item" data-act="elab">Open Elaborated Design</button>
+      <button class="flow-item" data-act="schematic">Schematic</button>
+    </div>
+    <div class="flow-sec">
+      <div class="sec-h">▾ SYNTHESIS</div>
+      <button class="flow-item" data-act="synth">Run Synthesis</button>
+      <button class="flow-item" data-act="rep-util">Report Utilization</button>
+      <button class="flow-item" data-act="rep-timing">Report Timing Summary</button>
+    </div>
+    <div class="flow-sec">
+      <div class="sec-h">▾ IMPLEMENTATION</div>
+      <button class="flow-item" data-act="impl">Run Implementation</button>
+    </div>
+    <div class="flow-sec">
+      <div class="sec-h">▾ PROGRAM AND DEBUG</div>
+      <button class="flow-item" data-act="run">Generate Bitstream</button>
+      <button class="flow-item" data-act="run">Program Device</button>
+    </div>
+  </aside>
+  <section class="pane left" id="left">
+    <div class="tabs" id="doc-tabs">
+      <button data-tab="lesson" class="active">📘 Lesson</button>
+      <button data-tab="source"><span id="src-name">top.v</span></button>
+      <button data-tab="xdc">${xdcName}</button>
+      <button data-tab="tb"><span id="tb-name">tb.v</span></button>
+      <button data-tab="schematic" id="schem-tab" class="hidden">⊞ Schematic</button>
+    </div>
+    <div class="tab-body">
+      <article class="lesson" id="lesson"></article>
+      <div class="editor-host hidden" id="src-editor"></div>
+      <div class="editor-host hidden" id="xdc-editor"></div>
+      <div class="editor-host hidden" id="tb-editor"></div>
+      <div class="schem-host hidden" id="schematic"></div>
+    </div>
+  </section>
+  <div class="splitter v" id="split-v" title="Drag to resize"></div>
+  <section class="pane right">
+    <div class="hw-title">
+      <span class="rtabs"><button data-rtab="hw" class="active"><b>HARDWARE MANAGER</b> <span class="dim">— localhost/xilinx_tcf/Digilent</span></button><button data-rtab="sim"><b>SIMULATION</b> <span class="dim">— Behavioral</span></button></span>
+      <span class="hw-dev" id="hw-dev">${hwDev} (not programmed)</span>
+    </div>
+    <div class="board-host" id="board">
+      <div class="board-tools">
+        <button data-act="view-reset" title="Perspective view">⟲ 3D</button>
+        <button data-act="view-top" title="Top view">⊤ Top</button>
+        <button data-act="modules" id="mod-btn" title="Sensors and Pmod modules connected to the board">🧩 Modules</button>
+      </div>
+      <div class="board-hint">Click the switches and buttons · drag to rotate · scroll to zoom</div>
+    </div>
+  </section>
+</main>
+<div class="splitter h" id="split-h" title="Drag to resize"></div>
+<section class="bottom" id="bottom">
+  <div class="tabs small" id="bottom-tabs">
+    <button data-btab="console" class="active">Tcl Console</button>
+    <button data-btab="messages">Messages <span class="badge" id="msg-badge"></span></button>
+    <button data-btab="reports">Reports</button>
+  </div>
+  <div class="bottom-body">
+    <div class="console" id="console"><div class="log" id="log"></div>
+      <form class="tcl-in" id="tcl-form"><span>Tcl&gt;</span><input id="tcl" autocomplete="off" spellcheck="false" placeholder="type help"/></form>
+    </div>
+    <div class="messages hidden" id="messages"></div>
+    <div class="reports hidden" id="reports"><p class="dim">Run synthesis to see the utilization report.</p></div>
+  </div>
+</section>
+<footer class="statusbar">
+  <span id="st-design">No design loaded</span>
+  <span id="st-speed"></span>
+  <span id="st-cycles"></span>
+</footer>
+<dialog id="about"><form method="dialog">
+  <h2>FPGA Lab</h2>
+  <p>An in-browser FPGA course with a Vivado-inspired workflow and simulated FPGA boards (currently: ${BOARDS.map((b) => `${b.vendor} ${b.name}`).join(", ")}).</p>
+  <p>Real Vivado cannot run in a browser. Instead, your Verilog/VHDL is parsed, elaborated and compiled to a fast cycle-accurate
+  JavaScript model that drives the 3D board, following your XDC pin constraints. The same code and XDC work in real Vivado.</p>
+  <p class="dim">Educational replica. Not affiliated with AMD/Xilinx or Digilent.</p>
+  <button>Close</button>
+</form></dialog>
+`;
+
+// ---------------------------------------------------------------- state
+let lang: Lang = store.get("lang") === "vhdl" ? "vhdl" : "verilog";
+let lesson: Lesson =
+  ALL_LESSONS.find((l) => l.id === store.get("lesson")) ?? LESSONS[0];
+let tab: "lesson" | "source" | "xdc" | "tb" | "schematic" = "lesson";
+type UiLang = "fa" | "en";
+let uiLang: UiLang = store.get("ui-lang") === "en" ? "en" : "fa";
+// lesson text in the selected site language (Persian lives in lessons.ts, English in en.ts)
+const text = (l: Lesson): LessonText =>
+  uiLang === "en" && EN[l.id] ? EN[l.id] : l;
+
+const srcKey = (l: Lesson, lg: Lang) => `src:${l.id}:${lg}`;
+const xdcKey = (l: Lesson) => `xdc:${boardDef.id}:${l.id}`;
+const sourceFor = (l: Lesson, lg: Lang) =>
+  store.get(srcKey(l, lg)) ?? (lg === "verilog" ? l.verilog : l.vhdl);
+const xdcFor = (l: Lesson) => store.get(xdcKey(l)) ?? boardDef.masterXdc(l.xdc);
+const fileName = () => (lang === "verilog" ? "top.v" : "top.vhd");
+const tbName = () => (lang === "verilog" ? "tb.v" : "tb.vhd");
+const tbKey = (l: Lesson, lg: Lang) => `tb:${l.id}:${lg}`;
+// a stored testbench, the lesson's own, or one generated from the design's ports
+function tbFor(l: Lesson, lg: Lang): string {
+  const own = store.get(tbKey(l, lg)) ?? l.tb?.[lg];
+  if (own) return own;
+  return newTestbench(sourceFor(l, lg), lg);
+}
+function newTestbench(src: string, lg: Lang): string {
+  try {
+    return generateTestbench(synthesize(src, lg), lg);
+  } catch {
+    return lg === "verilog"
+      ? "`timescale 1ns / 1ps\n// Fix the design first (it does not compile), then use Flow > Regenerate testbench.\nmodule tb;\n    initial begin\n        #100 $finish;\n    end\nendmodule\n"
+      : "-- Fix the design first (it does not compile), then use Flow > Regenerate testbench.\nentity tb is\nend tb;\narchitecture sim of tb is\nbegin\n    process\n    begin\n        wait for 100 ns;\n        std.env.finish;\n    end process;\nend sim;\n";
+  }
+}
+
+const srcEditor = new CodeEditor(
+  $("#src-editor"),
+  lang,
+  sourceFor(lesson, lang),
+);
+const xdcEditor = new CodeEditor($("#xdc-editor"), "xdc", xdcFor(lesson));
+let saveTimer = 0;
+srcEditor.onChange = (t) => {
+  clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(() => store.set(srcKey(lesson, lang), t), 300);
+};
+xdcEditor.onChange = (t) => {
+  clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(() => store.set(xdcKey(lesson), t), 300);
+};
+const tbEditor = new CodeEditor($("#tb-editor"), lang, tbFor(lesson, lang));
+let tbDirty = false; // the user edited the testbench (only then is it saved)
+tbEditor.onChange = (t) => {
+  if (!tbDirty && !tbEditor.programmatic) tbDirty = true;
+  if (!tbDirty) return;
+  clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(() => store.set(tbKey(lesson, lang), t), 300);
+};
+
+const board = boardDef.createView($("#board"));
+const runner = new Runner(boardDef);
+const la = new LogicAnalyzer(document.body, boardDef, board, runner);
+const laPreset = (): LaConfig => lesson.la ?? defaultConfig(boardDef);
+la.presetFor = laPreset;
+la.onChange = (cfg) => store.set(`la:${lesson.id}`, JSON.stringify(cfg));
+const serial = new SerialConsole(document.body, boardDef, runner);
+try {
+  serial.load(JSON.parse(store.get("serial") ?? "{}"));
+} catch {
+  /* keep defaults */
+}
+serial.onSettings = (st) => store.set("serial", JSON.stringify(st));
+const vga = new VgaScreen(document.body, boardDef, board, runner);
+const modules = new ModulePanel(
+  $("#board"),
+  boardDef,
+  runner,
+  board,
+  () => uiLang,
+);
+modules.onSave = (m) => store.set("modules", JSON.stringify(m));
+const schematic = new SchematicPanel(
+  $("#schematic"),
+  (line) => {
+    showTab("source");
+    srcEditor.goto(line);
+  },
+  () => act("schematic"),
+);
+modules.onXdc = (lines) => {
+  const t = xdcEditor.text.replace(/\s*$/, "\n\n") + lines + "\n";
+  xdcEditor.setText(t, "xdc");
+  store.set(xdcKey(lesson), t);
+  log(
+    `# add_constraints: ${lines.split("\n")[0].replace(/^## /, "")} (${xdcName})`,
+    "cmd",
+  );
+};
+try {
+  modules.load(JSON.parse(store.get("modules") ?? "[]") as SavedModule[]);
+} catch {
+  modules.load([]);
+}
+function loadLa() {
+  let cfg: LaConfig | null = null;
+  try {
+    cfg = JSON.parse(store.get(`la:${lesson.id}`) ?? "null");
+  } catch {
+    cfg = null;
+  }
+  la.load(cfg ?? laPreset());
+}
+runner.speedHz = boardDef.clockHz;
+(window as unknown as { fpgaLab: unknown }).fpgaLab = { board, runner };
+
+// ---------------------------------------------------------------- console / messages
+type Level = "info" | "warning" | "error" | "cmd" | "ok" | "plain";
+interface Msg {
+  level: "info" | "warning" | "error";
+  code: string;
+  text: string;
+  file?: "src" | "xdc" | "tb";
+  line?: number;
+  col?: number;
+}
+let messages: Msg[] = [];
+const logEl = $("#log");
+
+function log(text: string, level: Level = "plain") {
+  const d = document.createElement("div");
+  d.className = "l-" + level;
+  d.textContent = text;
+  logEl.appendChild(d);
+  while (logEl.childElementCount > 600) logEl.firstElementChild!.remove();
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+const fileLabel = (f?: Msg["file"]) =>
+  f === "xdc" ? xdcName : f === "tb" ? tbName() : fileName();
+const editorFor = (f?: Msg["file"]) =>
+  f === "xdc" ? xdcEditor : f === "tb" ? tbEditor : srcEditor;
+
+function msg(m: Msg) {
+  messages.push(m);
+  const loc = m.line ? ` [${fileLabel(m.file)}:${m.line}]` : "";
+  log(`${m.level.toUpperCase()}: [${m.code}] ${m.text}${loc}`, m.level);
+}
+
+function renderMessages() {
+  const el = $("#messages");
+  const counts = { error: 0, warning: 0, info: 0 };
+  messages.forEach((m) => counts[m.level]++);
+  const badge = $("#msg-badge");
+  badge.textContent = counts.error
+    ? `${counts.error}`
+    : counts.warning
+      ? `${counts.warning}`
+      : "";
+  badge.className =
+    "badge " + (counts.error ? "err" : counts.warning ? "warn" : "");
+  if (!messages.length) {
+    el.innerHTML = '<p class="dim">No messages.</p>';
+    return;
+  }
+  el.innerHTML =
+    `<div class="msg-sum">Errors: <b>${counts.error}</b> · Warnings: <b>${counts.warning}</b> · Info: <b>${counts.info}</b></div>` +
+    messages
+      .map(
+        (m, i) =>
+          `<div class="msg ${m.level}" data-i="${i}"><span class="mi">${m.level === "error" ? "⛔" : m.level === "warning" ? "⚠️" : "ℹ️"}</span><span>[${esc(m.code)}] ${esc(m.text)}${
+            m.line
+              ? ` <a href="#" class="loc">${fileLabel(m.file)}:${m.line}</a>`
+              : ""
+          }</span></div>`,
+      )
+      .join("");
+}
+
+$("#messages").addEventListener("click", (ev) => {
+  const t = (ev.target as HTMLElement).closest(".msg") as HTMLElement | null;
+  if (!t) return;
+  ev.preventDefault();
+  const m = messages[Number(t.dataset.i)];
+  if (!m?.line) return;
+  showTab(m.file === "xdc" ? "xdc" : m.file === "tb" ? "tb" : "source");
+  editorFor(m.file).goto(m.line);
+});
+
+// ---------------------------------------------------------------- flow
+let lastDesign: Design | null = null;
+let lastNetlist: Netlist | null = null;
+let lastSynth: SynthResult | null = null;
+
+// the period of the first create_clock in the constraints (ns), 10 ns if there is none
+function clockPeriod(xdc: string): number {
+  for (const line of xdc.split("\n")) {
+    const m = /^\s*create_clock\b.*-period\s+([\d.]+)/.exec(line);
+    if (m && +m[1] > 0) return +m[1];
+  }
+  return 1e9 / boardDef.clockHz;
+}
+
+function stamp() {
+  return new Date().toLocaleTimeString([], { hour12: false });
+}
+
+function doSynth(): Design | null {
+  messages = [];
+  srcEditor.clearMarks();
+  xdcEditor.clearMarks();
+  log(`# launch_runs synth_1 -jobs 8   (${stamp()})`, "cmd");
+  log(`INFO: [Synth 8-7079] Multithreading enabled for synth_design`, "info");
+  try {
+    const d = synthesize(srcEditor.text, lang);
+    for (const m of d.modules)
+      log(`INFO: [Synth 8-6157] synthesizing module '${m}'`, "info");
+    for (const w of d.warnings)
+      msg({
+        level: "warning",
+        code: "Synth 8-324",
+        text: w.msg,
+        file: "src",
+        line: w.loc?.line,
+      });
+    for (const m of [...d.modules].reverse())
+      log(`INFO: [Synth 8-6155] done synthesizing module '${m}'`, "info");
+    const nl = buildNetlist(d);
+    const sr = techMap(nl, clockPeriod(xdcEditor.text));
+    for (const w of nl.warnings)
+      msg({
+        level: w.code === "Synth 8-3380" ? "info" : "warning",
+        code: w.code,
+        text: w.msg,
+        file: "src",
+        line: w.loc?.line,
+      });
+    for (const f of sr.fsms)
+      log(
+        `INFO: [Synth 8-802] inferred FSM for state register '${f.reg}' in module '${d.top}' (${f.encoding}: ${f.states.map((s) => `${s.name}=${s.code}`).join(", ")})`,
+        "info",
+      );
+    const u = sr.util;
+    log(
+      `Finished RTL Optimization : top = '${d.top}', ${u.ffs} registers, ${u.lutLogic + u.lutMem} LUTs, ${u.carry4} CARRY4${u.dsp ? `, ${u.dsp} DSP48E1` : ""}${u.latches ? `, ${u.latches} latches` : ""}`,
+      "plain",
+    );
+    log(
+      `Report Cell Usage: ${[...sr.prims]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((p) => `${p.name} ${p.count}`)
+        .join(", ")}`,
+      "plain",
+    );
+    const t = sr.timing;
+    log(
+      `Timing estimate: WNS ${t.wns.toFixed(3)} ns at ${(1000 / t.period).toFixed(1)} MHz${t.worst ? ` (Fmax ≈ ${Math.floor(1000 / (t.period - t.wns))} MHz)` : ""}${t.failing ? ` — ${t.failing} failing endpoints` : ""}`,
+      t.wns < 0 ? "warning" : "plain",
+    );
+    log(`synth_design completed successfully`, "ok");
+    lastDesign = d;
+    lastNetlist = nl;
+    lastSynth = sr;
+    if (!$("#schem-tab").classList.contains("hidden")) schematic.show(nl);
+    renderReports(d, null);
+    $("#st-design").textContent =
+      `Top: ${d.top} (${lang === "verilog" ? "Verilog" : "VHDL"})`;
+    return d;
+  } catch (e) {
+    if (!(e instanceof HdlError)) console.error(e);
+    const he = e as HdlError;
+    msg({
+      level: "error",
+      code: he.code ?? "Synth 8-2715",
+      text: he.message,
+      file: "src",
+      line: he.loc?.line,
+      col: he.loc?.col,
+    });
+    srcEditor.markError(he.loc?.line, he.loc?.col, he.message);
+    log(`ERROR: [Common 17-69] Command failed: Synthesis failed`, "error");
+    log(`synth_design failed`, "error");
+    showTab("source");
+    lastDesign = null;
+    return null;
+  } finally {
+    renderMessages();
+  }
+}
+
+function doImpl(d: Design): Mapping | null {
+  log(`# launch_runs impl_1   (${stamp()})`, "cmd");
+  log(`INFO: [Vivado 12-3482] Parsing XDC File [${xdcName}]`, "info");
+  const map = mapPorts(d, xdcEditor.text, boardDef);
+  const unmatched = map.messages.filter((m) => m.code === "Vivado 12-507");
+  const other = map.messages.filter((m) => m.code !== "Vivado 12-507");
+  for (const m of other)
+    msg({
+      level: m.level,
+      code: m.code,
+      text: m.msg,
+      file: "xdc",
+      line: m.line,
+    });
+  if (unmatched.length) {
+    msg({
+      level: "warning",
+      code: "Vivado 12-507",
+      text: `${unmatched.length} constraint(s) matched no port in the design (e.g. ${unmatched
+        .slice(0, 3)
+        .map((m) => m.msg.match(/'(.+?)'/)?.[1])
+        .join(", ")}). Unused board pins are left unconnected.`,
+      file: "xdc",
+      line: unmatched[0].line,
+    });
+  }
+  renderMessages();
+  if (map.messages.some((m) => m.level === "error")) {
+    log(
+      "ERROR: [Place 30-68] Implementation failed: I/O placement errors",
+      "error",
+    );
+    showBottom("messages");
+    return null;
+  }
+  log(
+    `INFO: [Place 30-611] Placed ${map.bindings.length} I/O bit(s) on package pins`,
+    "info",
+  );
+  if (map.clock !== undefined)
+    log(
+      `INFO: [Timing 38-35] Clock 'sys_clk_pin' on '${d.sigs[map.clock].name}': period 10.000 ns (100 MHz)`,
+      "info",
+    );
+  log(`route_design completed successfully`, "ok");
+  renderReports(d, map);
+  return map;
+}
+
+function doProgram(d: Design, map: Mapping) {
+  log(`# write_bitstream -force ${d.top}.bit`, "cmd");
+  log(
+    `INFO: [Common 17-83] Bitstream generated: ${d.top}.bit (simulated)`,
+    "info",
+  );
+  log(`# program_hw_devices [get_hw_devices ${hwDev}]`, "cmd");
+  try {
+    runner.program(d, map, {
+      switches: board.switches,
+      pressed: (b) => board.isPressed(b),
+    });
+  } catch (e) {
+    const he = e as HdlError;
+    msg({
+      level: "error",
+      code: he.code ?? "Synth 8-2715",
+      text: he.message,
+      file: "src",
+      line: he.loc?.line,
+    });
+    renderMessages();
+    showBottom("messages");
+    log("ERROR: programming failed", "error");
+    return;
+  }
+  la.setDesign(d, map);
+  serial.setDesign(map);
+  vga.setDesign(map);
+  if (vga.connected) log("INFO: VGA monitor connected to the VGA port", "info");
+  log(
+    `INFO: [Labtools 27-3164] End of startup status: HIGH — device is running`,
+    "ok",
+  );
+  $("#hw-dev").textContent = `${hwDev} (Programmed)`;
+  $("#hw-dev").classList.add("ok");
+  setRunState();
+}
+
+function runFlow() {
+  const d = doSynth();
+  if (!d) {
+    showBottom("messages");
+    return;
+  }
+  const map = doImpl(d);
+  if (!map) return;
+  doProgram(d, map);
+  if (messages.some((m) => m.level === "warning")) showBottom("messages");
+}
+
+// ---------------------------------------------------------------- behavioral simulation
+let tbsim: TbSim | null = null;
+const wave = new WaveView($("#board"));
+wave.onRestart = () => simRestart();
+wave.onRunAll = () => simRun(Infinity);
+wave.onRunFor = (ps) => simRun(ps);
+
+function doSim() {
+  messages = [];
+  srcEditor.clearMarks();
+  tbEditor.clearMarks();
+  log(`# launch_simulation   (${stamp()})`, "cmd");
+  log(`INFO: [SIM-utils-51] Simulation object is 'sim_1'`, "info");
+  log(
+    `INFO: [USF-XSim-7] Compiling ${fileName()} and ${tbName()} (behavioral)`,
+    "info",
+  );
+  let d: Design;
+  try {
+    d = synthesizeFiles(
+      [
+        { name: fileName(), src: srcEditor.text },
+        { name: tbName(), src: tbEditor.text },
+      ],
+      lang,
+    );
+  } catch (e) {
+    if (!(e instanceof HdlError)) console.error(e);
+    const he = e as HdlError;
+    const file = he.file === tbName() ? "tb" : "src";
+    msg({
+      level: "error",
+      code: he.code ?? "XSIM 43-3322",
+      text: he.message,
+      file,
+      line: he.loc?.line,
+      col: he.loc?.col,
+    });
+    editorFor(file).markError(he.loc?.line, he.loc?.col, he.message);
+    log(
+      `ERROR: [USF-XSim-62] 'compile' step failed with error(s). Please check the Tcl console output or messages for more information.`,
+      "error",
+    );
+    renderMessages();
+    showTab(file === "tb" ? "tb" : "source");
+    showBottom("messages");
+    return;
+  }
+  for (const w of d.warnings)
+    msg({ level: "warning", code: "VRFC 10-3091", text: w.msg });
+  if (!d.procs.some((p) => p.kind === "tb")) {
+    msg({
+      level: "warning",
+      code: "XSIM 43-4099",
+      text: `module '${d.top}' has no initial block or process with delays: nothing drives the inputs over time`,
+    });
+  }
+  try {
+    tbsim = new TbSim(d);
+  } catch (e) {
+    msg({ level: "error", code: "XSIM 43-3225", text: (e as Error).message });
+    renderMessages();
+    showBottom("messages");
+    return;
+  }
+  renderMessages();
+  tbsim.onLine = (l) =>
+    log(l.text, l.sev >= 2 ? "error" : l.sev === 1 ? "warning" : "plain");
+  log(
+    `INFO: [USF-XSim-96] XSim completed. Design snapshot '${d.top}_behav' loaded.`,
+    "ok",
+  );
+  wave.setSim(tbsim);
+  showRight("sim");
+  showBottom("console");
+  simRun(1e6, true); // Vivado runs 1000 ns after launching
+}
+
+function simRun(ps: number, fit = false) {
+  if (!tbsim) {
+    doSim();
+    return;
+  }
+  log(
+    Number.isFinite(ps) ? `run ${formatTime(ps).replace(" ", "")}` : "run all",
+    "cmd",
+  );
+  if (tbsim.finished) {
+    log(
+      `INFO: the simulation has finished (${tbsim.error ? "error" : "$finish"} at ${formatTime(tbsim.now)}). Press Restart to run it again.`,
+      "info",
+    );
+    return;
+  }
+  const r = tbsim.run(ps, 2500);
+  if (r === "finish" && !tbsim.error)
+    log(`$finish called at time : ${formatTime(tbsim.now)}`, "info");
+  if (r === "error") {
+    msg({
+      level: "error",
+      code: "XSIM 43-3225",
+      text: tbsim.error ?? "simulation error",
+    });
+    renderMessages();
+  }
+  if (r === "budget")
+    log(
+      `INFO: simulation paused at ${formatTime(tbsim.now)} (it keeps running forever); press Run All again to continue`,
+      "info",
+    );
+  if (r === "idle")
+    log(`INFO: no more events after ${formatTime(tbsim.now)}`, "info");
+  if (tbsim.errors)
+    log(`WARNING: the testbench reported ${tbsim.errors} error(s)`, "warning");
+  wave.refresh(fit || r === "finish");
+}
+
+function simRestart() {
+  if (!tbsim) return;
+  log("restart", "cmd");
+  tbsim.restart();
+  log(`INFO: [Simtcl 6-17] Simulation restarted`, "info");
+  wave.refresh();
+}
+
+function showRight(t: "hw" | "sim") {
+  document
+    .querySelectorAll<HTMLElement>("[data-rtab]")
+    .forEach((b) => b.classList.toggle("active", b.dataset.rtab === t));
+  if (t === "sim") wave.show();
+  else wave.hide();
+  $("#hw-dev").classList.toggle("hidden", t === "sim");
+}
+
+function stop() {
+  runner.stop();
+  la.setDesign(null, null);
+  serial.setDesign(null);
+  vga.setDesign(null);
+  board.setOutputs({ led: [], rgb: [], seg: [], done: false });
+  $("#hw-dev").textContent = `${hwDev} (not programmed)`;
+  $("#hw-dev").classList.remove("ok");
+  log("# close_hw_target", "cmd");
+  setRunState();
+}
+
+runner.onError = (m) => {
+  msg({ level: "error", code: "Simulation 43-3", text: m });
+  renderMessages();
+  showBottom("messages");
+  setRunState();
+};
+
+function setRunState() {
+  const el = $("#run-state");
+  if (runner.error) {
+    el.textContent = "Error";
+    el.className = "run-state err";
+  } else if (runner.running) {
+    el.textContent = `● Running ${runner.design?.top ?? ""}`;
+    el.className = "run-state on";
+  } else {
+    el.textContent = "Ready";
+    el.className = "run-state";
+  }
+}
+
+// ---------------------------------------------------------------- reports
+function renderReports(d: Design, map: Mapping | null) {
+  const sr = lastSynth;
+  const res = boardDef.resources;
+  const pct = (used: number, avail: number) =>
+    ((used / avail) * 100).toFixed(2);
+  const row = (n: string, used: number, avail: number, sub = false) =>
+    `<tr${sub ? ' class="sub"' : ""}><td>${n}</td><td>${used}</td><td>${avail.toLocaleString()}</td><td>${pct(used, avail)}</td></tr>`;
+  let html = `<div class="rep-actions"><button data-act="schematic">⊞ Open schematic</button><button data-act="download-project">⭳ Vivado project (.zip)</button><span class="dim">Estimates from FPGA Lab's own mapping onto 7-series primitives: real Vivado numbers will differ a little.</span></div>`;
+  if (sr) {
+    const u = sr.util;
+    html += `<div class="rep-grid"><div><h4>Utilization — ${esc(d.top)}</h4>
+<table class="rep"><thead><tr><th>Site Type</th><th>Used</th><th>Available</th><th>Util%</th></tr></thead><tbody>
+${row("Slice LUTs", u.lutLogic + u.lutMem, res.luts)}${row("LUT as Logic", u.lutLogic, res.luts, true)}${row("LUT as Memory", u.lutMem, 19000, true)}
+${row("Slice Registers", u.ffs + u.latches, res.ffs)}${row("Register as Flip Flop", u.ffs, res.ffs, true)}${row("Register as Latch", u.latches, res.ffs, true)}
+${row("CARRY4", u.carry4, 15850)}${row("F7 Muxes", u.f7, 31700)}${row("F8 Muxes", u.f8, 15850)}
+${row("Block RAM Tile", u.bram36 + u.bram18 / 2, res.bram)}${row("DSPs", u.dsp, 240)}${row("Bonded IOB", u.iob, res.iob)}${row("BUFGCTRL", u.bufg, 32)}
+</tbody></table></div>`;
+    const t = sr.timing;
+    const ok = t.wns >= 0;
+    html += `<div><h4>Design Timing Summary</h4><table class="rep"><tbody>
+<tr><td>Clock</td><td>${esc(t.clocks.join(", ") || "—")} · ${t.period} ns (${(1000 / t.period).toFixed(1)} MHz)</td></tr>
+<tr><td>Worst Negative Slack (WNS)</td><td class="${ok ? "good" : "bad"}">${t.wns.toFixed(3)} ns</td></tr>
+<tr><td>Total Negative Slack (TNS)</td><td>${t.tns.toFixed(3)} ns</td></tr>
+<tr><td>Failing / total endpoints</td><td>${t.failing} / ${t.endpoints}</td></tr>
+<tr><td>Estimated Fmax</td><td>${t.worst ? `${Math.floor(1000 / (t.period - t.wns))} MHz` : "— (no register-to-register path)"}</td></tr>
+</tbody></table>
+<p class="${ok ? "good" : "bad"}">${ok ? "All user specified timing constraints are met." : "Timing constraints are not met: shorten the logic between registers (pipelining)."}</p></div>`;
+    html += `<div><h4>Primitives</h4><table class="rep"><thead><tr><th>Ref Name</th><th>Used</th><th>Functional Category</th></tr></thead><tbody>${[
+      ...sr.prims,
+    ]
+      .sort((a, b) => b.count - a.count)
+      .map(
+        (p) =>
+          `<tr><td>${p.name}</td><td>${p.count}</td><td>${p.group}</td></tr>`,
+      )
+      .join("")}</tbody></table></div></div>`;
+    if (t.worst) {
+      html += `<h4>Worst path: ${esc(t.worst.from)} → ${esc(t.worst.to)} <span class="dim">(${t.worst.delay.toFixed(3)} ns data path, ${t.worst.levels} logic levels, slack ${t.worst.slack.toFixed(3)} ns)</span></h4>
+<table class="rep path"><thead><tr><th>Cell</th><th>Type</th><th>Incr (ns)</th><th>Path (ns)</th></tr></thead><tbody>${t.worst.steps
+        .map(
+          (st) =>
+            `<tr><td>${esc(st.cell)}</td><td>${st.type}</td><td>${st.incr.toFixed(3)}</td><td>${st.at.toFixed(3)}</td></tr>`,
+        )
+        .join("")}</tbody></table>`;
+    }
+    if (sr.hier.length > 1)
+      html += `<h4>Utilization by hierarchy</h4><table class="rep"><thead><tr><th>Instance</th><th>LUTs</th><th>FFs</th><th>CARRY4</th><th>BRAM</th><th>DSP</th></tr></thead><tbody>${sr.hier
+        .map(
+          (h) =>
+            `<tr><td>${h.path ? "└ " + esc(h.path.slice(0, -1)) : esc(d.top)}</td><td>${h.luts}</td><td>${h.ffs}</td><td>${h.carry4}</td><td>${h.bram}</td><td>${h.dsp}</td></tr>`,
+        )
+        .join("")}</tbody></table>`;
+    for (const f of sr.fsms)
+      html += `<h4>FSM: ${esc(f.reg)} <span class="dim">(${f.encoding} encoding)</span></h4><table class="rep"><thead><tr><th>State</th><th>Encoding</th></tr></thead><tbody>${f.states
+        .map(
+          (st) =>
+            `<tr><td>${esc(st.name)}</td><td><code>${st.code}</code></td></tr>`,
+        )
+        .join("")}</tbody></table>`;
+    if (sr.removed.length)
+      html += `<h4>Removed (unused) registers</h4><p class="dim">${sr.removed.map(esc).join(", ")}</p>`;
+  }
+  html += `<h4>Design hierarchy</h4><ul class="hier">${d.modules.map((m, i) => `<li style="padding-left:${i ? 16 : 0}px">${i ? "└ " : ""}${esc(m)}</li>`).join("")}</ul>`;
+  if (map) {
+    html += `<h4>I/O placement</h4><table class="rep"><thead><tr><th>Port</th><th>Package pin</th><th>Board device</th></tr></thead><tbody>${map.bindings
+      .map((b) => {
+        const s = d.sigs[b.sig];
+        const nm =
+          s.width > 1
+            ? `${b.port}[${s.left >= s.right ? b.bit + s.right : s.right - b.bit}]`
+            : b.port;
+        const dn = deviceLabel(b.device, boardDef);
+        return `<tr><td>${esc(nm)}</td><td>${b.pin}</td><td>${dn}</td></tr>`;
+      })
+      .join("")}</tbody></table>`;
+  }
+  $("#reports").innerHTML = html;
+}
+
+// ---------------------------------------------------------------- lessons UI
+function renderLessonList() {
+  const el = $("#lesson-list");
+  const dir = uiLang === "fa" ? "rtl" : "ltr";
+  const ui = LESSON_UI[uiLang];
+  let n = 0;
+  el.innerHTML = CHAPTERS.map((c, ci) => {
+    const items = c.lessons.map((l) => {
+      const num = l === PLAYGROUND ? "★" : String(++n);
+      return `<button class="flow-item lesson-item ${l.id === lesson.id ? "active" : ""}" data-lesson="${l.id}" dir="${dir}"><span class="num">${num}</span>${esc(text(l).title)}${solved.has(l.id) ? `<span class="done" title="${ui.solved}">✓</span>` : ""}</button>`;
+    });
+    const soon = (c.soon ?? []).map(
+      (s) =>
+        `<div class="flow-item lesson-item soon" dir="${dir}"><span class="num">·</span><span>${esc(s[uiLang])} <em>(${ui.soon})</em></span></div>`,
+    );
+    const head = l10nChapter(ci);
+    return `<div class="chapter-h" dir="${dir}">${esc(head)}</div>${items.join("")}${soon.join("")}`;
+  }).join("");
+}
+
+// ---------------------------------------------------------------- exercises and progress
+const solved = new Set<string>(
+  (store.get("solved") ?? "").split(",").filter((x) => EXERCISES[x]),
+);
+const exerciseCount = () => ALL_LESSONS.filter((l) => EXERCISES[l.id]).length;
+
+function exerciseHtml(): string {
+  const ui = LESSON_UI[uiLang];
+  const ex = EXERCISES[lesson.id];
+  const body = ex ? ex[uiLang] : text(lesson).exercise;
+  if (!body) return "";
+  const done = solved.has(lesson.id)
+    ? ` <span class="ex-done">✓ ${ui.solved}</span>`
+    : "";
+  const btn = ex
+    ? `<button class="big-run check" data-act="check">${ui.check}</button><div id="ex-result"></div>`
+    : "";
+  return `<section class="exercise"><h2>${ui.exercise}${done}</h2>${body}<p class="dim">${ex?.testbench ? ui.exerciseHintTb : ui.exerciseHint}</p>${btn}</section>`;
+}
+
+function checkExercise() {
+  if (!EXERCISES[lesson.id]) return;
+  const ui = LESSON_UI[uiLang];
+  if (tab !== "lesson") showTab("lesson");
+  const box = document.getElementById("ex-result");
+  if (box) {
+    box.className = "ex-result busy";
+    box.textContent = ui.checking;
+    box.scrollIntoView({ block: "nearest" });
+  }
+  const l = lesson;
+  log(`# check_exercise ${l.id}`, "cmd");
+  setTimeout(() => {
+    const r = gradeExercise(
+      l.id,
+      {
+        lang,
+        src: srcEditor.text,
+        xdc: xdcEditor.text,
+        tb: tbEditor.text,
+        original: lang === "verilog" ? l.verilog : l.vhdl,
+      },
+      boardDef,
+    );
+    for (const i of r.items)
+      log(`${i.ok ? "  ✓" : "  ✗"} ${i[uiLang]}`, i.ok ? "ok" : "error");
+    log(
+      r.passed ? ui.passed : ui.failed.replace(/:$/, ""),
+      r.passed ? "ok" : "warning",
+    );
+    if (r.passed && !solved.has(l.id)) {
+      solved.add(l.id);
+      store.set("solved", [...solved].join(","));
+      renderLessonList();
+      applyUiLang();
+    }
+    if (l !== lesson) return;
+    const sec = document.querySelector("#lesson .exercise h2");
+    if (sec && r.passed && !sec.querySelector(".ex-done"))
+      sec.insertAdjacentHTML(
+        "beforeend",
+        ` <span class="ex-done">✓ ${ui.solved}</span>`,
+      );
+    const el = document.getElementById("ex-result");
+    if (!el) return;
+    el.className = "ex-result " + (r.passed ? "pass" : "fail");
+    el.innerHTML = `<b>${r.passed ? ui.passed : ui.failed}</b><ul>${r.items.map((i) => `<li dir="auto" class="${i.ok ? "ok" : "bad"}">${i.ok ? "✓" : "✗"} ${esc(i[uiLang])}</li>`).join("")}</ul>`;
+  }, 30);
+}
+
+function l10nChapter(ci: number) {
+  const c = CHAPTERS[ci];
+  return c.lessons.includes(PLAYGROUND)
+    ? c.title[uiLang]
+    : `${LESSON_UI[uiLang].chapter(ci + 1)}: ${c.title[uiLang]}`;
+}
+
+function codeBlock(code: string, lg: "verilog" | "vhdl") {
+  return `<pre class="code" dir="ltr"><code>${highlight(code, lg)}</code></pre>`;
+}
+
+function renderLesson() {
+  const idx = ALL_LESSONS.indexOf(lesson);
+  const prev = ALL_LESSONS[idx - 1];
+  const next = ALL_LESSONS[idx + 1];
+  const el = $("#lesson");
+  const tx = text(lesson);
+  const ui = LESSON_UI[uiLang];
+  const rtl = uiLang === "fa";
+  el.dir = rtl ? "rtl" : "ltr";
+  el.lang = uiLang;
+  el.innerHTML = `
+<div class="lesson-head"><span class="chapter">${esc(l10nChapter(chapterOf(lesson)))}</span><h1>${esc(tx.title)}</h1><p class="summary">${esc(tx.summary)}</p></div>
+<section><h2>${ui.explain}</h2>${tx.body}</section>
+<section><h2>${ui.code}</h2>
+  <div class="code-tabs" dir="ltr">
+    <button data-code="verilog" class="${lang === "verilog" ? "active" : ""}">Verilog</button>
+    <button data-code="vhdl" class="${lang === "vhdl" ? "active" : ""}">VHDL</button>
+    <span class="grow"></span>
+    <button class="open-ed" data-act="open-editor">${ui.openEditor}</button>
+  </div>
+  <div class="code-panel" data-panel="verilog" ${lang === "verilog" ? "" : "hidden"}>${codeBlock(lesson.verilog, "verilog")}</div>
+  <div class="code-panel" data-panel="vhdl" ${lang === "vhdl" ? "" : "hidden"}>${codeBlock(lesson.vhdl, "vhdl")}</div>
+</section>
+<section class="try"><h2>${ui.tryIt}</h2>${tx.tryIt}
+  <button class="big-run" data-act="run">${ui.runOn(esc(boardDef.name))}</button>
+  <button class="big-run sim" data-act="sim">${ui.simulate}</button>
+</section>
+${exerciseHtml()}
+<nav class="lesson-nav">
+  ${prev ? `<button data-lesson="${prev.id}">${rtl ? "→" : "←"} ${esc(text(prev).title)}</button>` : "<span></span>"}
+  ${next ? `<button data-lesson="${next.id}">${esc(text(next).title)} ${rtl ? "←" : "→"}</button>` : "<span></span>"}
+</nav>`;
+  el.scrollTop = 0;
+}
+
+$("#lesson").addEventListener("click", (ev) => {
+  const t = ev.target as HTMLElement;
+  const codeBtn = t.closest("[data-code]") as HTMLElement | null;
+  if (codeBtn) {
+    const lg = codeBtn.dataset.code as Lang;
+    setLang(lg);
+  }
+});
+
+function openLesson(l: Lesson, switchTab = true) {
+  if (runner.running) stop();
+  lesson = l;
+  store.set("lesson", l.id);
+  srcEditor.setText(sourceFor(l, lang), lang);
+  xdcEditor.setText(xdcFor(l), "xdc");
+  loadTb();
+  renderLessonList();
+  renderLesson();
+  loadLa();
+  if (switchTab) showTab("lesson");
+  log(`# open_lesson ${l.id}`, "cmd");
+}
+
+function setLang(lg: Lang) {
+  if (lg === lang) return;
+  store.set(srcKey(lesson, lang), srcEditor.text);
+  lang = lg;
+  store.set("lang", lg);
+  srcEditor.setText(sourceFor(lesson, lang), lang);
+  loadTb();
+  $("#src-name").textContent = fileName();
+  document
+    .querySelectorAll<HTMLElement>("[data-lang]")
+    .forEach((b) => b.classList.toggle("active", b.dataset.lang === lang));
+  document
+    .querySelectorAll<HTMLElement>(".code-tabs [data-code]")
+    .forEach((b) => b.classList.toggle("active", b.dataset.code === lang));
+  document
+    .querySelectorAll<HTMLElement>(".code-panel")
+    .forEach((p) => (p.hidden = p.dataset.panel !== lang));
+  log(
+    `# set_property TARGET_LANGUAGE ${lang === "verilog" ? "Verilog" : "VHDL"} [current_project]`,
+    "cmd",
+  );
+}
+
+function loadTb() {
+  tbEditor.setText(tbFor(lesson, lang), lang);
+  tbDirty = store.get(tbKey(lesson, lang)) !== null;
+  $("#tb-name").textContent = tbName();
+  tbsim = null;
+  wave.setSim(null);
+}
+
+function setUiLang(l: UiLang) {
+  uiLang = l;
+  store.set("ui-lang", l);
+  applyUiLang();
+  renderLessonList();
+  renderLesson();
+  modules.render();
+}
+
+function applyUiLang() {
+  document.documentElement.lang = uiLang;
+  document
+    .querySelectorAll<HTMLElement>("[data-ui]")
+    .forEach((b) => b.classList.toggle("active", b.dataset.ui === uiLang));
+  $("#learn-h").textContent = `▾ LEARN · ${LESSON_UI[uiLang].learn}`;
+  $("#learn-h").title = LESSON_UI[uiLang].progress(
+    solved.size,
+    exerciseCount(),
+  );
+  $("#learn-h").insertAdjacentHTML(
+    "beforeend",
+    ` <span class="progress">${solved.size}/${exerciseCount()}</span>`,
+  );
+  $("#bouncy-l").textContent = LESSON_UI[uiLang].bouncy;
+}
+
+function showTab(t: typeof tab) {
+  tab = t;
+  document
+    .querySelectorAll<HTMLElement>("#doc-tabs [data-tab]")
+    .forEach((b) => b.classList.toggle("active", b.dataset.tab === t));
+  $("#lesson").classList.toggle("hidden", t !== "lesson");
+  $("#src-editor").classList.toggle("hidden", t !== "source");
+  $("#xdc-editor").classList.toggle("hidden", t !== "xdc");
+  if (t === "source") srcEditor.view.requestMeasure();
+  if (t === "xdc") xdcEditor.view.requestMeasure();
+  $("#tb-editor").classList.toggle("hidden", t !== "tb");
+  if (t === "tb") tbEditor.view.requestMeasure();
+  $("#schematic").classList.toggle("hidden", t !== "schematic");
+  if (t === "schematic") {
+    $("#schem-tab").classList.remove("hidden");
+    schematic.shown();
+  }
+}
+
+function showBottom(t: "console" | "messages" | "reports") {
+  document
+    .querySelectorAll<HTMLElement>("#bottom-tabs [data-btab]")
+    .forEach((b) => b.classList.toggle("active", b.dataset.btab === t));
+  $("#console").classList.toggle("hidden", t !== "console");
+  $("#messages").classList.toggle("hidden", t !== "messages");
+  $("#reports").classList.toggle("hidden", t !== "reports");
+}
+
+function download(
+  name: string,
+  text: string | Uint8Array,
+  type = "text/plain",
+) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text as BlobPart], { type }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function downloadProject() {
+  let top = "top";
+  try {
+    top = synthesize(srcEditor.text, lang).top;
+  } catch {
+    /* export the sources anyway */
+  }
+  const name =
+    lesson.id === PLAYGROUND.id
+      ? "fpga_lab_playground"
+      : `fpga_lab_${lesson.id}`;
+  const data = projectZip({
+    name,
+    lang,
+    top,
+    src: srcEditor.text,
+    xdc: xdcEditor.text,
+    xdcName,
+    tb: tbEditor.text,
+    part: boardDef.part,
+    board: `${boardDef.vendor} ${boardDef.name}`,
+    boardPart: boardDef.boardPart,
+  });
+  download(`${name}.zip`, data, "application/zip");
+  log(
+    `# write_project ${name}.zip — open create_project.tcl in Vivado (Tools > Run Tcl Script)`,
+    "cmd",
+  );
+}
+
+function timingText(sr: SynthResult): string {
+  const t = sr.timing;
+  const lines = [
+    "Design Timing Summary (estimate)",
+    "    WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints",
+    "    -------      -------  ---------------------  -------------------",
+    `${t.wns.toFixed(3).padStart(11)}${t.tns.toFixed(3).padStart(13)}${String(t.failing).padStart(23)}${String(t.endpoints).padStart(21)}`,
+    "",
+    t.wns >= 0
+      ? "All user specified timing constraints are met."
+      : "Timing constraints are not met.",
+  ];
+  if (t.worst) {
+    lines.push(
+      "",
+      `Worst path: ${t.worst.from} -> ${t.worst.to}  (clock ${t.clocks[0] ?? "?"}, period ${t.period} ns)`,
+    );
+    for (const st of t.worst.steps)
+      lines.push(
+        `  ${st.type.padEnd(8)} ${st.incr.toFixed(3).padStart(7)} ${st.at.toFixed(3).padStart(8)}  ${st.cell}`,
+      );
+    lines.push(`  slack ${t.worst.slack.toFixed(3)} ns`);
+  }
+  return lines.join("\n");
+}
+
+// ---------------------------------------------------------------- actions
+function act(name: string) {
+  switch (name) {
+    case "run":
+      runFlow();
+      break;
+    case "stop":
+      stop();
+      break;
+    case "la":
+      if (la.open) la.hide();
+      else {
+        la.show();
+        log("# open_hw_logic_analyzer", "cmd");
+      }
+      document.querySelector("#la-btn")?.classList.toggle("active", la.open);
+      break;
+    case "serial":
+      if (serial.open) serial.hide();
+      else {
+        serial.show();
+        log("# open serial console (USB-UART)", "cmd");
+      }
+      document
+        .querySelector("#serial-btn")
+        ?.classList.toggle("active", serial.open);
+      break;
+    case "vga":
+      if (vga.open) vga.hide();
+      else vga.show();
+      break;
+    case "modules":
+      if (modules.open) modules.hide();
+      else modules.show();
+      break;
+    case "reset":
+      if (runner.sim) {
+        runner.reset({
+          switches: board.switches,
+          pressed: (b) => board.isPressed(b),
+        });
+        log("# reset_hw_device — design restarted", "cmd");
+      }
+      break;
+    case "synth": {
+      const d = doSynth();
+      if (d) showBottom("reports");
+      else showBottom("messages");
+      break;
+    }
+    case "impl": {
+      const d = doSynth();
+      if (d && doImpl(d)) showBottom("reports");
+      else showBottom("messages");
+      break;
+    }
+    case "elab":
+    case "schematic": {
+      const d = doSynth();
+      if (d && lastNetlist) {
+        log(
+          `# ${name === "elab" ? "synth_design -rtl" : "show_schematic"}: ${lastNetlist.cells.filter((c) => c.type !== "const").length} cells, ${lastNetlist.netNames.size} named nets`,
+          "cmd",
+        );
+        $("#schem-tab").classList.remove("hidden");
+        schematic.show(lastNetlist);
+        showTab("schematic");
+        showBottom(
+          messages.some((m) => m.level === "warning") ? "messages" : "reports",
+        );
+      } else showBottom("messages");
+      break;
+    }
+    case "rep-util":
+    case "rep-timing": {
+      const d = doSynth();
+      if (d && lastSynth) {
+        showBottom("console");
+        if (name === "rep-util") {
+          log("# report_utilization", "cmd");
+          log(
+            utilizationText(
+              lastSynth,
+              d.top,
+              boardDef.part,
+              boardDef.resources,
+            ),
+            "plain",
+          );
+        } else {
+          log("# report_timing_summary", "cmd");
+          log(timingText(lastSynth), "plain");
+        }
+      } else showBottom("messages");
+      break;
+    }
+    case "download-project":
+      downloadProject();
+      break;
+    case "tab-source":
+      showTab("source");
+      break;
+    case "tab-xdc":
+      showTab("xdc");
+      break;
+    case "open-editor":
+      showTab("source");
+      break;
+    case "playground":
+      openLesson(PLAYGROUND);
+      break;
+    case "lesson-intro":
+      openLesson(LESSONS[0]);
+      break;
+    case "reset-code":
+      if (
+        confirm(
+          "Reset this lesson’s code and constraints to the original version?",
+        )
+      ) {
+        store.del(srcKey(lesson, lang));
+        store.del(xdcKey(lesson));
+        store.del(tbKey(lesson, lang));
+        srcEditor.setText(sourceFor(lesson, lang), lang);
+        xdcEditor.setText(xdcFor(lesson), "xdc");
+        loadTb();
+        log("# reset lesson sources", "cmd");
+      }
+      break;
+    case "download-src":
+      download(fileName(), srcEditor.text);
+      break;
+    case "download-xdc":
+      download(xdcName, xdcEditor.text);
+      break;
+    case "download-tb":
+      download(tbName(), tbEditor.text);
+      break;
+    case "sim":
+      doSim();
+      break;
+    case "check":
+      checkExercise();
+      break;
+    case "new-tb":
+      if (
+        !tbDirty ||
+        confirm(
+          "Replace the testbench with a new one generated from the design?",
+        )
+      ) {
+        store.del(tbKey(lesson, lang));
+        tbEditor.setText(newTestbench(srcEditor.text, lang), lang);
+        tbDirty = false;
+        showTab("tb");
+        log("# generate testbench from the design ports", "cmd");
+      }
+      break;
+    case "tab-tb":
+      showTab("tb");
+      break;
+    case "view-reset":
+      board.resetView();
+      break;
+    case "view-top":
+      board.topView();
+      break;
+    case "toggle-flow":
+      $("#flow").classList.toggle("collapsed");
+      break;
+    case "about":
+      ($("#about") as HTMLDialogElement).showModal();
+      break;
+  }
+}
+
+document.addEventListener("click", (ev) => {
+  const t = ev.target as HTMLElement;
+  const a = t.closest("[data-act]") as HTMLElement | null;
+  if (a) {
+    act(a.dataset.act!);
+    (document.activeElement as HTMLElement | null)?.blur?.();
+  }
+  const l = t.closest("[data-lesson]") as HTMLElement | null;
+  if (l) {
+    const found = ALL_LESSONS.find((x) => x.id === l.dataset.lesson);
+    if (found) openLesson(found);
+  }
+  const ui = t.closest("[data-ui]") as HTMLElement | null;
+  if (ui) setUiLang(ui.dataset.ui as UiLang);
+  const lg = t.closest("[data-lang]") as HTMLElement | null;
+  if (lg) setLang(lg.dataset.lang as Lang);
+  const tb = t.closest("[data-tab]") as HTMLElement | null;
+  if (tb) showTab(tb.dataset.tab as typeof tab);
+  const bt = t.closest("[data-btab]") as HTMLElement | null;
+  if (bt) showBottom(bt.dataset.btab as "console");
+  const rt = t.closest("[data-rtab]") as HTMLElement | null;
+  if (rt) showRight(rt.dataset.rtab as "hw");
+});
+
+document.addEventListener("keydown", (ev) => {
+  if ((ev.ctrlKey || ev.metaKey) && ev.key === "Enter") {
+    ev.preventDefault();
+    runFlow();
+  }
+  if (ev.key === "F5") {
+    ev.preventDefault();
+    runFlow();
+  }
+  if (ev.key === "F6" && ev.shiftKey) {
+    ev.preventDefault();
+    doSim();
+  }
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "l") {
+    ev.preventDefault();
+    act("la");
+  }
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "m") {
+    ev.preventDefault();
+    act("serial");
+  }
+});
+
+// contact bounce on the push buttons
+const bouncy = $<HTMLInputElement>("#bouncy");
+bouncy.checked = runner.bounce = store.get("bouncy") === "1";
+bouncy.addEventListener("change", () => {
+  runner.bounce = bouncy.checked;
+  store.set("bouncy", bouncy.checked ? "1" : "0");
+  log(
+    `# set_property BOUNCE ${bouncy.checked ? "on" : "off"} [get_hw_buttons]`,
+    "cmd",
+  );
+});
+
+// speed
+const speedSel = $<HTMLSelectElement>("#speed");
+speedSel.value = store.get("speed") ?? String(boardDef.clockHz);
+if (!speedSel.value) speedSel.value = String(boardDef.clockHz);
+runner.speedHz = Number(speedSel.value);
+speedSel.addEventListener("change", () => {
+  runner.speedHz = Number(speedSel.value);
+  store.set("speed", speedSel.value);
+});
+
+// board I/O
+board.onSwitch = (i, on) => runner.setSwitch(i, on);
+board.onButton = (b, down) => runner.setButton(b, down);
+let statTimer = 0;
+const laBtn = $("#la-btn");
+const serialBtn = $("#serial-btn");
+const vgaBtn = $("#vga-btn");
+const modBtn = $("#mod-btn");
+board.onFrame = (dt) => {
+  const out = runner.frame(dt);
+  board.setOutputs(out);
+  la.frame();
+  serial.frame();
+  vga.frame();
+  vgaBtn.classList.toggle("active", vga.open);
+  modules.frame();
+  modBtn.classList.toggle("active", modules.open);
+  laBtn.classList.toggle("active", la.open);
+  serialBtn.classList.toggle("active", serial.open);
+  statTimer += dt;
+  if (statTimer > 0.25) {
+    statTimer = 0;
+    if (runner.running && runner.mapping?.clock !== undefined) {
+      const hz = runner.achievedHz;
+      const f =
+        hz >= 1e6
+          ? `${(hz / 1e6).toFixed(1)} MHz`
+          : hz >= 1e3
+            ? `${(hz / 1e3).toFixed(1)} kHz`
+            : `${hz.toFixed(1)} Hz`;
+      $("#st-speed").textContent =
+        `Sim clock: ${f} (${((hz / boardDef.clockHz) * 100).toFixed(hz < 1e6 ? 4 : 1)}% of ${clockLabel})`;
+      const t = runner.totalCycles / boardDef.clockHz;
+      $("#st-cycles").textContent =
+        `Board time: ${t < 1 ? (t * 1000).toFixed(1) + " ms" : t.toFixed(2) + " s"}`;
+    } else if (runner.running) {
+      $("#st-speed").textContent = "Combinational design (no clock)";
+      $("#st-cycles").textContent = "";
+    } else {
+      $("#st-speed").textContent = "";
+      $("#st-cycles").textContent = "";
+    }
+  }
+};
+
+// Tcl console
+$("#tcl-form").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const input = $<HTMLInputElement>("#tcl");
+  const cmd = input.value.trim();
+  input.value = "";
+  if (!cmd) return;
+  log(cmd, "cmd");
+  const [c, ...args] = cmd.split(/\s+/);
+  switch (c) {
+    case "help":
+      log(
+        "Commands: synth_design, place_design, launch_simulation, run <time>|all, restart, program_hw_devices (run), close_hw, reset, clear, set_lang verilog|vhdl, get_ports, report_utilization, report_timing_summary, show_schematic, write_project, open_lesson <n>",
+        "plain",
+      );
+      break;
+    case "synth_design":
+      act("synth");
+      break;
+    case "place_design":
+    case "route_design":
+      act("impl");
+      break;
+    case "launch_simulation":
+      act("sim");
+      break;
+    case "run":
+      if (args[0] && tbsim)
+        simRun(args[0] === "all" ? Infinity : parseTime(args.join("")));
+      else act("run");
+      break;
+    case "restart":
+      simRestart();
+      break;
+    case "program_hw_devices":
+      act("run");
+      break;
+    case "close_hw":
+    case "close_hw_target":
+    case "stop":
+      act("stop");
+      break;
+    case "reset":
+      act("reset");
+      break;
+    case "clear":
+      logEl.innerHTML = "";
+      break;
+    case "set_lang":
+      if (args[0] === "verilog" || args[0] === "vhdl") setLang(args[0]);
+      else log("usage: set_lang verilog|vhdl", "error");
+      break;
+    case "report_utilization":
+      act("rep-util");
+      break;
+    case "report_timing_summary":
+    case "report_timing":
+      act("rep-timing");
+      break;
+    case "show_schematic":
+    case "open_rtl_design":
+      act("schematic");
+      break;
+    case "write_project":
+      downloadProject();
+      break;
+    case "get_ports":
+      if (!lastDesign) log("ERROR: run synth_design first", "error");
+      else
+        log(
+          lastDesign.ports
+            .map(
+              (p) =>
+                `${p.name}${p.width > 1 ? `[${p.left}:${p.right}]` : ""} (${p.dir})`,
+            )
+            .join("  "),
+          "plain",
+        );
+      break;
+    case "open_lesson": {
+      const n = Number(args[0]);
+      const l = ALL_LESSONS[n - 1] ?? ALL_LESSONS.find((x) => x.id === args[0]);
+      if (l) openLesson(l);
+      else log("usage: open_lesson <number|id>", "error");
+      break;
+    }
+    default:
+      log(
+        `ERROR: [Common 17-9] invalid command name "${c}". Type help.`,
+        "error",
+      );
+  }
+});
+
+function parseTime(s: string): number {
+  const m = /^([\d.]+)\s*(fs|ps|ns|us|ms|s)?$/.exec(s);
+  if (!m) return 1e6;
+  const u: Record<string, number> = {
+    fs: 1e-3,
+    ps: 1,
+    ns: 1e3,
+    us: 1e6,
+    ms: 1e9,
+    s: 1e12,
+  };
+  return Math.round(Number(m[1]) * u[m[2] ?? "ns"]);
+}
+
+// ---------------------------------------------------------------- splitters
+function dragSplit(el: HTMLElement, onMove: (dx: number, dy: number) => void) {
+  el.addEventListener("pointerdown", (ev) => {
+    el.setPointerCapture(ev.pointerId);
+    let x = ev.clientX;
+    let y = ev.clientY;
+    const move = (e: PointerEvent) => {
+      onMove(e.clientX - x, e.clientY - y);
+      x = e.clientX;
+      y = e.clientY;
+    };
+    const up = () => {
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+    };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+  });
+}
+const left = $("#left");
+dragSplit($("#split-v"), (dx) => {
+  const w = Math.max(
+    280,
+    Math.min(window.innerWidth - 400, left.getBoundingClientRect().width + dx),
+  );
+  left.style.flexBasis = w + "px";
+});
+const bottom = $("#bottom");
+dragSplit($("#split-h"), (_dx, dy) => {
+  const h = Math.max(
+    60,
+    Math.min(
+      window.innerHeight * 0.6,
+      bottom.getBoundingClientRect().height - dy,
+    ),
+  );
+  bottom.style.height = h + "px";
+});
+
+// ---------------------------------------------------------------- init
+document
+  .querySelectorAll<HTMLElement>("[data-lang]")
+  .forEach((b) => b.classList.toggle("active", b.dataset.lang === lang));
+applyUiLang();
+$("#src-name").textContent = fileName();
+renderLessonList();
+loadLa();
+renderLesson();
+renderMessages();
+log(
+  "****** FPGA Lab — Vivado-style HDL environment (browser edition)",
+  "plain",
+);
+log(
+  "INFO: [Labtools 27-2285] Connecting to hw_server url TCP:localhost:3121",
+  "info",
+);
+log(
+  "INFO: [Labtools 27-3415] Connecting to cs_server url TCP:localhost:3042",
+  "info",
+);
+log(
+  `INFO: [Labtools 27-1434] Device ${hwDev} on ${boardDef.vendor} ${boardDef.name} (JTAG device index = 0) is ready. Press ▶ Run on Board to program it.`,
+  "info",
+);
