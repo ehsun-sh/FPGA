@@ -1,3 +1,14 @@
+import "@fontsource/inter/latin-400.css";
+import "@fontsource/inter/latin-500.css";
+import "@fontsource/inter/latin-600.css";
+import "@fontsource/inter/latin-700.css";
+import "@fontsource/inter/latin-800.css";
+import "@fontsource/vazirmatn/arabic-400.css";
+import "@fontsource/vazirmatn/arabic-500.css";
+import "@fontsource/vazirmatn/arabic-700.css";
+import "@fontsource/vazirmatn/arabic-800.css";
+import "@fontsource/jetbrains-mono/latin-400.css";
+import "@fontsource/jetbrains-mono/latin-600.css";
 import "./style.css";
 import { BOARDS, deviceLabel, getBoard } from "./boards";
 import { mapPorts, type Mapping } from "./boards/mapping";
@@ -27,6 +38,9 @@ import { projectZip } from "./synth/project";
 import { techMap, utilizationText, type SynthResult } from "./synth/techmap";
 import { CodeEditor } from "./ui/editor";
 import { highlight } from "./ui/highlight";
+import { homeNav, renderHome } from "./ui/home";
+import { icon } from "./ui/icons";
+import { num, UI, type UiLang } from "./ui/strings";
 
 // ---------------------------------------------------------------- storage
 const store = {
@@ -75,10 +89,7 @@ const clockLabel =
 // ---------------------------------------------------------------- layout
 const app = $("#app");
 app.innerHTML = `
-<header class="titlebar">
-  <div class="brand"><span class="logo"></span><b>FPGA Lab</b><span class="dim">— a Vivado-style learning environment</span></div>
-  <div class="project">Board: <b>${boardDef.vendor} ${boardDef.name}</b> · Part: <b>${boardDef.part}</b></div>
-</header>
+<header class="titlebar" id="titlebar"></header>
 <nav class="menubar">
   <div class="menu"><button>File</button><div class="dropdown">
     <button data-act="playground">Open Playground</button>
@@ -116,17 +127,14 @@ app.innerHTML = `
   </div></div>
 </nav>
 <div class="toolbar">
-  <button class="tb run" data-act="run" title="Synthesize, implement and program the board (Ctrl+Enter)"><span class="ico">▶</span> Run on Board</button>
-  <button class="tb" data-act="stop" title="Stop"><span class="ico stop">■</span> Stop</button>
-  <button class="tb" data-act="reset" title="Reset the design (like re-programming)"><span class="ico">↺</span> Reset</button>
-  <button class="tb" data-act="sim" id="sim-btn" title="Run the testbench and show the waveforms (Shift+F6)"><span class="ico">∿</span> Simulate</button>
-  <button class="tb" data-act="la" id="la-btn" title="Open the logic analyzer (Ctrl+L)"><span class="ico">⎍</span> Logic Analyzer</button>
-  <button class="tb" data-act="serial" id="serial-btn" title="Open the serial console on the USB-UART (Ctrl+M)"><span class="ico">⌨</span> Serial Console</button>
-  <button class="tb" data-act="vga" id="vga-btn" title="Show the picture on the VGA connector in a bigger window"><span class="ico">🖥</span> VGA Monitor</button>
+  <button class="tb run" data-act="run" title="Synthesize, implement and program the board (Ctrl+Enter)">${icon("play", 14)}<span class="lbl">Run on Board</span></button>
+  <button class="tb" data-act="stop" title="Stop">${icon("stop", 14)}<span class="lbl">Stop</span></button>
+  <button class="tb" data-act="reset" title="Reset the design (like re-programming)">${icon("reset", 14)}<span class="lbl">Reset</span></button>
+  <button class="tb" data-act="sim" id="sim-btn" title="Run the testbench and show the waveforms (Shift+F6)">${icon("wave", 14)}<span class="lbl">Simulate</span></button>
   <span class="sep"></span>
-  <div class="seg-ctl" role="group" aria-label="Site language">
-    <button data-ui="fa">فارسی</button><button data-ui="en">English</button>
-  </div>
+  <button class="tb tool" data-act="la" id="la-btn" title="Logic Analyzer (Ctrl+L)">${icon("logic", 14)}<span class="lbl">Logic Analyzer</span></button>
+  <button class="tb tool" data-act="serial" id="serial-btn" title="Serial Console on the USB-UART (Ctrl+M)">${icon("terminal", 14)}<span class="lbl">Serial Console</span></button>
+  <button class="tb tool" data-act="vga" id="vga-btn" title="VGA Monitor">${icon("monitor", 14)}<span class="lbl">VGA Monitor</span></button>
   <span class="sep"></span>
   <div class="seg-ctl" role="group" aria-label="HDL language">
     <button data-lang="verilog">Verilog</button><button data-lang="vhdl">VHDL</button>
@@ -141,8 +149,6 @@ app.innerHTML = `
     <option value="1">1 Hz</option>
   </select></label>
   <label class="bouncy" title="Simulate mechanical contact bounce on the push buttons"><input type="checkbox" id="bouncy"> <span id="bouncy-l"></span></label>
-  <span class="grow"></span>
-  <span class="run-state" id="run-state">Ready</span>
 </div>
 <main class="workspace">
   <aside class="flow" id="flow">
@@ -185,11 +191,11 @@ app.innerHTML = `
   </aside>
   <section class="pane left" id="left">
     <div class="tabs" id="doc-tabs">
-      <button data-tab="lesson" class="active">📘 Lesson</button>
+      <button data-tab="lesson" class="active">${icon("book", 14)}<span id="lesson-tab-l">Lesson</span></button>
       <button data-tab="source"><span id="src-name">top.v</span></button>
       <button data-tab="xdc">${xdcName}</button>
       <button data-tab="tb"><span id="tb-name">tb.v</span></button>
-      <button data-tab="schematic" id="schem-tab" class="hidden">⊞ Schematic</button>
+      <button data-tab="schematic" id="schem-tab" class="hidden">${icon("schematic", 14)}Schematic</button>
     </div>
     <div class="tab-body">
       <article class="lesson" id="lesson"></article>
@@ -207,11 +213,11 @@ app.innerHTML = `
     </div>
     <div class="board-host" id="board">
       <div class="board-tools">
-        <button data-act="view-reset" title="Perspective view">⟲ 3D</button>
-        <button data-act="view-top" title="Top view">⊤ Top</button>
-        <button data-act="modules" id="mod-btn" title="Sensors and Pmod modules connected to the board">🧩 Modules</button>
+        <button data-act="view-reset" title="Perspective view">${icon("cube", 13)}3D</button>
+        <button data-act="view-top" title="Top view">${icon("top", 13)}Top</button>
+        <button data-act="modules" id="mod-btn" title="Sensors and Pmod modules connected to the board">${icon("plug", 13)}Modules</button>
       </div>
-      <div class="board-hint">Click the switches and buttons · drag to rotate · scroll to zoom</div>
+      <div class="board-hint" id="board-hint"></div>
     </div>
   </section>
 </main>
@@ -230,11 +236,19 @@ app.innerHTML = `
     <div class="reports hidden" id="reports"><p class="dim">Run synthesis to see the utilization report.</p></div>
   </div>
 </section>
+<nav class="mtabs" id="mtabs">
+  <button data-m="lesson" class="active">${icon("book", 18)}<span data-ml="mLesson"></span></button>
+  <button data-m="code">${icon("code", 18)}<span data-ml="mCode"></span></button>
+  <button data-m="board">${icon("cpu", 18)}<span data-ml="mBoard"></span></button>
+  <button data-m="console">${icon("terminal", 18)}<span data-ml="mConsole"></span></button>
+</nav>
 <footer class="statusbar">
-  <span id="st-design">No design loaded</span>
+  <span class="run-state" id="run-state"></span>
+  <span id="st-design"></span>
   <span id="st-speed"></span>
   <span id="st-cycles"></span>
 </footer>
+<div class="home" id="home" hidden></div>
 <dialog id="about"><form method="dialog">
   <h2>FPGA Lab</h2>
   <p>An in-browser FPGA course with a Vivado-inspired workflow and simulated FPGA boards (currently: ${BOARDS.map((b) => `${b.vendor} ${b.name}`).join(", ")}).</p>
@@ -250,7 +264,6 @@ let lang: Lang = store.get("lang") === "vhdl" ? "vhdl" : "verilog";
 let lesson: Lesson =
   ALL_LESSONS.find((l) => l.id === store.get("lesson")) ?? LESSONS[0];
 let tab: "lesson" | "source" | "xdc" | "tb" | "schematic" = "lesson";
-type UiLang = "fa" | "en";
 let uiLang: UiLang = store.get("ui-lang") === "en" ? "en" : "fa";
 // lesson text in the selected site language (Persian lives in lessons.ts, English in en.ts)
 const text = (l: Lesson): LessonText =>
@@ -789,15 +802,19 @@ runner.onError = (m) => {
 
 function setRunState() {
   const el = $("#run-state");
-  if (runner.error) {
-    el.textContent = "Error";
-    el.className = "run-state err";
-  } else if (runner.running) {
-    el.textContent = `● Running ${runner.design?.top ?? ""}`;
-    el.className = "run-state on";
-  } else {
-    el.textContent = "Ready";
-    el.className = "run-state";
+  const u = UI[uiLang];
+  const st = runner.error ? "err" : runner.running ? "on" : "";
+  el.textContent = runner.error
+    ? "Error"
+    : runner.running
+      ? `● Running ${runner.design?.top ?? ""}`
+      : u.ready;
+  el.className = "run-state " + st;
+  // the status chip in the lesson's "try it" section
+  const chip = document.getElementById("try-state");
+  if (chip) {
+    chip.className = "state-chip " + st;
+    chip.innerHTML = `<i></i>${u.boardState} · ${runner.error ? "Error" : runner.running ? u.running(clockLabel) : u.stopped}`;
   }
 }
 
@@ -889,8 +906,8 @@ function renderLessonList() {
   let n = 0;
   el.innerHTML = CHAPTERS.map((c, ci) => {
     const items = c.lessons.map((l) => {
-      const num = l === PLAYGROUND ? "★" : String(++n);
-      return `<button class="flow-item lesson-item ${l.id === lesson.id ? "active" : ""}" data-lesson="${l.id}" dir="${dir}"><span class="num">${num}</span>${esc(text(l).title)}${solved.has(l.id) ? `<span class="done" title="${ui.solved}">✓</span>` : ""}</button>`;
+      const no = l === PLAYGROUND ? "★" : num(++n, uiLang);
+      return `<button class="flow-item lesson-item ${l.id === lesson.id ? "active" : ""}" data-lesson="${l.id}" dir="${dir}"><span class="num">${no}</span>${esc(text(l).title)}${solved.has(l.id) ? `<span class="done" title="${ui.solved}">✓</span>` : ""}</button>`;
     });
     const soon = (c.soon ?? []).map(
       (s) =>
@@ -916,9 +933,9 @@ function exerciseHtml(): string {
     ? ` <span class="ex-done">✓ ${ui.solved}</span>`
     : "";
   const btn = ex
-    ? `<button class="big-run check" data-act="check">${ui.check}</button><div id="ex-result"></div>`
+    ? `<button class="big-run check" data-act="check">${icon("check", 15)}${ui.check}</button><div id="ex-result"></div>`
     : "";
-  return `<section class="exercise"><h2>${ui.exercise}${done}</h2>${body}<p class="dim">${ex?.testbench ? ui.exerciseHintTb : ui.exerciseHint}</p>${btn}</section>`;
+  return `<section class="exercise" id="sec-exercise"><h2>${icon("target", 18)}${ui.exercise}${done}</h2>${body}<p class="dim">${ex?.testbench ? ui.exerciseHintTb : ui.exerciseHint}</p>${btn}</section>`;
 }
 
 function checkExercise() {
@@ -975,7 +992,7 @@ function l10nChapter(ci: number) {
   const c = CHAPTERS[ci];
   return c.lessons.includes(PLAYGROUND)
     ? c.title[uiLang]
-    : `${LESSON_UI[uiLang].chapter(ci + 1)}: ${c.title[uiLang]}`;
+    : `${LESSON_UI[uiLang].chapter(num(ci + 1, uiLang))}: ${c.title[uiLang]}`;
 }
 
 function codeBlock(code: string, lg: "verilog" | "vhdl") {
@@ -989,36 +1006,73 @@ function renderLesson() {
   const el = $("#lesson");
   const tx = text(lesson);
   const ui = LESSON_UI[uiLang];
+  const u = UI[uiLang];
   const rtl = uiLang === "fa";
+  const course = ALL_LESSONS.filter((l) => l !== PLAYGROUND);
+  const pos = course.indexOf(lesson);
+  const of =
+    pos < 0
+      ? ""
+      : `<span class="of">${u.lessonOf(num(pos + 1, uiLang), num(course.length, uiLang))}</span>`;
+  const hasEx = !!(EXERCISES[lesson.id] || tx.exercise);
+  const toc = [
+    ["sec-overview", "book", u.overview],
+    ["sec-code", "code", u.code],
+    ["sec-try", "zap", u.tryIt],
+    ...(hasEx ? [["sec-exercise", "target", u.exercise]] : []),
+  ] as [string, Parameters<typeof icon>[0], string][];
+  const navCard = (l: Lesson | undefined, label: string, cls: string) =>
+    l
+      ? `<button class="${cls}" data-lesson="${l.id}"><small>${label}</small><span>${esc(text(l).title)}</span></button>`
+      : "<span></span>";
   el.dir = rtl ? "rtl" : "ltr";
   el.lang = uiLang;
   el.innerHTML = `
-<div class="lesson-head"><span class="chapter">${esc(l10nChapter(chapterOf(lesson)))}</span><h1>${esc(tx.title)}</h1><p class="summary">${esc(tx.summary)}</p></div>
-<section><h2>${ui.explain}</h2>${tx.body}</section>
-<section><h2>${ui.code}</h2>
+<div class="lesson-head">
+  <div class="lesson-meta"><span class="chapter">${esc(l10nChapter(chapterOf(lesson)))}</span>${of}</div>
+  ${pos < 0 ? "" : `<div class="bar"><i style="width:${Math.round((100 * (pos + 1)) / course.length)}%"></i></div>`}
+  <h1>${esc(tx.title)}</h1><p class="summary">${esc(tx.summary)}</p>
+</div>
+<nav class="lesson-toc">${toc.map(([id, ic, label], i) => `<button data-jump="${id}" class="${i ? "" : "active"}">${icon(ic, 14)}${label}</button>`).join("")}</nav>
+<section id="sec-overview"><h2>${icon("book", 18)}${ui.explain}</h2>${tx.body}</section>
+<section id="sec-code"><h2>${icon("code", 18)}${ui.code}</h2>
   <div class="code-tabs" dir="ltr">
     <button data-code="verilog" class="${lang === "verilog" ? "active" : ""}">Verilog</button>
     <button data-code="vhdl" class="${lang === "vhdl" ? "active" : ""}">VHDL</button>
     <span class="grow"></span>
-    <button class="open-ed" data-act="open-editor">${ui.openEditor}</button>
+    <button class="open-ed" data-act="open-editor" dir="${el.dir}">${icon("pencil", 13)}${ui.openEditor}</button>
   </div>
   <div class="code-panel" data-panel="verilog" ${lang === "verilog" ? "" : "hidden"}>${codeBlock(lesson.verilog, "verilog")}</div>
   <div class="code-panel" data-panel="vhdl" ${lang === "vhdl" ? "" : "hidden"}>${codeBlock(lesson.vhdl, "vhdl")}</div>
 </section>
-<section class="try"><h2>${ui.tryIt}</h2>${tx.tryIt}
-  <button class="big-run" data-act="run">${ui.runOn(esc(boardDef.name))}</button>
-  <button class="big-run sim" data-act="sim">${ui.simulate}</button>
+<section class="try" id="sec-try"><h2>${icon("zap", 18)}${ui.tryIt}<span class="state-chip" id="try-state"></span></h2>${tx.tryIt}
+  <div class="try-actions">
+    <button class="big-run" data-act="run">${icon("play", 15)}${ui.runOn(esc(boardDef.name))}</button>
+    <button class="big-run sim" data-act="sim">${icon("wave", 15)}${ui.simulate}</button>
+  </div>
 </section>
 ${exerciseHtml()}
 <nav class="lesson-nav">
-  ${prev ? `<button data-lesson="${prev.id}">${rtl ? "→" : "←"} ${esc(text(prev).title)}</button>` : "<span></span>"}
-  ${next ? `<button data-lesson="${next.id}">${esc(text(next).title)} ${rtl ? "←" : "→"}</button>` : "<span></span>"}
+  ${navCard(prev, `${rtl ? "→" : "←"} ${u.prev}`, "prev")}
+  ${navCard(next, `${u.next} ${rtl ? "←" : "→"}`, "next")}
 </nav>`;
   el.scrollTop = 0;
+  setRunState();
 }
 
 $("#lesson").addEventListener("click", (ev) => {
   const t = ev.target as HTMLElement;
+  const jump = t.closest("[data-jump]") as HTMLElement | null;
+  if (jump) {
+    const sec = document.getElementById(jump.dataset.jump!);
+    const lessonEl = $("#lesson");
+    const toc = $(".lesson-toc", lessonEl);
+    if (sec)
+      lessonEl.scrollTo({
+        top: sec.offsetTop - toc.offsetHeight - 8,
+        behavior: "smooth",
+      });
+  }
   const codeBtn = t.closest("[data-code]") as HTMLElement | null;
   if (codeBtn) {
     const lg = codeBtn.dataset.code as Lang;
@@ -1026,10 +1080,27 @@ $("#lesson").addEventListener("click", (ev) => {
   }
 });
 
+$("#lesson").addEventListener(
+  "scroll",
+  () => {
+    const el = $("#lesson");
+    const btns = el.querySelectorAll<HTMLElement>(".lesson-toc [data-jump]");
+    let cur = btns[0]?.dataset.jump;
+    for (const b of btns) {
+      const sec = document.getElementById(b.dataset.jump!);
+      if (sec && sec.offsetTop - el.scrollTop < 140) cur = b.dataset.jump;
+    }
+    btns.forEach((b) => b.classList.toggle("active", b.dataset.jump === cur));
+  },
+  { passive: true },
+);
+
 function openLesson(l: Lesson, switchTab = true) {
   if (runner.running) stop();
   lesson = l;
   store.set("lesson", l.id);
+  markSeen(l);
+  if (!homeOpen) history.replaceState(null, "", `#lesson/${l.id}`);
   srcEditor.setText(sourceFor(l, lang), lang);
   xdcEditor.setText(xdcFor(l), "xdc");
   loadTb();
@@ -1078,10 +1149,25 @@ function setUiLang(l: UiLang) {
   renderLessonList();
   renderLesson();
   modules.render();
+  if (homeOpen) renderHomePage();
 }
 
 function applyUiLang() {
+  const u = UI[uiLang];
   document.documentElement.lang = uiLang;
+  document.title =
+    uiLang === "fa" ? "FPGA Lab · آموزش FPGA با برد Nexys A7" : "FPGA Lab · Nexys A7";
+  $("#titlebar").innerHTML = homeNav(
+    uiLang,
+    `<div class="project" dir="ltr">${boardDef.vendor} <b>${boardDef.name}</b> · <b>${boardDef.part}</b></div>`,
+  );
+  $("#lesson-tab-l").textContent = u.lessonTab;
+  $("#board-hint").textContent = u.boardHint;
+  if (!lastDesign) $("#st-design").textContent = u.noDesign;
+  document
+    .querySelectorAll<HTMLElement>("[data-ml]")
+    .forEach((e) => (e.textContent = u[e.dataset.ml as "mLesson"]));
+  setRunState();
   document
     .querySelectorAll<HTMLElement>("[data-ui]")
     .forEach((b) => b.classList.toggle("active", b.dataset.ui === uiLang));
@@ -1092,13 +1178,15 @@ function applyUiLang() {
   );
   $("#learn-h").insertAdjacentHTML(
     "beforeend",
-    ` <span class="progress">${solved.size}/${exerciseCount()}</span>`,
+    ` <span class="progress">${num(solved.size, uiLang)}/${num(exerciseCount(), uiLang)}</span>`,
   );
   $("#bouncy-l").textContent = LESSON_UI[uiLang].bouncy;
 }
 
 function showTab(t: typeof tab) {
   tab = t;
+  if (document.body.dataset.m === "lesson" || document.body.dataset.m === "code")
+    setMobile(t === "lesson" ? "lesson" : "code", false);
   document
     .querySelectorAll<HTMLElement>("#doc-tabs [data-tab]")
     .forEach((b) => b.classList.toggle("active", b.dataset.tab === t));
@@ -1198,6 +1286,7 @@ function act(name: string) {
   switch (name) {
     case "run":
       runFlow();
+      if (runner.running && phone.matches) setMobile("board");
       break;
     case "stop":
       stop();
@@ -1303,6 +1392,19 @@ function act(name: string) {
       break;
     case "playground":
       openLesson(PLAYGROUND);
+      goLab();
+      break;
+    case "home":
+      goHome();
+      break;
+    case "lab":
+      goLab();
+      break;
+    case "go-lessons":
+      if (!homeOpen) goHome();
+      document
+        .getElementById("home-lessons")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
       break;
     case "lesson-intro":
       openLesson(LESSONS[0]);
@@ -1379,7 +1481,9 @@ document.addEventListener("click", (ev) => {
   const l = t.closest("[data-lesson]") as HTMLElement | null;
   if (l) {
     const found = ALL_LESSONS.find((x) => x.id === l.dataset.lesson);
-    if (found) openLesson(found);
+    // from the landing page, the lesson already on the board keeps running
+    if (found && !(homeOpen && found === lesson)) openLesson(found);
+    if (found && homeOpen) goLab();
   }
   const ui = t.closest("[data-ui]") as HTMLElement | null;
   if (ui) setUiLang(ui.dataset.ui as UiLang);
@@ -1391,6 +1495,8 @@ document.addEventListener("click", (ev) => {
   if (bt) showBottom(bt.dataset.btab as "console");
   const rt = t.closest("[data-rtab]") as HTMLElement | null;
   if (rt) showRight(rt.dataset.rtab as "hw");
+  const m = t.closest("[data-m]") as HTMLElement | null;
+  if (m) setMobile(m.dataset.m as MobileView);
 });
 
 document.addEventListener("keydown", (ev) => {
@@ -1630,6 +1736,97 @@ dragSplit($("#split-h"), (_dx, dy) => {
   bottom.style.height = h + "px";
 });
 
+// ---------------------------------------------------------------- landing page
+// lessons opened so far; a lesson counts as done when its exercise is solved (or, without one, once opened)
+const seen = new Set<string>((store.get("seen") ?? "").split(",").filter(Boolean));
+function markSeen(l: Lesson) {
+  if (seen.has(l.id)) return;
+  seen.add(l.id);
+  store.set("seen", [...seen].join(","));
+}
+const isDone = (l: Lesson) =>
+  EXERCISES[l.id] ? solved.has(l.id) : seen.has(l.id);
+
+const homeEl = $("#home");
+const boardEl = $("#board");
+const boardPane = boardEl.parentElement!;
+let homeOpen = false;
+let heroRan = false;
+
+function renderHomePage() {
+  // the live board moves into the hero; take it out before the page is rebuilt
+  boardPane.appendChild(boardEl);
+  homeEl.dir = uiLang === "fa" ? "rtl" : "ltr";
+  homeEl.lang = uiLang;
+  homeEl.innerHTML = renderHome({
+    lang: uiLang,
+    chapters: CHAPTERS,
+    playground: PLAYGROUND,
+    title: (l) => text(l).title,
+    summary: (l) => text(l).summary,
+    done: isDone,
+    resume: seen.size ? lesson : null,
+    live: runner.running && lesson === ALL_LESSONS[0],
+  });
+  $("#hero-stage").appendChild(boardEl);
+}
+
+function showHome(on: boolean) {
+  if (on === homeOpen) return;
+  homeOpen = on;
+  homeEl.hidden = !on;
+  document.body.classList.toggle("at-home", on);
+  if (on) {
+    // first visit: run lesson 1 so the hero board reacts to its switches
+    if (!heroRan && !runner.running && lesson === ALL_LESSONS[0]) {
+      heroRan = true;
+      try {
+        synthesize(srcEditor.text, lang);
+        runFlow();
+      } catch {
+        /* the lesson code was edited and does not compile: leave the board idle */
+      }
+    }
+    renderHomePage();
+    homeEl.scrollTop = 0;
+  } else {
+    boardPane.appendChild(boardEl);
+    markSeen(lesson);
+  }
+}
+
+function goHome() {
+  if (location.hash) history.pushState(null, "", location.pathname + location.search);
+  showHome(true);
+}
+
+function goLab() {
+  if (homeOpen) history.pushState(null, "", `#lesson/${lesson.id}`);
+  showHome(false);
+}
+
+// #lesson/<id> (or #lab) opens the workbench, anything else the landing page
+function route() {
+  const m = /^#lesson\/(.+)$/.exec(location.hash);
+  const l = m && ALL_LESSONS.find((x) => x.id === m[1]);
+  if (l && l !== lesson) openLesson(l);
+  showHome(!l && location.hash !== "#lab");
+}
+window.addEventListener("popstate", route);
+
+// ---------------------------------------------------------------- phones: one pane at a time
+type MobileView = "lesson" | "code" | "board" | "console";
+const phone = window.matchMedia("(max-width: 900px)");
+function setMobile(v: MobileView, syncTab = true) {
+  document.body.dataset.m = v;
+  document
+    .querySelectorAll<HTMLElement>("#mtabs [data-m]")
+    .forEach((b) => b.classList.toggle("active", b.dataset.m === v));
+  if (syncTab && v === "lesson") showTab("lesson");
+  if (syncTab && v === "code" && tab === "lesson") showTab("source");
+}
+document.body.dataset.m = "lesson";
+
 // ---------------------------------------------------------------- init
 document
   .querySelectorAll<HTMLElement>("[data-lang]")
@@ -1640,6 +1837,7 @@ renderLessonList();
 loadLa();
 renderLesson();
 renderMessages();
+route();
 log(
   "****** FPGA Lab — Vivado-style HDL environment (browser edition)",
   "plain",
