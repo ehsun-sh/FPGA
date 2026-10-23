@@ -91,7 +91,7 @@ npm run build    # static site in dist/
 | `src/la/` | logic analyzer: `capture.ts` (recording, trigger), `decode.ts` (protocol decoders), `window.ts` (UI) |
 | `src/serial/` | serial console: live UART decoder and terminal window |
 | `src/lessons/` | course content: `course.ts` (chapters), `lessons.ts` and `advanced.ts` (Persian text + code), `en.ts` (English) |
-| `src/main.ts`, `src/ui/` | Vivado-style UI |
+| `src/main.ts`, `src/ui/` | Vivado-style workbench, landing page (`home.ts`), site text in both languages (`strings.ts`), line icons (`icons.ts`) |
 
 ## Adding a board
 
