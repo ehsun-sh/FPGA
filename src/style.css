@@ -2350,7 +2350,8 @@ body {
   background: var(--panel-2);
   color: var(--text);
 }
-.titlebar .nav-links [data-act='lab'],
+body:not(.in-playground) .titlebar .nav-links [data-act='lab'],
+body.in-playground .titlebar .nav-links [data-act='playground'],
 .home-nav .nav-links [data-act='home'] {
   background: var(--ink);
   color: #fff7ea;
