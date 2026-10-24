@@ -263,6 +263,9 @@ app.innerHTML = `
 let lang: Lang = store.get("lang") === "vhdl" ? "vhdl" : "verilog";
 let lesson: Lesson =
   ALL_LESSONS.find((l) => l.id === store.get("lesson")) ?? LESSONS[0];
+// the course lesson the workbench returns to when leaving the playground
+let lastCourse: Lesson = lesson === PLAYGROUND ? LESSONS[0] : lesson;
+document.body.classList.toggle("in-playground", lesson === PLAYGROUND);
 let tab: "lesson" | "source" | "xdc" | "tb" | "schematic" = "lesson";
 let uiLang: UiLang = store.get("ui-lang") === "fa" ? "fa" : "en";
 // lesson text in the selected site language (Persian lives in lessons.ts, English in en.ts)
@@ -1098,6 +1101,8 @@ $("#lesson").addEventListener(
 function openLesson(l: Lesson, switchTab = true) {
   if (runner.running) stop();
   lesson = l;
+  if (l !== PLAYGROUND) lastCourse = l;
+  document.body.classList.toggle("in-playground", l === PLAYGROUND);
   store.set("lesson", l.id);
   markSeen(l);
   if (!homeOpen) history.replaceState(null, "", `#lesson/${l.id}`);
@@ -1398,6 +1403,8 @@ function act(name: string) {
       goHome();
       break;
     case "lab":
+      // the workbench is the course; from the playground go back to the last lesson
+      if (lesson === PLAYGROUND) openLesson(lastCourse);
       goLab();
       break;
     case "go-lessons":
