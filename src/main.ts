@@ -265,7 +265,6 @@ let lesson: Lesson =
   ALL_LESSONS.find((l) => l.id === store.get("lesson")) ?? LESSONS[0];
 // the course lesson the workbench returns to when leaving the playground
 let lastCourse: Lesson = lesson === PLAYGROUND ? LESSONS[0] : lesson;
-document.body.classList.toggle("in-playground", lesson === PLAYGROUND);
 let tab: "lesson" | "source" | "xdc" | "tb" | "schematic" = "lesson";
 let uiLang: UiLang = store.get("ui-lang") === "fa" ? "fa" : "en";
 // lesson text in the selected site language (Persian lives in lessons.ts, English in en.ts)
@@ -1102,7 +1101,7 @@ function openLesson(l: Lesson, switchTab = true) {
   if (runner.running) stop();
   lesson = l;
   if (l !== PLAYGROUND) lastCourse = l;
-  document.body.classList.toggle("in-playground", l === PLAYGROUND);
+  playgroundMode();
   store.set("lesson", l.id);
   markSeen(l);
   if (!homeOpen) history.replaceState(null, "", `#lesson/${l.id}`);
@@ -1112,8 +1111,16 @@ function openLesson(l: Lesson, switchTab = true) {
   renderLessonList();
   renderLesson();
   loadLa();
-  if (switchTab) showTab("lesson");
+  if (switchTab) showTab(l === PLAYGROUND ? "source" : "lesson");
   log(`# open_lesson ${l.id}`, "cmd");
+}
+
+// the playground is a free editor: no course navigator, the code gets the room and the lesson tab is a short guide
+function playgroundMode() {
+  const on = lesson === PLAYGROUND;
+  document.body.classList.toggle("in-playground", on);
+  $("#flow").classList.toggle("collapsed", on);
+  $("#lesson-tab-l").textContent = on ? UI[uiLang].guideTab : UI[uiLang].lessonTab;
 }
 
 function setLang(lg: Lang) {
@@ -1166,7 +1173,7 @@ function applyUiLang() {
     uiLang,
     `<div class="project" dir="ltr">${boardDef.vendor} <b>${boardDef.name}</b> · <b>${boardDef.part}</b></div>`,
   );
-  $("#lesson-tab-l").textContent = u.lessonTab;
+  playgroundMode();
   $("#board-hint").textContent = u.boardHint;
   if (!lastDesign) $("#st-design").textContent = u.noDesign;
   document

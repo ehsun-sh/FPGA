@@ -24,8 +24,8 @@ export function homeNav(lang: UiLang, extra = ''): string {
   <nav class="nav-links">
     <button data-act="home">${icon('home')}<span>${u.home}</span></button>
     <button data-act="go-lessons">${icon('book')}<span>${u.lessons}</span></button>
-    <button data-act="playground">${icon('flask')}<span>${u.playground}</span></button>
     <button data-act="lab">${icon('cpu')}<span>${u.lab}</span></button>
+    <button data-act="playground">${icon('flask')}<span>${u.playground}</span></button>
   </nav>
   <span class="grow"></span>${extra}
   <div class="seg-ctl lang-ctl" role="group" aria-label="Site language">${langBtn('en', lang)}${langBtn('fa', lang)}</div>`;
