@@ -3150,3 +3150,8 @@ body.in-playground .titlebar .nav-links [data-act='playground'],
 [dir="rtl"] .home-nav .lang-ctl {
   order: -1;
 }
+
+/* playground: the editor gets most of the width */
+body.in-playground .pane.left {
+  flex-basis: 62%;
+}
