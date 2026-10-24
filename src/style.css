@@ -3131,3 +3131,21 @@ body {
     max-width: none;
   }
 }
+
+/* language switch: flag buttons, always on the physical right of the top bar */
+.lang-ctl button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.lang-ctl .flag {
+  width: 20px;
+  height: 10px;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+  flex: none;
+}
+[dir="rtl"] .titlebar .lang-ctl,
+[dir="rtl"] .home-nav .lang-ctl {
+  order: -1;
+}

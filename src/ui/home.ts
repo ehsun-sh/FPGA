@@ -20,7 +20,7 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 // the top bar, shared by the landing page and the workbench; `extra` goes before the language switch
 export function homeNav(lang: UiLang, extra = ''): string {
   const u = UI[lang];
-  return `<button class="brand" data-act="home" title="${u.home}"><span class="logo"></span><b>FPGA Lab</b><span class="dim">${u.tagline}</span></button>
+  return `<button class="brand" data-act="home" title="${u.home}"><span class="logo"></span><b>FPGA Lab</b><span class="dim brand-sep">|</span><span class="dim">${u.tagline}</span></button>
   <nav class="nav-links">
     <button data-act="home">${icon('home')}<span>${u.home}</span></button>
     <button data-act="go-lessons">${icon('book')}<span>${u.lessons}</span></button>
@@ -28,7 +28,18 @@ export function homeNav(lang: UiLang, extra = ''): string {
     <button data-act="lab">${icon('cpu')}<span>${u.lab}</span></button>
   </nav>
   <span class="grow"></span>${extra}
-  <div class="seg-ctl lang-ctl" role="group" aria-label="Site language">${icon('globe', 14)}<button data-ui="fa" class="${lang === 'fa' ? 'active' : ''}">فارسی</button><button data-ui="en" class="${lang === 'en' ? 'active' : ''}">English</button></div>`;
+  <div class="seg-ctl lang-ctl" role="group" aria-label="Site language">${langBtn('en', lang)}${langBtn('fa', lang)}</div>`;
+}
+
+// flags drawn inline so they look the same everywhere (Windows has no flag emoji)
+const FLAG: Record<UiLang, string> = {
+  en: '<svg class="flag" viewBox="0 0 60 30" aria-hidden="true"><clipPath id="fl-uk"><path d="M0 0v30h60V0z"/></clipPath><g clip-path="url(#fl-uk)"><path d="M0 0v30h60V0z" fill="#012169"/><path d="M0 0l60 30m0-30L0 30" stroke="#fff" stroke-width="6"/><path d="M0 0l60 30m0-30L0 30" stroke="#C8102E" stroke-width="2"/><path d="M30 0v30M0 15h60" stroke="#fff" stroke-width="10"/><path d="M30 0v30M0 15h60" stroke="#C8102E" stroke-width="6"/></g></svg>',
+  fa: '<svg class="flag" viewBox="0 0 60 30" aria-hidden="true"><path d="M0 0h60v10H0z" fill="#239f40"/><path d="M0 10h60v10H0z" fill="#fff"/><path d="M0 20h60v10H0z" fill="#da0000"/><circle cx="30" cy="15" r="3.2" fill="none" stroke="#da0000" stroke-width="1.2"/></svg>',
+};
+const LANG_NAME: Record<UiLang, string> = { en: 'English', fa: 'فارسی' };
+
+function langBtn(l: UiLang, cur: UiLang): string {
+  return `<button data-ui="${l}" class="${l === cur ? 'active' : ''}" title="${LANG_NAME[l]}" lang="${l}">${FLAG[l]}<span>${l === 'en' ? 'EN' : 'فا'}</span></button>`;
 }
 
 export function renderHome(d: HomeData): string {

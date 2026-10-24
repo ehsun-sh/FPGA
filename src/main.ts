@@ -264,7 +264,7 @@ let lang: Lang = store.get("lang") === "vhdl" ? "vhdl" : "verilog";
 let lesson: Lesson =
   ALL_LESSONS.find((l) => l.id === store.get("lesson")) ?? LESSONS[0];
 let tab: "lesson" | "source" | "xdc" | "tb" | "schematic" = "lesson";
-let uiLang: UiLang = store.get("ui-lang") === "en" ? "en" : "fa";
+let uiLang: UiLang = store.get("ui-lang") === "fa" ? "fa" : "en";
 // lesson text in the selected site language (Persian lives in lessons.ts, English in en.ts)
 const text = (l: Lesson): LessonText =>
   uiLang === "en" && EN[l.id] ? EN[l.id] : l;
@@ -1156,7 +1156,7 @@ function applyUiLang() {
   const u = UI[uiLang];
   document.documentElement.lang = uiLang;
   document.title =
-    uiLang === "fa" ? "FPGA Lab · آموزش FPGA با برد Nexys A7" : "FPGA Lab · Nexys A7";
+    uiLang === "fa" ? "FPGA Lab | محیط یادگیری به سبک Vivado" : "FPGA Lab | a Vivado-style learning environment";
   $("#titlebar").innerHTML = homeNav(
     uiLang,
     `<div class="project" dir="ltr">${boardDef.vendor} <b>${boardDef.name}</b> · <b>${boardDef.part}</b></div>`,

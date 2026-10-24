@@ -33,7 +33,7 @@ export const UI = {
     mConsole: 'کنسول',
   },
   en: {
-    tagline: 'a Vivado-style FPGA learning lab',
+    tagline: 'a Vivado-style learning environment',
     home: 'Home',
     lessons: 'Lessons',
     playground: 'Playground',
