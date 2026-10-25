@@ -89,9 +89,10 @@ const clockLabel =
 // ---------------------------------------------------------------- layout
 const app = $("#app");
 app.innerHTML = `
+<a class="skip-link" href="#left" id="skip-link" data-act="skip">Skip to the lesson</a>
 <header class="titlebar" id="titlebar"></header>
-<nav class="menubar">
-  <div class="menu"><button>File</button><div class="dropdown">
+<nav class="menubar" aria-label="Menu">
+  <div class="menu"><button aria-haspopup="true" aria-expanded="false">File</button><div class="dropdown">
     <button data-act="playground">Open Playground</button>
     <button data-act="reset-code">Reset lesson code</button>
     <hr/>
@@ -100,7 +101,7 @@ app.innerHTML = `
     <button data-act="download-xdc">Download constraints (.xdc)</button>
     <button data-act="download-project">Download Vivado project (.zip)</button>
   </div></div>
-  <div class="menu"><button>Flow</button><div class="dropdown">
+  <div class="menu"><button aria-haspopup="true" aria-expanded="false">Flow</button><div class="dropdown">
     <button data-act="synth">Run Synthesis</button>
     <button data-act="impl">Run Implementation</button>
     <button data-act="schematic">Open RTL Schematic</button>
@@ -111,22 +112,22 @@ app.innerHTML = `
     <hr/>
     <button data-act="stop">Close Hardware Target</button>
   </div></div>
-  <div class="menu"><button>View</button><div class="dropdown">
+  <div class="menu"><button aria-haspopup="true" aria-expanded="false">View</button><div class="dropdown">
     <button data-act="view-reset">Board: perspective view</button>
     <button data-act="view-top">Board: top view</button>
     <button data-act="toggle-flow">Toggle Flow Navigator</button>
   </div></div>
-  <div class="menu"><button>Tools</button><div class="dropdown">
+  <div class="menu"><button aria-haspopup="true" aria-expanded="false">Tools</button><div class="dropdown">
     <button data-act="la">Logic Analyzer <kbd>Ctrl+L</kbd></button>
     <button data-act="serial">Serial Console <kbd>Ctrl+M</kbd></button>
     <button data-act="vga">VGA Monitor</button>
   </div></div>
-  <div class="menu"><button>Help</button><div class="dropdown">
+  <div class="menu"><button aria-haspopup="true" aria-expanded="false">Help</button><div class="dropdown">
     <button data-act="about">About FPGA Lab</button>
     <button data-act="lesson-intro">Getting started</button>
   </div></div>
 </nav>
-<div class="toolbar">
+<div class="toolbar" role="toolbar" aria-label="Design flow">
   <button class="tb run" data-act="run" title="Synthesize, implement and program the board (Ctrl+Enter)">${icon("play", 14)}<span class="lbl">Run on Board</span></button>
   <button class="tb" data-act="stop" title="Stop">${icon("stop", 14)}<span class="lbl">Stop</span></button>
   <button class="tb" data-act="reset" title="Reset the design (like re-programming)">${icon("reset", 14)}<span class="lbl">Reset</span></button>
@@ -137,68 +138,70 @@ app.innerHTML = `
   <button class="tb tool" data-act="vga" id="vga-btn" title="VGA Monitor">${icon("monitor", 14)}<span class="lbl">VGA Monitor</span></button>
   <span class="sep"></span>
   <div class="seg-ctl" role="group" aria-label="HDL language">
-    <button data-lang="verilog">Verilog</button><button data-lang="vhdl">VHDL</button>
+    <button data-lang="verilog" aria-pressed="false">Verilog</button><button data-lang="vhdl" aria-pressed="false">VHDL</button>
   </div>
-  <span class="sep"></span>
-  <label class="clock">Clock <select id="speed">
-    <option value="${boardDef.clockHz}">${clockLabel} (real time)</option>
-    <option value="1000000">1 MHz</option>
-    <option value="10000">10 kHz</option>
-    <option value="100">100 Hz</option>
-    <option value="10">10 Hz</option>
-    <option value="1">1 Hz</option>
-  </select></label>
-  <label class="bouncy" title="Simulate mechanical contact bounce on the push buttons"><input type="checkbox" id="bouncy"> <span id="bouncy-l"></span></label>
 </div>
 <main class="workspace">
-  <aside class="flow" id="flow">
+  <aside class="flow" id="flow" aria-label="Flow Navigator">
     <div class="flow-title">FLOW NAVIGATOR</div>
-    <div class="flow-sec">
-      <div class="sec-h" id="learn-h">▾ LEARN</div>
-      <div id="lesson-list"></div>
+    <div class="flow-sec" data-sec="learn">
+      <button class="sec-h" id="learn-h" aria-expanded="true"></button>
+      <div class="sec-body" id="lesson-list"></div>
     </div>
-    <div class="flow-sec">
-      <div class="sec-h">▾ PROJECT MANAGER</div>
-      <button class="flow-item" data-act="tab-source">Design Sources</button>
-      <button class="flow-item" data-act="tab-xdc">Constraints</button>
-      <button class="flow-item" data-act="tab-tb">Simulation Sources</button>
+    <div class="flow-sec" data-sec="project">
+      <button class="sec-h" aria-expanded="true">PROJECT MANAGER</button>
+      <div class="sec-body">
+        <button class="flow-item" data-act="tab-source">Design Sources</button>
+        <button class="flow-item" data-act="tab-xdc">Constraints</button>
+        <button class="flow-item" data-act="tab-tb">Simulation Sources</button>
+      </div>
     </div>
-    <div class="flow-sec">
-      <div class="sec-h">▾ SIMULATION</div>
-      <button class="flow-item" data-act="sim">Run Behavioral Simulation</button>
-      <button class="flow-item" data-act="run">Run on Board</button>
+    <div class="flow-sec" data-sec="sim">
+      <button class="sec-h" aria-expanded="true">SIMULATION</button>
+      <div class="sec-body">
+        <button class="flow-item" data-act="sim">Run Behavioral Simulation</button>
+        <button class="flow-item" data-act="run">Run on Board</button>
+      </div>
     </div>
-    <div class="flow-sec">
-      <div class="sec-h">▾ RTL ANALYSIS</div>
-      <button class="flow-item" data-act="elab">Open Elaborated Design</button>
-      <button class="flow-item" data-act="schematic">Schematic</button>
+    <div class="flow-sec" data-sec="rtl">
+      <button class="sec-h" aria-expanded="true">RTL ANALYSIS</button>
+      <div class="sec-body">
+        <button class="flow-item" data-act="elab">Open Elaborated Design</button>
+        <button class="flow-item" data-act="schematic">Schematic</button>
+      </div>
     </div>
-    <div class="flow-sec">
-      <div class="sec-h">▾ SYNTHESIS</div>
-      <button class="flow-item" data-act="synth">Run Synthesis</button>
-      <button class="flow-item" data-act="rep-util">Report Utilization</button>
-      <button class="flow-item" data-act="rep-timing">Report Timing Summary</button>
+    <div class="flow-sec" data-sec="synth">
+      <button class="sec-h" aria-expanded="true">SYNTHESIS</button>
+      <div class="sec-body">
+        <button class="flow-item" data-act="synth">Run Synthesis</button>
+        <button class="flow-item" data-act="rep-util">Report Utilization</button>
+        <button class="flow-item" data-act="rep-timing">Report Timing Summary</button>
+      </div>
     </div>
-    <div class="flow-sec">
-      <div class="sec-h">▾ IMPLEMENTATION</div>
-      <button class="flow-item" data-act="impl">Run Implementation</button>
+    <div class="flow-sec" data-sec="impl">
+      <button class="sec-h" aria-expanded="true">IMPLEMENTATION</button>
+      <div class="sec-body">
+        <button class="flow-item" data-act="impl">Run Implementation</button>
+      </div>
     </div>
-    <div class="flow-sec">
-      <div class="sec-h">▾ PROGRAM AND DEBUG</div>
-      <button class="flow-item" data-act="run">Generate Bitstream</button>
-      <button class="flow-item" data-act="run">Program Device</button>
+    <div class="flow-sec" data-sec="prog">
+      <button class="sec-h" aria-expanded="true">PROGRAM AND DEBUG</button>
+      <div class="sec-body">
+        <button class="flow-item" data-act="run">Generate Bitstream</button>
+        <button class="flow-item" data-act="run">Program Device</button>
+      </div>
     </div>
   </aside>
-  <section class="pane left" id="left">
-    <div class="tabs" id="doc-tabs">
-      <button data-tab="lesson" class="active">${icon("book", 14)}<span id="lesson-tab-l">Lesson</span></button>
-      <button data-tab="source"><span id="src-name">top.v</span></button>
-      <button data-tab="xdc">${xdcName}</button>
-      <button data-tab="tb"><span id="tb-name">tb.v</span></button>
-      <button data-tab="schematic" id="schem-tab" class="hidden">${icon("schematic", 14)}Schematic</button>
+  <section class="pane left" id="left" tabindex="-1" aria-label="Lesson and sources">
+    <div class="tabs" id="doc-tabs" role="tablist" aria-label="Documents">
+      <button data-tab="lesson" class="active" role="tab" aria-selected="true">${icon("book", 14)}<span id="lesson-tab-l">Lesson</span></button>
+      <button data-tab="source" role="tab" aria-selected="false"><span id="src-name">top.v</span></button>
+      <button data-tab="xdc" role="tab" aria-selected="false">${xdcName}</button>
+      <button data-tab="tb" role="tab" aria-selected="false"><span id="tb-name">tb.v</span></button>
+      <button data-tab="schematic" id="schem-tab" class="hidden" role="tab" aria-selected="false">${icon("schematic", 14)}Schematic</button>
     </div>
     <div class="tab-body">
-      <article class="lesson" id="lesson"></article>
+      <article class="lesson" id="lesson" tabindex="-1"></article>
       <div class="editor-host hidden" id="src-editor"></div>
       <div class="editor-host hidden" id="xdc-editor"></div>
       <div class="editor-host hidden" id="tb-editor"></div>
@@ -206,9 +209,9 @@ app.innerHTML = `
     </div>
   </section>
   <div class="splitter v" id="split-v" title="Drag to resize"></div>
-  <section class="pane right">
+  <section class="pane right" aria-label="Hardware">
     <div class="hw-title">
-      <span class="rtabs"><button data-rtab="hw" class="active"><b>HARDWARE MANAGER</b> <span class="dim">— localhost/xilinx_tcf/Digilent</span></button><button data-rtab="sim"><b>SIMULATION</b> <span class="dim">— Behavioral</span></button></span>
+      <span class="rtabs" role="tablist" aria-label="Hardware and simulation"><button data-rtab="hw" class="active" role="tab" aria-selected="true"><b>HARDWARE MANAGER</b> <span class="dim">— localhost/xilinx_tcf/Digilent</span></button><button data-rtab="sim" role="tab" aria-selected="false"><b>SIMULATION</b> <span class="dim">— Behavioral</span></button></span>
       <span class="hw-dev" id="hw-dev">${hwDev} (not programmed)</span>
     </div>
     <div class="board-host" id="board">
@@ -216,39 +219,48 @@ app.innerHTML = `
         <button data-act="view-reset" title="Perspective view">${icon("cube", 13)}3D</button>
         <button data-act="view-top" title="Top view">${icon("top", 13)}Top</button>
         <button data-act="modules" id="mod-btn" title="Sensors and Pmod modules connected to the board">${icon("plug", 13)}Modules</button>
+        <label class="clock" title="Board clock speed">${icon("clock", 13)}<span>Clock</span> <select id="speed">
+          <option value="${boardDef.clockHz}">${clockLabel} (real time)</option>
+          <option value="1000000">1 MHz</option>
+          <option value="10000">10 kHz</option>
+          <option value="100">100 Hz</option>
+          <option value="10">10 Hz</option>
+          <option value="1">1 Hz</option>
+        </select></label>
+        <label class="bouncy" title="Simulate mechanical contact bounce on the push buttons"><input type="checkbox" id="bouncy"> <span id="bouncy-l"></span></label>
       </div>
       <div class="board-hint" id="board-hint"></div>
     </div>
   </section>
 </main>
 <div class="splitter h" id="split-h" title="Drag to resize"></div>
-<section class="bottom" id="bottom">
-  <div class="tabs small" id="bottom-tabs">
-    <button data-btab="console" class="active">Tcl Console</button>
-    <button data-btab="messages">Messages <span class="badge" id="msg-badge"></span></button>
-    <button data-btab="reports">Reports</button>
+<section class="bottom" id="bottom" aria-label="Console">
+  <div class="tabs small" id="bottom-tabs" role="tablist" aria-label="Console">
+    <button data-btab="console" class="active" role="tab" aria-selected="true">Tcl Console</button>
+    <button data-btab="messages" role="tab" aria-selected="false">Messages <span class="badge" id="msg-badge"></span></button>
+    <button data-btab="reports" role="tab" aria-selected="false">Reports</button>
   </div>
   <div class="bottom-body">
-    <div class="console" id="console"><div class="log" id="log"></div>
-      <form class="tcl-in" id="tcl-form"><span>Tcl&gt;</span><input id="tcl" autocomplete="off" spellcheck="false" placeholder="type help"/></form>
+    <div class="console" id="console"><div class="log" id="log" role="log" tabindex="0" aria-label="Tcl Console output"></div>
+      <form class="tcl-in" id="tcl-form"><span>Tcl&gt;</span><input id="tcl" autocomplete="off" spellcheck="false" placeholder="type help" aria-label="Tcl command"/></form>
     </div>
     <div class="messages hidden" id="messages"></div>
     <div class="reports hidden" id="reports"><p class="dim">Run synthesis to see the utilization report.</p></div>
   </div>
 </section>
-<nav class="mtabs" id="mtabs">
+<nav class="mtabs" id="mtabs" aria-label="Panes">
   <button data-m="lesson" class="active">${icon("book", 18)}<span data-ml="mLesson"></span></button>
   <button data-m="code">${icon("code", 18)}<span data-ml="mCode"></span></button>
   <button data-m="board">${icon("cpu", 18)}<span data-ml="mBoard"></span></button>
   <button data-m="console">${icon("terminal", 18)}<span data-ml="mConsole"></span></button>
 </nav>
-<footer class="statusbar">
+<footer class="statusbar" aria-label="Status">
   <span class="run-state" id="run-state"></span>
   <span id="st-design"></span>
   <span id="st-speed"></span>
   <span id="st-cycles"></span>
 </footer>
-<div class="home" id="home" hidden></div>
+<div class="home" id="home" tabindex="-1" hidden></div>
 <dialog id="about"><form method="dialog">
   <h2>FPGA Lab</h2>
   <p>An in-browser FPGA course with a Vivado-inspired workflow and simulated FPGA boards (currently: ${BOARDS.map((b) => `${b.vendor} ${b.name}`).join(", ")}).</p>
@@ -777,7 +789,7 @@ function simRestart() {
 function showRight(t: "hw" | "sim") {
   document
     .querySelectorAll<HTMLElement>("[data-rtab]")
-    .forEach((b) => b.classList.toggle("active", b.dataset.rtab === t));
+    .forEach((b) => selectTab(b, b.dataset.rtab === t));
   if (t === "sim") wave.show();
   else wave.hide();
   $("#hw-dev").classList.toggle("hidden", t === "sim");
@@ -901,6 +913,11 @@ ${row("Block RAM Tile", u.bram36 + u.bram18 / 2, res.bram)}${row("DSPs", u.dsp, 
 }
 
 // ---------------------------------------------------------------- lessons UI
+// chapters fold like a course outline: the current one is open and the others show their title and progress,
+// unless the learner folded or unfolded one by hand
+const chapterFold = new Map<number, boolean>();
+const chapterOpen = (ci: number) =>
+  chapterFold.get(ci) ?? (lesson !== PLAYGROUND && ci === chapterOf(lesson));
 function renderLessonList() {
   const el = $("#lesson-list");
   const dir = uiLang === "fa" ? "rtl" : "ltr";
@@ -909,15 +926,51 @@ function renderLessonList() {
   el.innerHTML = CHAPTERS.map((c, ci) => {
     const items = c.lessons.map((l) => {
       const no = l === PLAYGROUND ? "★" : num(++n, uiLang);
-      return `<button class="flow-item lesson-item ${l.id === lesson.id ? "active" : ""}" data-lesson="${l.id}" dir="${dir}"><span class="num">${no}</span>${esc(text(l).title)}${solved.has(l.id) ? `<span class="done" title="${ui.solved}">✓</span>` : ""}</button>`;
+      const cur = l.id === lesson.id;
+      const done = solved.has(l.id)
+        ? `<span class="done" title="${ui.solved}">${icon("check", 13)}<span class="sr-only">${ui.solved}</span></span>`
+        : "";
+      return `<button class="flow-item lesson-item ${cur ? "active" : ""}" data-lesson="${l.id}" dir="${dir}"${cur ? ' aria-current="page"' : ""}><span class="num">${no}</span><span class="lt">${esc(text(l).title)}</span>${done}</button>`;
     });
     const soon = (c.soon ?? []).map(
       (s) =>
         `<div class="flow-item lesson-item soon" dir="${dir}"><span class="num">·</span><span>${esc(s[uiLang])} <em>(${ui.soon})</em></span></div>`,
     );
-    const head = l10nChapter(ci);
-    return `<div class="chapter-h" dir="${dir}">${esc(head)}</div>${items.join("")}${soon.join("")}`;
+    const open = chapterOpen(ci);
+    const lab = c.lessons.includes(PLAYGROUND);
+    const done = c.lessons.filter(isDone).length;
+    const count = lab
+      ? ""
+      : `<span class="ch-prog${done === c.lessons.length ? " full" : ""}" title="${ui.chapterDone(num(done, uiLang), num(c.lessons.length, uiLang))}">${num(done, uiLang)}/${num(c.lessons.length, uiLang)}</span>`;
+    return `<div class="chap${open ? " open" : ""}"><button class="chapter-h" dir="${dir}" data-chapter="${ci}" aria-expanded="${open}" aria-controls="chap-${ci}">${icon("chevron", 12)}<span class="ct">${lab ? "" : `<span class="cno">${num(ci + 1, uiLang)}</span>`}${esc(c.title[uiLang])}</span>${count}</button><div class="chap-body" id="chap-${ci}"${open ? "" : " hidden"}>${items.join("")}${soon.join("")}</div></div>`;
   }).join("");
+  el.querySelector<HTMLElement>(".lesson-item.active")?.scrollIntoView({ block: "nearest" });
+}
+
+function toggleChapter(ci: number) {
+  const open = !chapterOpen(ci);
+  chapterFold.set(ci, open);
+  const btn = document.querySelector<HTMLElement>(`[data-chapter="${ci}"]`);
+  btn?.setAttribute("aria-expanded", String(open));
+  btn?.parentElement?.classList.toggle("open", open);
+  const body = document.getElementById(`chap-${ci}`);
+  if (body) body.hidden = !open;
+}
+
+// Flow Navigator sections fold like in Vivado; folded sections are remembered
+const closedSecs = new Set((store.get("flow-closed") ?? "").split(",").filter(Boolean));
+function applyFlowSections() {
+  document.querySelectorAll<HTMLElement>(".flow-sec[data-sec]").forEach((sec) => {
+    const open = !closedSecs.has(sec.dataset.sec!);
+    sec.classList.toggle("closed", !open);
+    sec.querySelector(".sec-h")?.setAttribute("aria-expanded", String(open));
+  });
+}
+function toggleFlowSection(key: string) {
+  if (closedSecs.has(key)) closedSecs.delete(key);
+  else closedSecs.add(key);
+  store.set("flow-closed", [...closedSecs].join(","));
+  applyFlowSections();
 }
 
 // ---------------------------------------------------------------- exercises and progress
@@ -1017,6 +1070,15 @@ function renderLesson() {
       ? ""
       : `<span class="of">${u.lessonOf(num(pos + 1, uiLang), num(course.length, uiLang))}</span>`;
   const hasEx = !!(EXERCISES[lesson.id] || tx.exercise);
+  // reading time of the prose (about 180 words a minute), so a learner can plan a sitting
+  const words = `${tx.body} ${tx.tryIt} ${tx.exercise ?? ""}`
+    .replace(/<pre[\s\S]*?<\/pre>|<[^>]+>/g, " ")
+    .split(/\s+/)
+    .filter(Boolean).length;
+  const read =
+    pos < 0
+      ? ""
+      : `<span class="read">${icon("clock", 13)}${ui.readTime(num(Math.max(2, Math.round(words / 180)), uiLang))}</span>`;
   const toc = [
     ["sec-overview", "book", u.overview],
     ["sec-code", "code", u.code],
@@ -1031,11 +1093,11 @@ function renderLesson() {
   el.lang = uiLang;
   el.innerHTML = `
 <div class="lesson-head">
-  <div class="lesson-meta"><span class="chapter">${esc(l10nChapter(chapterOf(lesson)))}</span>${of}</div>
+  <div class="lesson-meta"><span class="chapter">${esc(l10nChapter(chapterOf(lesson)))}</span>${of}${read}</div>
   ${pos < 0 ? "" : `<div class="bar"><i style="width:${Math.round((100 * (pos + 1)) / course.length)}%"></i></div>`}
   <h1>${esc(tx.title)}</h1><p class="summary">${esc(tx.summary)}</p>
 </div>
-<nav class="lesson-toc">${toc.map(([id, ic, label], i) => `<button data-jump="${id}" class="${i ? "" : "active"}">${icon(ic, 14)}${label}</button>`).join("")}</nav>
+<nav class="lesson-toc" aria-label="${u.onPage}">${toc.map(([id, ic, label], i) => `<button data-jump="${id}" class="${i ? "" : "active"}">${icon(ic, 14)}${label}</button>`).join("")}</nav>
 <section id="sec-overview"><h2>${icon("book", 18)}${ui.explain}</h2>${tx.body}</section>
 <section id="sec-code"><h2>${icon("code", 18)}${ui.code}</h2>
   <div class="code-tabs" dir="ltr">
@@ -1054,7 +1116,7 @@ function renderLesson() {
   </div>
 </section>
 ${exerciseHtml()}
-<nav class="lesson-nav">
+<nav class="lesson-nav" aria-label="${u.prevNext}">
   ${navCard(prev, `${rtl ? "→" : "←"} ${u.prev}`, "prev")}
   ${navCard(next, `${u.next} ${rtl ? "←" : "→"}`, "next")}
 </nav>`;
@@ -1100,6 +1162,7 @@ $("#lesson").addEventListener(
 function openLesson(l: Lesson, switchTab = true) {
   if (runner.running) stop();
   lesson = l;
+  chapterFold.delete(chapterOf(l));
   if (l !== PLAYGROUND) lastCourse = l;
   playgroundMode();
   store.set("lesson", l.id);
@@ -1121,6 +1184,14 @@ function playgroundMode() {
   document.body.classList.toggle("in-playground", on);
   $("#flow").classList.toggle("collapsed", on);
   $("#lesson-tab-l").textContent = on ? UI[uiLang].guideTab : UI[uiLang].lessonTab;
+  $("#skip-link").textContent = on ? UI[uiLang].skipCode : UI[uiLang].skip;
+  document
+    .querySelectorAll<HTMLElement>(".titlebar .nav-links [data-act]")
+    .forEach((b) =>
+      b.dataset.act === (on ? "playground" : "lab")
+        ? b.setAttribute("aria-current", "page")
+        : b.removeAttribute("aria-current"),
+    );
 }
 
 function setLang(lg: Lang) {
@@ -1133,7 +1204,7 @@ function setLang(lg: Lang) {
   $("#src-name").textContent = fileName();
   document
     .querySelectorAll<HTMLElement>("[data-lang]")
-    .forEach((b) => b.classList.toggle("active", b.dataset.lang === lang));
+    .forEach((b) => markLang(b));
   document
     .querySelectorAll<HTMLElement>(".code-tabs [data-code]")
     .forEach((b) => b.classList.toggle("active", b.dataset.code === lang));
@@ -1144,6 +1215,11 @@ function setLang(lg: Lang) {
     `# set_property TARGET_LANGUAGE ${lang === "verilog" ? "Verilog" : "VHDL"} [current_project]`,
     "cmd",
   );
+}
+
+function markLang(b: HTMLElement) {
+  b.classList.toggle("active", b.dataset.lang === lang);
+  b.setAttribute("aria-pressed", String(b.dataset.lang === lang));
 }
 
 function loadTb() {
@@ -1172,6 +1248,7 @@ function applyUiLang() {
   $("#titlebar").innerHTML = homeNav(
     uiLang,
     `<div class="project" dir="ltr">${boardDef.vendor} <b>${boardDef.name}</b> · <b>${boardDef.part}</b></div>`,
+    lesson === PLAYGROUND ? "playground" : "lab",
   );
   playgroundMode();
   $("#board-hint").textContent = u.boardHint;
@@ -1180,19 +1257,17 @@ function applyUiLang() {
     .querySelectorAll<HTMLElement>("[data-ml]")
     .forEach((e) => (e.textContent = u[e.dataset.ml as "mLesson"]));
   setRunState();
-  document
-    .querySelectorAll<HTMLElement>("[data-ui]")
-    .forEach((b) => b.classList.toggle("active", b.dataset.ui === uiLang));
-  $("#learn-h").textContent = `▾ LEARN · ${LESSON_UI[uiLang].learn}`;
-  $("#learn-h").title = LESSON_UI[uiLang].progress(
-    solved.size,
-    exerciseCount(),
-  );
-  $("#learn-h").insertAdjacentHTML(
-    "beforeend",
-    ` <span class="progress">${num(solved.size, uiLang)}/${num(exerciseCount(), uiLang)}</span>`,
-  );
+  document.querySelectorAll<HTMLElement>("[data-ui]").forEach((b) => {
+    b.classList.toggle("active", b.dataset.ui === uiLang);
+    b.setAttribute("aria-pressed", String(b.dataset.ui === uiLang));
+  });
+  $("#learn-h").innerHTML = `LEARN · ${LESSON_UI[uiLang].learn} <span class="progress" title="${LESSON_UI[uiLang].progress(solved.size, exerciseCount())}">${num(solved.size, uiLang)}/${num(exerciseCount(), uiLang)}</span>`;
   $("#bouncy-l").textContent = LESSON_UI[uiLang].bouncy;
+}
+
+function selectTab(b: HTMLElement, on: boolean) {
+  b.classList.toggle("active", on);
+  b.setAttribute("aria-selected", String(on));
 }
 
 function showTab(t: typeof tab) {
@@ -1201,7 +1276,7 @@ function showTab(t: typeof tab) {
     setMobile(t === "lesson" ? "lesson" : "code", false);
   document
     .querySelectorAll<HTMLElement>("#doc-tabs [data-tab]")
-    .forEach((b) => b.classList.toggle("active", b.dataset.tab === t));
+    .forEach((b) => selectTab(b, b.dataset.tab === t));
   $("#lesson").classList.toggle("hidden", t !== "lesson");
   $("#src-editor").classList.toggle("hidden", t !== "source");
   $("#xdc-editor").classList.toggle("hidden", t !== "xdc");
@@ -1219,7 +1294,7 @@ function showTab(t: typeof tab) {
 function showBottom(t: "console" | "messages" | "reports") {
   document
     .querySelectorAll<HTMLElement>("#bottom-tabs [data-btab]")
-    .forEach((b) => b.classList.toggle("active", b.dataset.btab === t));
+    .forEach((b) => selectTab(b, b.dataset.btab === t));
   $("#console").classList.toggle("hidden", t !== "console");
   $("#messages").classList.toggle("hidden", t !== "messages");
   $("#reports").classList.toggle("hidden", t !== "reports");
@@ -1482,16 +1557,35 @@ function act(name: string) {
     case "about":
       ($("#about") as HTMLDialogElement).showModal();
       break;
+    case "skip":
+      if (tab === "lesson") $("#lesson").focus();
+      else if (tab === "xdc") xdcEditor.view.focus();
+      else if (tab === "tb") tbEditor.view.focus();
+      else srcEditor.view.focus();
+      break;
   }
 }
 
 document.addEventListener("click", (ev) => {
   const t = ev.target as HTMLElement;
+  const menuBtn = t.closest(".menu > button") as HTMLElement | null;
+  if (menuBtn) {
+    const open = !menuBtn.parentElement!.classList.contains("open");
+    closeMenus();
+    if (open) openMenu(menuBtn.parentElement!);
+    return;
+  }
+  closeMenus();
   const a = t.closest("[data-act]") as HTMLElement | null;
   if (a) {
+    if (a.tagName === "A") ev.preventDefault();
     act(a.dataset.act!);
-    (document.activeElement as HTMLElement | null)?.blur?.();
+    if (a.dataset.act !== "skip") (document.activeElement as HTMLElement | null)?.blur?.();
   }
+  const ch = t.closest("[data-chapter]") as HTMLElement | null;
+  if (ch) toggleChapter(Number(ch.dataset.chapter));
+  const sec = t.closest(".flow-sec[data-sec] > .sec-h") as HTMLElement | null;
+  if (sec) toggleFlowSection((sec.parentElement as HTMLElement).dataset.sec!);
   const l = t.closest("[data-lesson]") as HTMLElement | null;
   if (l) {
     const found = ALL_LESSONS.find((x) => x.id === l.dataset.lesson);
@@ -1511,6 +1605,42 @@ document.addEventListener("click", (ev) => {
   if (rt) showRight(rt.dataset.rtab as "hw");
   const m = t.closest("[data-m]") as HTMLElement | null;
   if (m) setMobile(m.dataset.m as MobileView);
+});
+
+// menu bar: opens on hover or click; arrow keys move through an open menu and Escape closes it
+function openMenu(m: Element) {
+  m.classList.add("open");
+  m.querySelector(":scope > button")?.setAttribute("aria-expanded", "true");
+}
+function closeMenus() {
+  document.querySelectorAll(".menu.open").forEach((m) => {
+    m.classList.remove("open");
+    m.querySelector(":scope > button")?.setAttribute("aria-expanded", "false");
+  });
+}
+$(".menubar").addEventListener("keydown", (ev) => {
+  const menu = (ev.target as HTMLElement).closest(".menu");
+  if (!menu) return;
+  const items = [...menu.querySelectorAll<HTMLElement>(".dropdown button")];
+  const i = items.indexOf(ev.target as HTMLElement);
+  if (ev.key === "Escape") {
+    closeMenus();
+    menu.querySelector<HTMLElement>(":scope > button")?.focus();
+  } else if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+    ev.preventDefault();
+    openMenu(menu);
+    const d = ev.key === "ArrowDown" ? 1 : -1;
+    items[(i + d + items.length) % items.length]?.focus();
+  } else if (ev.key === "ArrowRight" || ev.key === "ArrowLeft") {
+    const menus = [...document.querySelectorAll<HTMLElement>(".menu")];
+    const k = menus.indexOf(menu as HTMLElement) + (ev.key === "ArrowRight" ? 1 : -1);
+    const next = menus[(k + menus.length) % menus.length];
+    closeMenus();
+    next.querySelector<HTMLElement>(":scope > button")?.focus();
+  }
+});
+$(".menubar").addEventListener("focusout", (ev) => {
+  if (!$(".menubar").contains(ev.relatedTarget as Node)) closeMenus();
 });
 
 document.addEventListener("keydown", (ev) => {
@@ -1789,6 +1919,9 @@ function showHome(on: boolean) {
   if (on === homeOpen) return;
   homeOpen = on;
   homeEl.hidden = !on;
+  // the workbench stays in the page under the landing page: keep it out of the tab order and the accessibility tree
+  for (const el of app.children)
+    if (el !== homeEl && el.tagName !== "DIALOG") (el as HTMLElement).inert = on;
   document.body.classList.toggle("at-home", on);
   if (on) {
     // first visit: run lesson 1 so the hero board reacts to its switches
@@ -1803,9 +1936,12 @@ function showHome(on: boolean) {
     }
     renderHomePage();
     homeEl.scrollTop = 0;
+    homeEl.focus({ preventScroll: true });
   } else {
     boardPane.appendChild(boardEl);
     markSeen(lesson);
+    // the page changed under the keyboard: start again from the lesson, not from the hidden landing page
+    (lesson === PLAYGROUND ? $("#left") : $("#lesson")).focus({ preventScroll: true });
   }
 }
 
@@ -1835,16 +1971,18 @@ function setMobile(v: MobileView, syncTab = true) {
   document.body.dataset.m = v;
   document
     .querySelectorAll<HTMLElement>("#mtabs [data-m]")
-    .forEach((b) => b.classList.toggle("active", b.dataset.m === v));
+    .forEach((b) => {
+      b.classList.toggle("active", b.dataset.m === v);
+      b.setAttribute("aria-pressed", String(b.dataset.m === v));
+    });
   if (syncTab && v === "lesson") showTab("lesson");
   if (syncTab && v === "code" && tab === "lesson") showTab("source");
 }
 document.body.dataset.m = "lesson";
 
 // ---------------------------------------------------------------- init
-document
-  .querySelectorAll<HTMLElement>("[data-lang]")
-  .forEach((b) => b.classList.toggle("active", b.dataset.lang === lang));
+document.querySelectorAll<HTMLElement>("[data-lang]").forEach((b) => markLang(b));
+applyFlowSections();
 applyUiLang();
 $("#src-name").textContent = fileName();
 renderLessonList();

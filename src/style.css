@@ -120,7 +120,7 @@ button {
   padding: 4px 0;
 }
 .menu:hover .dropdown,
-.menu:focus-within .dropdown {
+.menu.open .dropdown {
   display: block;
 }
 .dropdown button {
@@ -2993,7 +2993,7 @@ body.in-playground .titlebar .nav-links [data-act='playground'],
     display: none;
   }
 }
-@media (max-width: 1500px) {
+@media (max-width: 1180px) {
   .tb.tool .lbl {
     display: none;
   }
@@ -3154,4 +3154,259 @@ body.in-playground .titlebar .nav-links [data-act='playground'],
 /* playground: the editor gets most of the width */
 body.in-playground .pane.left {
   flex-basis: 62%;
+}
+
+/* ---------------------------------------------------------------- usability and accessibility pass */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.skip-link {
+  position: fixed;
+  top: 8px;
+  inset-inline-start: 8px;
+  z-index: 1000;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  transform: translateY(-150%);
+}
+.skip-link:focus {
+  transform: none;
+}
+/* a visible keyboard focus everywhere (WCAG 2.4.7); mouse clicks keep the calm look */
+:where(button, a, select, input, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.lesson:focus-visible,
+.log:focus-visible,
+.pane:focus-visible {
+  outline-offset: -2px;
+}
+.cm-editor.cm-focused {
+  outline: none;
+}
+
+/* Flow Navigator: sections fold, with a chevron like Vivado */
+.sec-h {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  border: 0;
+  background: none;
+  text-align: start;
+  cursor: pointer;
+  color: var(--muted);
+}
+.sec-h::before {
+  content: '';
+  flex: none;
+  width: 0;
+  height: 0;
+  border-inline-start: 4px solid transparent;
+  border-inline-end: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  margin-inline-end: 3px;
+  transition: transform 0.15s;
+}
+.flow-sec.closed .sec-h::before {
+  transform: rotate(-90deg);
+}
+[dir='rtl'] .flow-sec.closed .sec-h::before {
+  transform: rotate(90deg);
+}
+.flow-sec.closed .sec-body {
+  display: none;
+}
+.sec-h:hover {
+  color: var(--ink);
+}
+.sec-h .progress {
+  margin-inline-start: auto;
+  float: none;
+  opacity: 1;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* the course outline: one fold per chapter, with its progress */
+.chap + .chap {
+  border-top: 1px solid var(--line-soft);
+}
+.chapter-h {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  border: 0;
+  background: none;
+  border-radius: 6px;
+  padding: 8px 6px 7px;
+  font: 600 12px/1.45 var(--ui);
+  color: var(--text);
+  text-align: start;
+  cursor: pointer;
+}
+.chapter-h[dir='rtl'] {
+  font-family: var(--fa);
+  text-align: start;
+}
+.chapter-h:hover {
+  background: var(--panel-2);
+}
+.chapter-h .i-chevron {
+  flex: none;
+  margin-top: 3px;
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+.chapter-h[dir='rtl'] .i-chevron {
+  transform: scaleX(-1);
+}
+.chap.open .chapter-h .i-chevron {
+  transform: rotate(90deg);
+}
+.chapter-h .ct {
+  flex: 1;
+  min-width: 0;
+}
+.chapter-h .cno {
+  display: inline-block;
+  min-width: 16px;
+  margin-inline-end: 4px;
+  color: var(--brand, var(--accent));
+  font-weight: 700;
+}
+.chapter-h .ch-prog {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: var(--panel-2);
+}
+.chapter-h .ch-prog.full {
+  color: #166534;
+  background: #dcfce7;
+}
+.chap-body {
+  padding-bottom: 6px;
+}
+.lesson-item {
+  align-items: flex-start;
+}
+.lesson-item .lt {
+  flex: 1;
+  min-width: 0;
+}
+.lesson-item .done {
+  display: inline-flex;
+  color: #15803d;
+  padding-top: 3px;
+}
+
+/* lesson header: reading time next to the position in the course */
+.lesson-meta .read {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* board settings sit with the board they change */
+.board-tools {
+  flex-wrap: wrap;
+  inset-inline-end: 8px;
+  align-items: center;
+}
+.board-tools .clock,
+.board-tools .bouncy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 2px 4px 2px 9px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #e8edf3;
+  font-size: 12px;
+  min-height: 28px;
+}
+.board-tools .bouncy {
+  padding-inline-end: 9px;
+}
+.board-tools .clock select {
+  background: rgba(0, 0, 0, 0.25);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 5px;
+  padding: 2px 4px;
+  font-size: 12px;
+}
+.board-tools .clock option {
+  color: #111;
+}
+.board-tools .bouncy input {
+  accent-color: #60a5fa;
+  margin: 0;
+}
+@media (max-width: 1280px) {
+  .board-tools .clock > span {
+    display: none;
+  }
+}
+
+/* text contrast to at least 4.5:1 (WCAG 1.4.3) */
+.hw-dev.ok,
+.l-ok {
+  color: #15803d;
+}
+
+/* landing page: where to pick up */
+.ch-card ol button.here {
+  background: var(--brand-soft);
+}
+.ch-card ol .here-tag {
+  margin-inline-start: auto;
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  color: #9a3a0b;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+/* the sticky top bar must not cover a section scrolled into view */
+.home section[id] {
+  scroll-margin-top: 84px;
+}
+@media (max-width: 560px) {
+  .lesson-toc .i {
+    display: none;
+  }
+}
+.home:focus {
+  outline: none;
 }

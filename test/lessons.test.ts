@@ -6,7 +6,7 @@ import { compileDesign, synthesize } from '../src/hdl';
 import { Acquisition, Recorder } from '../src/la/capture';
 import { decodeI2c, decodePs2, decodeSpi, decodeUart } from '../src/la/decode';
 import { ADVANCED } from '../src/lessons/advanced';
-import { ALL_LESSONS } from '../src/lessons/course';
+import { ALL_LESSONS, CHAPTERS } from '../src/lessons/course';
 import { LESSONS, PLAYGROUND } from '../src/lessons/lessons';
 
 type Harness = ReturnType<typeof harness>;
@@ -527,6 +527,15 @@ describe('course', () => {
     const ids = ALL_LESSONS.map((l) => l.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const l of [...LESSONS, ...ADVANCED, PLAYGROUND]) expect(ids, l.id).toContain(l.id);
+  });
+
+  it('keeps chapters a manageable size and teaches prerequisites first', () => {
+    for (const c of CHAPTERS.filter((c) => !c.lessons.includes(PLAYGROUND)))
+      expect(c.lessons.length, c.title.en).toBeLessThanOrEqual(6);
+    const at = (id: string) => ALL_LESSONS.findIndex((l) => l.id === id);
+    expect(at('i2c')).toBeLessThan(at('sensors')); // the sensor talks I²C
+    expect(at('uart')).toBe(at('uart_rx') - 1); // the receiver reuses the transmitter
+    expect(at('ram')).toBeLessThan(at('softcore')); // the CPU has a data RAM
   });
 });
 

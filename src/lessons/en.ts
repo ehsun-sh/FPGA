@@ -46,7 +46,7 @@ export const EN: Record<string, LessonText> = {
 <h3>Your first design</h3>
 <p>The simplest possible circuit: wire every switch straight to the LED above it. In Verilog <code>assign</code>, and in VHDL <code>&lt;=</code>, creates a permanent (combinational) connection.</p>
 <h3>How this course is organised</h3>
-<p>The chapters follow the order of Pong P. Chu's book <i>FPGA Prototyping by Verilog/VHDL Examples</i>: gates first, then RT-level combinational circuits, regular sequential circuits, state machines, FSMD, memory and I/O. The text and code here are written for this site; the book is a good companion for going deeper.</p>`,
+<p>The first chapters follow Pong P. Chu's book <i>FPGA Prototyping by Verilog/VHDL Examples</i>: gates first, then RT-level combinational circuits, regular sequential circuits and state machines (FSM and FSMD). Then serial communication (UART, SPI and I²C), I/O and peripherals, and finally memory and a small soft-core processor that uses it. Every lesson has an explanation, Verilog and VHDL code, a run on the board and an exercise. The text and code here are written for this site; the book is a good companion for going deeper.</p>`,
     tryIt: `<p>Press <span class="kbd">▶ Run</span>, then click the switches at the bottom of the board. Each switch that is up (ON) lights the LED above it.</p>`,
     exercise: `<p>Change the code so the LED order is reversed (SW0 → LD15). Hint: in Verilog use <code>{SW[0], SW[1], ...}</code> or a loop.</p>`,
   },
@@ -528,8 +528,8 @@ ${truth(
 <p>To count presses we need the <b>moment</b> the button goes down, not how long it is held. We keep last clock's value in a flip-flop: <code>tick = level &amp; ~prev</code>. The output is 1 for exactly one clock.</p>
 <h3>The experiment</h3>
 <p>There are two counters: one counts edges of the <b>raw</b> BTNC input (LD7..LD0), the other counts edges of the <b>debounced</b> signal (LD15..LD8). BTNU clears both.</p>
-<p class="note">💡 The simulator's buttons are clean by default. Turn on <b>Bouncy buttons</b> in the toolbar to make them bounce like a real button.</p>`,
-    tryIt: `<p>First turn on <b>Bouncy buttons</b> in the toolbar. Then press BTNC a few times: LD15..LD8 (debounced) count every press exactly once, but LD7..LD0 (raw) jump by several on each press. BTNU clears both.</p>`,
+<p class="note">💡 The simulator's buttons are clean by default. Turn on <b>Bouncy buttons</b> above the board to make them bounce like a real button.</p>`,
+    tryIt: `<p>First turn on <b>Bouncy buttons</b> above the board. Then press BTNC a few times: LD15..LD8 (debounced) count every press exactly once, but LD7..LD0 (raw) jump by several on each press. BTNU clears both.</p>`,
     exercise: `<p>Add the debouncer to the register (flip-flop) lesson so that each press of BTNU shifts the register by exactly one bit.</p>`,
   },
   bin2bcd: {
@@ -722,6 +722,8 @@ export const LESSON_UI = {
     learn: 'آموزش',
     chapter: (n: number | string) => `فصل ${n}`,
     soon: 'به‌زودی',
+    chapterDone: (n: string, total: string) => `${n} از ${total} درس این فصل تمام شده`,
+    readTime: (m: string) => `حدود ${m} دقیقه مطالعه`,
     bouncy: 'لرزش دکمه‌ها',
     simulate: 'شبیه‌سازی با Testbench',
   },
@@ -743,6 +745,8 @@ export const LESSON_UI = {
     learn: 'Lessons',
     chapter: (n: number | string) => `Chapter ${n}`,
     soon: 'coming soon',
+    chapterDone: (n: string, total: string) => `${n} of ${total} lessons in this chapter done`,
+    readTime: (m: string) => `about ${m} min read`,
     bouncy: 'Bouncy buttons',
     simulate: 'Simulate with the testbench',
   },

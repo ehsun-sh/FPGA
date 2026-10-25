@@ -17,18 +17,22 @@ export interface HomeData {
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
-// the top bar, shared by the landing page and the workbench; `extra` goes before the language switch
-export function homeNav(lang: UiLang, extra = ''): string {
+// the top bar, shared by the landing page and the workbench; `extra` goes before the language switch.
+// Labels stay in the buttons' accessible names when phones show only the icons.
+export type NavPage = 'home' | 'lab' | 'playground';
+export function homeNav(lang: UiLang, extra = '', current: NavPage = 'home'): string {
   const u = UI[lang];
-  return `<button class="brand" data-act="home" title="${u.home}"><span class="logo"></span><b>FPGA Lab</b><span class="dim brand-sep">|</span><span class="dim">${u.tagline}</span></button>
-  <nav class="nav-links">
-    <button data-act="home">${icon('home')}<span>${u.home}</span></button>
-    <button data-act="go-lessons">${icon('book')}<span>${u.lessons}</span></button>
-    <button data-act="lab">${icon('cpu')}<span>${u.lab}</span></button>
-    <button data-act="playground">${icon('flask')}<span>${u.playground}</span></button>
+  const item = (act: string, ic: IconName, label: string) =>
+    `<button data-act="${act}" aria-label="${label}"${act === current ? ' aria-current="page"' : ''}>${icon(ic)}<span>${label}</span></button>`;
+  return `<button class="brand" data-act="home" aria-label="FPGA Lab · ${u.home}"><span class="logo"></span><b>FPGA Lab</b><span class="dim brand-sep">|</span><span class="dim">${u.tagline}</span></button>
+  <nav class="nav-links" aria-label="${u.mainNav}">
+    ${item('home', 'home', u.home)}
+    ${item('go-lessons', 'book', u.lessons)}
+    ${item('lab', 'cpu', u.lab)}
+    ${item('playground', 'flask', u.playground)}
   </nav>
   <span class="grow"></span>${extra}
-  <div class="seg-ctl lang-ctl" role="group" aria-label="Site language">${langBtn('en', lang)}${langBtn('fa', lang)}</div>`;
+  <div class="seg-ctl lang-ctl" role="group" aria-label="${u.language}">${langBtn('en', lang)}${langBtn('fa', lang)}</div>`;
 }
 
 // flags drawn inline so they look the same everywhere (Windows has no flag emoji)
@@ -39,7 +43,7 @@ const FLAG: Record<UiLang, string> = {
 const LANG_NAME: Record<UiLang, string> = { en: 'English', fa: 'فارسی' };
 
 function langBtn(l: UiLang, cur: UiLang): string {
-  return `<button data-ui="${l}" class="${l === cur ? 'active' : ''}" title="${LANG_NAME[l]}" lang="${l}">${FLAG[l]}<span>${l === 'en' ? 'EN' : 'فا'}</span></button>`;
+  return `<button data-ui="${l}" class="${l === cur ? 'active' : ''}" title="${LANG_NAME[l]}" aria-label="${LANG_NAME[l]}" aria-pressed="${l === cur}" lang="${l}">${FLAG[l]}<span>${l === 'en' ? 'EN' : 'فا'}</span></button>`;
 }
 
 export function renderHome(d: HomeData): string {
@@ -56,7 +60,9 @@ export function renderHome(d: HomeData): string {
       const items = c.lessons
         .map((l) => {
           const k = ++i;
-          return `<li><button data-lesson="${l.id}" class="${d.done(l) ? 'done' : ''}"><span class="n">${d.done(l) ? icon('check', 13) : n(k)}</span><span class="t">${esc(d.title(l))}</span></button></li>`;
+          const here = l === d.resume;
+          const state = d.done(l) ? `<span class="sr-only"> · ${h.done}</span>` : '';
+          return `<li><button data-lesson="${l.id}" class="${d.done(l) ? 'done' : ''}${here ? ' here' : ''}"><span class="n">${d.done(l) ? icon('check', 13) : n(k)}</span><span class="t">${esc(d.title(l))}${state}</span>${here ? `<span class="here-tag">${h.here}</span>` : ''}</button></li>`;
         })
         .join('');
       return `<article class="ch-card">
@@ -73,6 +79,7 @@ export function renderHome(d: HomeData): string {
     : `<button class="btn primary" data-lesson="${all[0].id}">${icon('play', 15)}<span>${h.start}</span></button>`;
   return `
 <header class="home-nav">${homeNav(d.lang)}</header>
+<main class="home-main">
 <section class="hero">
   <div class="hero-copy">
     <span class="eyebrow" dir="ltr">${h.eyebrow}</span>
@@ -112,5 +119,6 @@ export function renderHome(d: HomeData): string {
     </article>
   </div>
 </section>
+</main>
 <footer class="home-foot">${h.footer}</footer>`;
 }
