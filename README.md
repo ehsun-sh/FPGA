@@ -20,7 +20,7 @@ and watch it run on an interactive 3D Digilent Nexys A7-100T on the right.
   `create_project.tcl` that re-creates the project in real Vivado (`-tclargs build` runs it through to a bitstream).
 - **In-browser HDL simulator**: Verilog-2001 and VHDL subsets are parsed, elaborated (hierarchy, parameters/generics,
   enums) and compiled to JavaScript. Single-clock designs run at close to the real 100 MHz clock, so counters and
-  multiplexed displays behave like on hardware. Clock can be slowed to 1 Hz to watch every step.
+  multiplexed displays behave like on hardware. Clock (above the board) can be slowed to 1 Hz to watch every step.
 - **Behavioral simulation** (Flow → Run Behavioral Simulation, Shift+F6), like Vivado's simulator: each lesson has a
   testbench tab (`tb.v` / `tb.vhd`), written for the lesson or generated from the design's ports. Testbenches can use
   `#` delays, `@(posedge clk)`, `wait`, `forever` / `repeat`, `$display` / `$monitor` / `$error` / `$finish` and
@@ -50,17 +50,22 @@ and watch it run on an interactive 3D Digilent Nexys A7-100T on the right.
   sends on `UART_RXD_OUT` and types bytes into `UART_TXD_IN` with bit-accurate timing. Selectable baud rate and
   format (8N1, 8E1, 8O1, 8N2, 7E1), text or hex view, line ending, local echo, or typing straight into the terminal.
 - **Lessons in Persian and English**, each with theory, Verilog and VHDL code, a “try it on the board” step and an
-  exercise. The chapter order follows Pong P. Chu, *FPGA Prototyping by Verilog/VHDL Examples* (structure only; the
-  text and code are original):
+  exercise. The first chapters follow Pong P. Chu, *FPGA Prototyping by Verilog/VHDL Examples* (structure only; the
+  text and code are original), and no chapter has more than six lessons:
   1. Basics: what is an FPGA, logic gates, multiplexers, adders and hierarchy, seven-segment decoder
   2. RT-level combinational: decoder and priority encoder, barrel shifter, 4-bit ALU
   3. Regular sequential: flip-flops, counters, simulation with a testbench and waveforms, shift register and LFSR, multiplexed display, BCD stopwatch
-  4. FSM: traffic light, button debouncing (with an optional contact-bounce simulation)
-  5. FSMD: binary to BCD (double dabble)
-  6. Memory: synchronous RAM
-  7. I/O: PWM, UART transmitter with the logic analyzer, UART receiver with the serial console, SPI master and slave, I²C write and read back, the on-board temperature sensor with open-drain pins, a PS/2 keyboard receiver with scan codes, VGA colour bars on the monitor
-  8. Soft-core processor: Tiny8, a small original 8-bit CPU (accumulator, 16 instructions, program ROM, data RAM) running a program from its ROM
-  9. Playground
+  4. State machines: traffic-light FSM, button debouncing (with an optional contact-bounce simulation), binary to BCD (double dabble, an FSMD)
+  5. Serial communication: UART transmitter with the logic analyzer, UART receiver with the serial console, SPI master and slave, I²C write and read back
+  6. I/O and peripherals: PWM, the on-board temperature sensor with open-drain pins, a PS/2 keyboard receiver with scan codes, VGA colour bars on the monitor
+  7. Memory and a soft-core processor: synchronous RAM, then Tiny8, a small original 8-bit CPU (accumulator, 16 instructions, program ROM, data RAM) running a program from its ROM
+  8. Playground
+- **Course navigation**: the landing page lists every chapter with its progress and marks where to continue. In the
+  workbench the Flow Navigator folds like Vivado's: each chapter folds to its title and progress (the current one is
+  open), and the PROJECT MANAGER, SIMULATION, SYNTHESIS… sections fold too. Each lesson shows its place in the
+  course and an estimated reading time.
+- **Accessibility**: a skip link, a visible keyboard focus, keyboard-operable menus (arrows and Escape), tabs and
+  toggles announced to screen readers, text contrast of at least 4.5:1 and reduced motion when the system asks for it.
 
 Real Vivado cannot run in a browser; this project imitates its look and workflow. The lesson code and XDC files are
 standard and also work in real Vivado on a real board.
