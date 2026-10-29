@@ -114,3 +114,9 @@ Lesson code currently uses the Nexys A7 port names (`SW`, `LED`, `CLK100MHZ`, ..
 
 2-state (0/1, no X). `z` is supported only on `inout` ports of the top module (`assign P = oe ? v : 1'bz;`), which
 are split into the value driven and the level on the wire. Vectors up to 32 bits, no `generate`, functions/tasks or VHDL packages yet.
+
+## Deploy
+
+The site runs as a Cloudflare Worker at <https://learn.shahmohammadi.dev/fpga/>. `wrangler.toml` builds `dist/`
+into the Worker's static assets and `worker/index.js` serves them under `/fpga`. Cloudflare builds `main` with
+`npm run build` and deploys with `npx wrangler deploy`; every push to `main` redeploys.
