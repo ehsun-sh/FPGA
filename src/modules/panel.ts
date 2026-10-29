@@ -208,7 +208,7 @@ export class ModulePanel {
   }
 
   private update3d() {
-    this.view.setModules?.(this.items.filter((i) => !i.def.onboard).map((i) => ({ label: i.def.name, color: i.def.color, pins: Object.values(i.saved.pins), pmod: !!i.def.pmod })));
+    this.view.setModules?.(this.items.filter((i) => !i.def.onboard).map((i) => ({ type: i.def.type, label: i.def.name, color: i.def.color, pins: Object.values(i.saved.pins), pmod: !!i.def.pmod })));
   }
 
   private pinLabel(pin: string): string {

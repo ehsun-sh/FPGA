@@ -1,8 +1,10 @@
 // Procedural 3D model of the Digilent Nexys A7-100T with interactive switches/buttons and glowing LEDs / 7-segment digits.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 import type { BoardOutputs, BoardView } from '../types';
+import { moduleModel, roundedSlab } from './modules3d';
 import { HEADERS } from './pins';
 
 type ButtonName = 'BTNC' | 'BTNU' | 'BTNL' | 'BTNR' | 'BTND' | 'CPU_RESETN';
@@ -296,7 +298,7 @@ export class NexysA7Model implements BoardView {
 
   // external modules: a Pmod card plugged into its header, or a module on the desk with flywires to its pins
   private moduleGroup: THREE.Group | null = null;
-  setModules(mods: { label: string; color: string; pins: string[]; pmod: boolean }[]) {
+  setModules(mods: { type: string; label: string; color: string; pins: string[]; pmod: boolean }[]) {
     if (this.moduleGroup) {
       this.scene.remove(this.moduleGroup);
       this.moduleGroup.traverse((o) => {
@@ -312,52 +314,32 @@ export class NexysA7Model implements BoardView {
     }
     if (!mods.length) return;
     const g = new THREE.Group();
-    const black = new THREE.MeshStandardMaterial({ color: '#15171a', roughness: 0.6 });
-    const label = (text: string, color: string) =>
-      new THREE.MeshStandardMaterial({
-        roughness: 0.6,
-        map: canvasTexture(256, 160, (c) => {
-          c.fillStyle = color;
-          c.fillRect(0, 0, 256, 160);
-          c.fillStyle = 'rgba(0,0,0,0.25)';
-          c.fillRect(0, 118, 256, 42);
-          c.fillStyle = '#fff';
-          c.font = 'bold 34px sans-serif';
-          c.textAlign = 'center';
-          c.textBaseline = 'middle';
-          c.fillText(text, 128, 60, 240);
-        }),
-      });
     const plugged = new Set<number>();
     let slot = 0;
     for (const m of mods) {
       const pos = m.pins.map((p) => this.headerPin(p));
       const hi = pos[0]?.hi;
       const oneHeader = m.pmod && pos.every((p) => p && p.hi === hi) && hi !== undefined && !plugged.has(hi);
-      const top = label(m.label, m.color);
-      const side = new THREE.MeshStandardMaterial({ color: m.color, roughness: 0.6 });
-      const mats = [side, side, top, side, side, side];
+      const model = moduleModel(m.type, m.label, m.color, m.pins.length);
       if (oneHeader) {
         plugged.add(hi!);
-        const zc = -3.6 + hi! * 1.25;
-        this.box(0.5, 0.45, 1.3, black, 6.45, TOP, zc, g);
-        const card = this.box(1.6, 0.08, 1.2, mats, 7.45, TOP + 0.2, zc, g);
-        card.rotation.y = Math.PI / 2;
+        model.position.set(6.05, TOP + 0.3, -3.6 + hi! * 1.25);
+        g.add(model);
         continue;
       }
       // on the desk, to the right of the board, with a wire to every pin
-      const x0 = 8.9;
+      const x0 = 9.0;
       const z0 = -3.4 + slot++ * 2.1;
       const DESK = -0.62;
-      const card = this.box(1.8, 0.1, 1.3, mats, x0, DESK, z0, g);
-      card.rotation.y = Math.PI / 2;
+      model.position.set(x0, DESK, z0);
+      g.add(model);
       pos.forEach((p, i) => {
         if (!p) return;
         const wire = new THREE.MeshStandardMaterial({ color: ['#e04848', '#e0c048', '#48a0e0', '#48e070', '#c048e0', '#e08a48', '#ffffff', '#8a8a8a'][i % 8], roughness: 0.5 });
         const clip = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.3, 8), wire);
         clip.position.set(p.x, TOP + 0.6, p.z);
         g.add(clip);
-        const end = new THREE.Vector3(x0 - 0.55, DESK + 0.15, z0 - 0.45 + (i * 0.9) / Math.max(1, pos.length - 1));
+        const end = new THREE.Vector3(x0 + 0.1, DESK + 0.35, z0 - 0.2 + (i * 0.4) / Math.max(1, pos.length - 1));
         const curve = new THREE.CatmullRomCurve3([
           new THREE.Vector3(p.x, TOP + 0.75, p.z),
           new THREE.Vector3(p.x + 0.4, TOP + 1.3, p.z),
@@ -495,6 +477,11 @@ export class NexysA7Model implements BoardView {
   }
 
   private buildLights() {
+    // soft studio reflections so metal parts, gold pins and the solder mask read as real materials
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environmentIntensity = 0.45;
+    pmrem.dispose();
     this.scene.add(new THREE.HemisphereLight('#dfe8ff', '#2a2020', 1.3));
     const key = new THREE.DirectionalLight('#ffffff', 2.2);
     key.position.set(-6, 14, 8);
@@ -537,9 +524,10 @@ export class NexysA7Model implements BoardView {
   private buildBoard() {
     const silk = canvasTexture(W * S, D * S, drawSilkscreen);
     const edge = new THREE.MeshStandardMaterial({ color: '#12502a', roughness: 0.6 });
-    const top = new THREE.MeshStandardMaterial({ map: silk, roughness: 0.5, metalness: 0.05 });
-    const bottom = new THREE.MeshStandardMaterial({ color: '#155a2f', roughness: 0.7 });
-    const pcb = new THREE.Mesh(new THREE.BoxGeometry(W, T, D), [edge, edge, top, bottom, edge, edge]);
+    // glossy solder mask: a clear coat over the silkscreen picks up the room reflections
+    const top = new THREE.MeshPhysicalMaterial({ map: silk, roughness: 0.55, clearcoat: 0.6, clearcoatRoughness: 0.25 });
+    const pcb = roundedSlab(W, D, T, 0.3, top, edge);
+    pcb.position.y = -TOP;
     pcb.receiveShadow = true;
     pcb.castShadow = true;
     this.scene.add(pcb);
