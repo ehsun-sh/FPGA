@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { Acquisition, Recorder } from '../src/la/capture';
 import { decodeBus, decodeI2c, decodeSpi, decodeUart } from '../src/la/decode';
+import { pinChannels } from '../src/la/window';
+import { getBoard } from '../src/boards';
+import { mapPorts } from '../src/boards/mapping';
+import { synthesize } from '../src/hdl';
 
 // builds a trace from per-channel level changes: [time, channel, level]
 function trace(changes: [number, number, number][], init: number, t1: number) {
@@ -81,5 +85,41 @@ describe('logic analyzer decoders', () => {
     expect(acq.tick(560)).toBe(true);
     expect(acq.window).toEqual([450, 550]);
     expect(acq.state).toBe('stopped');
+  });
+});
+
+describe('logic analyzer channels that follow the lesson', () => {
+  const board = getBoard('nexys-a7-100t');
+  const xdc = `## Clock
+set_property -dict { PACKAGE_PIN E3 IOSTANDARD LVCMOS33 } [get_ports { CLK100MHZ }];
+set_property -dict { PACKAGE_PIN J15 IOSTANDARD LVCMOS33 } [get_ports { SW[0] }];
+set_property -dict { PACKAGE_PIN L16 IOSTANDARD LVCMOS33 } [get_ports { SW[1] }];
+#set_property -dict { PACKAGE_PIN M13 IOSTANDARD LVCMOS33 } [get_ports { SW[2] }];
+set_property -dict { PACKAGE_PIN H17 IOSTANDARD LVCMOS33 } [get_ports { LED[0] }];`;
+
+  it('takes the pins the XDC constrains, in order, without the clock or commented lines', () => {
+    expect(pinChannels(board, xdc, null).map((c) => c.probe)).toEqual(['pin:J15', 'pin:L16', 'pin:H17']);
+  });
+
+  it('takes only the pins the programmed design uses once there is one', () => {
+    const src = `module top(input wire [1:0] SW, output wire [0:0] LED); assign LED[0] = SW[0] & SW[1]; endmodule`;
+    const m = mapPorts(synthesize(src, 'verilog'), xdc, board);
+    expect(new Set(pinChannels(board, xdc, m).map((c) => c.probe))).toEqual(new Set(['pin:J15', 'pin:L16', 'pin:H17']));
+    const one = mapPorts(synthesize(`module top(input wire [0:0] SW, output wire [0:0] LED); assign LED = SW; endmodule`, 'verilog'), xdc, board);
+    expect(pinChannels(board, xdc, one).map((c) => c.probe).sort()).toEqual(['pin:H17', 'pin:J15']);
+  });
+});
+
+describe('logic analyzer channels with more pins than channels', () => {
+  it('keeps every output and drops inputs, in the lesson order', () => {
+    const board = getBoard('nexys-a7-100t');
+    const sw = ['J15', 'L16', 'M13', 'R15', 'R17', 'T18', 'U18', 'R13', 'T8', 'U8', 'R16', 'T13', 'H6', 'U12', 'U11', 'V10'];
+    const led = ['H17', 'K15', 'J13', 'N14', 'R18', 'V17', 'U17', 'U16', 'V16', 'T15', 'U14', 'T16', 'V15', 'V14', 'V12', 'V11'];
+    const line = (pin: string, port: string) => `set_property -dict { PACKAGE_PIN ${pin} IOSTANDARD LVCMOS33 } [get_ports { ${port} }];`;
+    const xdc = [...sw.map((p, i) => line(p, `SW[${i}]`)), ...led.map((p, i) => line(p, `LED[${i}]`)), line('N15', 'LED16_R'), line('M16', 'LED16_G')].join('\n');
+    const ch = pinChannels(board, xdc, null).map((c) => c.probe.slice(4));
+    expect(ch.length).toBe(32);
+    expect(ch.slice(-18)).toEqual([...led, 'N15', 'M16']);
+    expect(ch.slice(0, 14)).toEqual(sw.slice(0, 14));
   });
 });

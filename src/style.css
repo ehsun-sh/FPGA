@@ -2435,6 +2435,18 @@ body.in-playground .titlebar .nav-links [data-act='playground'],
   color: #d9d0c1;
   align-items: center;
 }
+.statusbar .st-version {
+  margin-inline-start: auto;
+  opacity: 0.7;
+}
+.about-ver {
+  font-size: 13px;
+  font-weight: 500;
+}
+.home-ver {
+  opacity: 0.75;
+  white-space: nowrap;
+}
 .statusbar .run-state {
   color: #fff7ea;
   font-weight: 600;

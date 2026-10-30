@@ -41,6 +41,7 @@ import { highlight } from "./ui/highlight";
 import { bindLangMenu, homeNav, renderHome } from "./ui/home";
 import { icon } from "./ui/icons";
 import { num, UI, type UiLang } from "./ui/strings";
+import { versionLabel } from "./version";
 
 // ---------------------------------------------------------------- storage
 const store = {
@@ -259,10 +260,11 @@ app.innerHTML = `
   <span id="st-design"></span>
   <span id="st-speed"></span>
   <span id="st-cycles"></span>
+  <span class="st-version" title="FPGA Lab version">FPGA Lab ${versionLabel}</span>
 </footer>
 <div class="home" id="home" tabindex="-1" hidden></div>
 <dialog id="about"><form method="dialog">
-  <h2>FPGA Lab</h2>
+  <h2>FPGA Lab <span class="dim about-ver">${versionLabel}</span></h2>
   <p>An in-browser FPGA course with a Vivado-inspired workflow and simulated FPGA boards (currently: ${BOARDS.map((b) => `${b.vendor} ${b.name}`).join(", ")}).</p>
   <p>Real Vivado cannot run in a browser. Instead, your Verilog/VHDL is parsed, elaborated and compiled to a fast cycle-accurate
   JavaScript model that drives the 3D board, following your XDC pin constraints. The same code and XDC work in real Vivado.</p>
@@ -334,8 +336,10 @@ tbEditor.onChange = (t) => {
 const board = boardDef.createView($("#board"));
 const runner = new Runner(boardDef);
 const la = new LogicAnalyzer(document.body, boardDef, board, runner);
-const laPreset = (): LaConfig => lesson.la ?? defaultConfig(boardDef);
+// a lesson without its own setup probes the pins it uses
+const laPreset = (): LaConfig => lesson.la ?? { ...defaultConfig(boardDef), chans: [], auto: true };
 la.presetFor = laPreset;
+la.xdc = () => xdcEditor.text;
 la.onChange = (cfg) => store.set(`la:${lesson.id}`, JSON.stringify(cfg));
 const serial = new SerialConsole(document.body, boardDef, runner);
 try {
@@ -382,6 +386,9 @@ function loadLa() {
   } catch {
     cfg = null;
   }
+  // saved before the analyzer followed the lesson's pins, still on the old default (Pmod JA): follow them now
+  if (cfg && cfg.auto === undefined && !lesson.la && !cfg.decs.length && JSON.stringify(cfg.chans) === JSON.stringify(defaultConfig(boardDef).chans))
+    cfg.auto = true;
   la.load(cfg ?? laPreset());
 }
 runner.speedHz = boardDef.clockHz;

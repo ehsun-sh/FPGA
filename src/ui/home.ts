@@ -3,6 +3,7 @@ import type { Chapter } from '../lessons/course';
 import type { Lesson } from '../lessons/lessons';
 import { icon, type IconName } from './icons';
 import { HOME, num, UI, type UiLang } from './strings';
+import { versionLabel } from '../version';
 
 export interface HomeData {
   lang: UiLang;
@@ -212,5 +213,5 @@ export function renderHome(d: HomeData): string {
   </div>
 </section>
 </main>
-<footer class="home-foot">${h.footer}</footer>`;
+<footer class="home-foot">${h.footer} <span class="home-ver" dir="ltr">${versionLabel}</span></footer>`;
 }
