@@ -42,6 +42,7 @@ import { bindLangMenu, homeNav, renderHome } from "./ui/home";
 import { icon } from "./ui/icons";
 import { num, UI, type UiLang } from "./ui/strings";
 import { versionLabel } from "./version";
+import { toolIcons, toolsBox } from "./ui/tools";
 
 // ---------------------------------------------------------------- storage
 const store = {
@@ -937,7 +938,7 @@ function renderLessonList() {
       const done = solved.has(l.id)
         ? `<span class="done" title="${ui.solved}">${icon("check", 13)}<span class="sr-only">${ui.solved}</span></span>`
         : "";
-      return `<button class="flow-item lesson-item ${cur ? "active" : ""}" data-lesson="${l.id}" dir="${dir}"${cur ? ' aria-current="page"' : ""}><span class="num">${no}</span><span class="lt">${esc(text(l).title)}</span>${done}</button>`;
+      return `<button class="flow-item lesson-item ${cur ? "active" : ""}" data-lesson="${l.id}" dir="${dir}"${cur ? ' aria-current="page"' : ""}><span class="num">${no}</span><span class="lt">${esc(text(l).title)}</span>${toolIcons(l)}${done}</button>`;
     });
     const soon = (c.soon ?? []).map(
       (s) =>
@@ -1104,6 +1105,7 @@ function renderLesson() {
   ${pos < 0 ? "" : `<div class="bar"><i style="width:${Math.round((100 * (pos + 1)) / course.length)}%"></i></div>`}
   <h1>${esc(tx.title)}</h1><p class="summary">${esc(tx.summary)}</p>
 </div>
+${toolsBox(lesson, uiLang)}
 <nav class="lesson-toc" aria-label="${u.onPage}">${toc.map(([id, ic, label], i) => `<button data-jump="${id}" class="${i ? "" : "active"}">${icon(ic, 14)}${label}</button>`).join("")}</nav>
 <section id="sec-overview"><h2>${icon("book", 18)}${ui.explain}</h2>${tx.body}</section>
 <section id="sec-code"><h2>${icon("code", 18)}${ui.code}</h2>

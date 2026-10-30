@@ -3536,3 +3536,78 @@ body.in-playground .pane.left {
 .home:focus {
   outline: none;
 }
+
+/* the instruments a lesson works with: icons in the course lists, a box at the top of the lesson */
+.lt-tools {
+  display: inline-flex;
+  gap: 3px;
+  flex: none;
+  padding-top: 3px;
+  color: var(--muted);
+  opacity: 0.85;
+}
+.ch-card .lt-tools {
+  margin-inline-start: auto;
+  padding-top: 0;
+  align-self: center;
+}
+.lesson-tools {
+  border: 1px solid var(--line-soft);
+  background: var(--panel-2);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+.lesson .lesson-tools h2 {
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+.lesson-tools ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.lesson-tools li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.lesson-tools .ti {
+  display: inline-flex;
+  flex: none;
+  padding: 6px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: #1e40af;
+}
+.lesson-tools li > div {
+  flex: 1;
+  min-width: 0;
+}
+.lesson-tools b {
+  font-size: 13.5px;
+}
+.lesson-tools p {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.lesson-tools button {
+  flex: none;
+  align-self: center;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel, #fff);
+  color: inherit;
+  cursor: pointer;
+}
+.lesson-tools button:hover {
+  border-color: #1e40af;
+  color: #1e40af;
+}
