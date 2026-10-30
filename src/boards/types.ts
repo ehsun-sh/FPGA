@@ -26,6 +26,17 @@ export interface BoardOutputs {
   done: boolean; // FPGA configured
 }
 
+// An add-on module as the board view shows it. values: its controls' current values (and numeric readouts).
+export interface ModuleSpec {
+  id: string;
+  type: string;
+  label: string;
+  color: string;
+  pins: string[];
+  pmod: boolean;
+  values: Record<string, number>;
+}
+
 // The interactive picture of a board (3D or otherwise).
 export interface BoardView {
   switches: boolean[];
@@ -39,7 +50,13 @@ export interface BoardView {
   // show logic-analyzer probe clips on header pins (package pin names), if the view supports it
   setProbes?(probes: { pin: string; color: string }[]): void;
   // external modules wired to header pins (package pins); a Pmod plugs straight into its header
-  setModules?(mods: { type: string; label: string; color: string; pins: string[]; pmod: boolean }[]): void;
+  setModules?(mods: ModuleSpec[]): void;
+  // a module's control was operated on the view (same keys and values as the module's card), if the view supports it
+  onModule?: (id: string, key: string, v: number) => void;
+  // a control changed on the module's card: show it on the view
+  setModuleValue?(id: string, key: string, v: number): void;
+  // readouts the view can show on a module (LED brightness per LED, servo angle ...)
+  setModuleOutputs?(id: string, out: Record<string, number | number[]>): void;
   // show (canvas) or hide (null) a VGA monitor plugged into the board; the canvas is its screen
   setMonitor?(screen: HTMLCanvasElement | null): void;
   // the screen canvas changed

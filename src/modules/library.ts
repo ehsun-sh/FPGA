@@ -27,6 +27,8 @@ export interface ModuleDef {
   pmod?: boolean;
   timed?: boolean;
   controls: Control[];
+  // readouts the board's 3D model shows on the module (LED brightness, the servo's angle)
+  shows?: string[];
   create(ctx: ModuleCtx, values: Record<string, number>): ModuleInst;
 }
 
@@ -425,6 +427,7 @@ const PMOD_8LD: ModuleDef = {
   pmod: true,
   roles: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({ role: `ld${i}`, io: 'out' as const, label: `LD${i}` })),
   controls: [{ kind: 'leds', key: 'leds', n: 8 }],
+  shows: ['leds'],
   create(ctx) {
     const m = dutyMeter(
       ctx,
@@ -521,6 +524,7 @@ const SERVO: ModuleDef = {
   color: '#3b6fb5',
   roles: [{ role: 'pwm', io: 'out', label: 'PWM' }],
   controls: [{ kind: 'readout', key: 'angle', label: { fa: 'زاویه', en: 'Angle' } }],
+  shows: ['deg'],
   create(ctx) {
     let rise = -1;
     let width = 0;

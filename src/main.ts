@@ -38,7 +38,7 @@ import { projectZip } from "./synth/project";
 import { techMap, utilizationText, type SynthResult } from "./synth/techmap";
 import { CodeEditor } from "./ui/editor";
 import { highlight } from "./ui/highlight";
-import { homeNav, renderHome } from "./ui/home";
+import { bindLangMenu, homeNav, renderHome } from "./ui/home";
 import { icon } from "./ui/icons";
 import { num, UI, type UiLang } from "./ui/strings";
 
@@ -1257,10 +1257,6 @@ function applyUiLang() {
     .querySelectorAll<HTMLElement>("[data-ml]")
     .forEach((e) => (e.textContent = u[e.dataset.ml as "mLesson"]));
   setRunState();
-  document.querySelectorAll<HTMLElement>("[data-ui]").forEach((b) => {
-    b.classList.toggle("active", b.dataset.ui === uiLang);
-    b.setAttribute("aria-pressed", String(b.dataset.ui === uiLang));
-  });
   $("#learn-h").innerHTML = `LEARN · ${LESSON_UI[uiLang].learn} <span class="progress" title="${LESSON_UI[uiLang].progress(solved.size, exerciseCount())}">${num(solved.size, uiLang)}/${num(exerciseCount(), uiLang)}</span>`;
   $("#bouncy-l").textContent = LESSON_UI[uiLang].bouncy;
 }
@@ -1984,6 +1980,7 @@ document.body.dataset.m = "lesson";
 document.querySelectorAll<HTMLElement>("[data-lang]").forEach((b) => markLang(b));
 applyFlowSections();
 applyUiLang();
+bindLangMenu();
 $("#src-name").textContent = fileName();
 renderLessonList();
 loadLa();

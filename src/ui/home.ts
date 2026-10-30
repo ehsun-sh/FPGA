@@ -17,7 +17,7 @@ export interface HomeData {
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
-// the top bar, shared by the landing page and the workbench; `extra` goes before the language switch.
+// the top bar, shared by the landing page and the workbench; `extra` goes before the language menu.
 // Labels stay in the buttons' accessible names when phones show only the icons.
 export type NavPage = 'home' | 'lab' | 'playground';
 export function homeNav(lang: UiLang, extra = '', current: NavPage = 'home'): string {
@@ -32,7 +32,7 @@ export function homeNav(lang: UiLang, extra = '', current: NavPage = 'home'): st
     ${item('playground', 'flask', u.playground)}
   </nav>
   <span class="grow"></span>${extra}
-  <div class="seg-ctl lang-ctl" role="group" aria-label="${u.language}">${langBtn('en', lang)}${langBtn('fa', lang)}</div>`;
+  ${langMenu(lang, u.language, current === 'home' ? 'home' : 'lab')}`;
 }
 
 // flags drawn inline so they look the same everywhere (Windows has no flag emoji)
@@ -42,8 +42,95 @@ const FLAG: Record<UiLang, string> = {
 };
 const LANG_NAME: Record<UiLang, string> = { en: 'English', fa: 'فارسی' };
 
-function langBtn(l: UiLang, cur: UiLang): string {
-  return `<button data-ui="${l}" class="${l === cur ? 'active' : ''}" title="${LANG_NAME[l]}" aria-label="${LANG_NAME[l]}" aria-pressed="${l === cur}" lang="${l}">${FLAG[l]}<span>${l === 'en' ? 'EN' : 'فا'}</span></button>`;
+// language menu: a button with the current language's flag and name; picking an item (data-ui) switches the site.
+// `where` keeps the ids apart, as the landing page and the workbench each have one.
+function langMenu(cur: UiLang, label: string, where: string): string {
+  const items = (['fa', 'en'] as UiLang[])
+    .map(
+      (l) =>
+        `<button role="menuitemradio" aria-checked="${l === cur}" data-ui="${l}" tabindex="-1">${FLAG[l]}<span lang="${l}">${LANG_NAME[l]}</span>${icon('check', 14)}</button>`,
+    )
+    .join('');
+  return `<div class="lang-dd">
+    <button class="lang-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="lang-menu-${where}" aria-label="${label}: ${LANG_NAME[cur]}" title="${label}">${FLAG[cur]}<span class="ln" lang="${cur}">${LANG_NAME[cur]}</span>${icon('chevronDown', 14)}</button>
+    <div class="lang-menu" id="lang-menu-${where}" role="menu" aria-label="${label}" hidden>${items}</div>
+  </div>`;
+}
+
+// opens and closes the language menus (bound once: the menus are rebuilt with the top bar). Enter, Space or the
+// arrow keys open a menu, the arrows move through it, Escape or a click elsewhere closes it.
+export function bindLangMenu() {
+  const close = (dd: Element, refocus = false) => {
+    dd.classList.remove('open');
+    dd.querySelector('.lang-menu')?.setAttribute('hidden', '');
+    const b = dd.querySelector<HTMLElement>('.lang-btn');
+    b?.setAttribute('aria-expanded', 'false');
+    if (refocus) b?.focus();
+  };
+  const items = (dd: Element) => [...dd.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
+  const open = (dd: Element, focus: 'checked' | 'last') => {
+    dd.classList.add('open');
+    dd.querySelector('.lang-menu')?.removeAttribute('hidden');
+    dd.querySelector('.lang-btn')?.setAttribute('aria-expanded', 'true');
+    const all = items(dd);
+    (focus === 'last' ? all[all.length - 1] : (all.find((i) => i.getAttribute('aria-checked') === 'true') ?? all[0]))?.focus();
+  };
+  // capturing: a picked language rebuilds the page in the bubbling handler, so look at the item before that
+  document.addEventListener(
+    'click',
+    (e) => {
+      const t = e.target as HTMLElement;
+      document.querySelectorAll('.lang-dd.open').forEach((dd) => !dd.contains(t) && close(dd));
+      const b = t.closest('.lang-btn');
+      if (b) {
+        const dd = b.parentElement!;
+        if (dd.classList.contains('open')) close(dd);
+        else open(dd, 'checked');
+        return;
+      }
+      // a language was picked: the top bar is rebuilt, so give the focus to the new menu button
+      const pick = t.closest('.lang-dd [data-ui]');
+      if (pick) {
+        const where = pick.closest('#home') ? '#home' : '#titlebar';
+        setTimeout(() => document.querySelector<HTMLElement>(`${where} .lang-btn`)?.focus());
+      }
+    },
+    true,
+  );
+  document.addEventListener('keydown', (e) => {
+    const t = e.target as HTMLElement;
+    const dd = t.closest('.lang-dd');
+    if (!dd) return;
+    if (t.classList.contains('lang-btn')) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        open(dd, e.key === 'ArrowUp' ? 'last' : 'checked');
+      } else if (e.key === 'Escape' && dd.classList.contains('open')) {
+        e.stopPropagation();
+        close(dd);
+      }
+      return;
+    }
+    const all = items(dd);
+    const i = all.indexOf(t);
+    if (i < 0) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      all[(i + (e.key === 'ArrowDown' ? 1 : -1) + all.length) % all.length].focus();
+    } else if (e.key === 'Home' || e.key === 'End') {
+      e.preventDefault();
+      all[e.key === 'Home' ? 0 : all.length - 1].focus();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      close(dd, true);
+    } else if (e.key === 'Tab') close(dd);
+  });
+  document.addEventListener('focusout', (e) => {
+    const dd = (e.target as HTMLElement).closest?.('.lang-dd.open');
+    // only when the focus went somewhere else: a click outside is handled above (Safari does not focus clicked buttons)
+    if (dd && e.relatedTarget && !dd.contains(e.relatedTarget as Node)) close(dd);
+  });
 }
 
 export function renderHome(d: HomeData): string {

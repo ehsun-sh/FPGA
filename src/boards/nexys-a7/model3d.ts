@@ -1,10 +1,13 @@
 // Procedural 3D model of the Digilent Nexys A7-100T with interactive switches/buttons and glowing LEDs / 7-segment digits.
+// The add-on modules on it are interactive too: their buttons, switches, encoder knob and the sonar's target drive the
+// same module controls as their cards in the Modules panel.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
-import type { BoardOutputs, BoardView } from '../types';
-import { moduleModel, roundedSlab } from './modules3d';
+import type { BoardOutputs, BoardView, ModuleSpec } from '../types';
+import { angleDelta, Detents, screenAngle, wheelPx } from './controls';
+import { moduleModel, roundedSlab, type ModModel, type ModPart, type ModState } from './modules3d';
 import { HEADERS } from './pins';
 
 type ButtonName = 'BTNC' | 'BTNU' | 'BTNL' | 'BTNR' | 'BTND' | 'CPU_RESETN';
@@ -180,10 +183,38 @@ function chipTexture(lines: { t: string; size: number; weight?: string }[], w = 
 }
 
 interface Interactive {
-  kind: 'sw' | 'btn';
+  kind: 'sw' | 'btn' | 'mod';
   index: number;
   name?: ButtonName;
+  mod?: ModEntry;
+  part?: ModPart;
 }
+
+// an add-on module on the board: its model and the state its parts show
+interface ModEntry {
+  id: string;
+  model: ModModel;
+  state: ModState;
+}
+
+// a module part held by a pointer: buttons stay pressed until it is lifted, knobs and the sonar's target follow it
+interface Grab {
+  mod: ModEntry;
+  part: ModPart;
+  x: number; // where the pointer went down (CSS px)
+  y: number;
+  // turn: 'wait' until the pointer moves (turn the knob) or holds still (push the shaft)
+  mode?: 'wait' | 'turn' | 'push';
+  timer?: number;
+  cx?: number; // the knob's centre on screen
+  cy?: number;
+  a?: number; // last pointer angle around it
+  det?: Detents;
+  v0?: number; // lift: height at the start, and screen pixels per unit of height
+  ppu?: number;
+}
+
+const num = (v: ModState[string]) => (typeof v === 'number' ? v : 0);
 
 export class NexysA7Model implements BoardView {
   renderer: THREE.WebGLRenderer;
@@ -194,6 +225,7 @@ export class NexysA7Model implements BoardView {
   onSwitch: (i: number, on: boolean) => void = () => {};
   onButton: (b: string, pressed: boolean) => void = () => {};
   onFrame: (dt: number) => void = () => {};
+  onModule: (id: string, key: string, v: number) => void = () => {};
 
   private knobs: THREE.Mesh[] = [];
   private btnCaps = new Map<ButtonName, THREE.Mesh>();
@@ -206,6 +238,10 @@ export class NexysA7Model implements BoardView {
   private doneMat!: THREE.MeshStandardMaterial;
   private doneGlow!: THREE.Sprite;
   private pickables: THREE.Object3D[] = [];
+  private mods: ModEntry[] = [];
+  private grabs = new Map<number, Grab>(); // by pointer id
+  private wheelAcc = 0;
+  private wheelPart: ModPart | null = null;
   private raycaster = new THREE.Raycaster();
   private pointer = new THREE.Vector2();
   private last = performance.now();
@@ -226,7 +262,7 @@ export class NexysA7Model implements BoardView {
     this.controls.enableDamping = true;
     this.controls.maxPolarAngle = Math.PI * 0.48;
     this.controls.minDistance = 5;
-    this.controls.maxDistance = 40;
+    this.controls.maxDistance = 70; // a phone in portrait needs ~60 to fit the board and its modules
     this.controls.addEventListener('start', () => (this.userMoved = true));
     this.resetView();
     this.buildLights();
@@ -239,6 +275,14 @@ export class NexysA7Model implements BoardView {
 
   private view: 'persp' | 'top' = 'persp';
   private userMoved = false;
+
+  // zoom-out factor and sideways shift of the view, so the modules next to the board stay in the picture
+  private widen(): { k: number; dx: number } {
+    const wide: number = this.moduleGroup?.userData.wide ?? 0;
+    // a tall panel (phone) is limited by the width: centre on board + modules and fit all of it
+    if (this.fit() > 1) return { k: this.fit() * [1, 1.15, 1.36][wide], dx: [0, 0.95, 2.35][wide] };
+    return { k: [1, 1.08, 1.18][wide], dx: [0, 0.9, 1.4][wide] };
+  }
 
   // distance multiplier so the whole board fits the panel's aspect ratio
   private fit(): number {
@@ -298,7 +342,10 @@ export class NexysA7Model implements BoardView {
 
   // external modules: a Pmod card plugged into its header, or a module on the desk with flywires to its pins
   private moduleGroup: THREE.Group | null = null;
-  setModules(mods: { type: string; label: string; color: string; pins: string[]; pmod: boolean }[]) {
+  setModules(mods: ModuleSpec[]) {
+    for (const id of [...this.grabs.keys()]) this.drop(id, true);
+    this.pickables = this.pickables.filter((o) => !(o.userData.pick as Interactive).mod);
+    this.mods = [];
     if (this.moduleGroup) {
       this.scene.remove(this.moduleGroup);
       this.moduleGroup.traverse((o) => {
@@ -320,7 +367,16 @@ export class NexysA7Model implements BoardView {
       const pos = m.pins.map((p) => this.headerPin(p));
       const hi = pos[0]?.hi;
       const oneHeader = m.pmod && pos.every((p) => p && p.hi === hi) && hi !== undefined && !plugged.has(hi);
-      const model = moduleModel(m.type, m.label, m.color, m.pins.length);
+      const mm = moduleModel(m.type, m.label, m.color, m.pins.length);
+      const model = mm.group;
+      const entry: ModEntry = { id: m.id, model: mm, state: { ...m.values } };
+      this.mods.push(entry);
+      for (const part of mm.parts)
+        for (const h of part.hit) {
+          h.userData.pick = { kind: 'mod', index: 0, mod: entry, part } as Interactive;
+          this.pickables.push(h);
+        }
+      mm.show(entry.state, 1);
       if (oneHeader) {
         plugged.add(hi!);
         model.position.set(6.05, TOP + 0.3, -3.6 + hi! * 1.25);
@@ -349,7 +405,8 @@ export class NexysA7Model implements BoardView {
         g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.03, 6), wire));
       });
     }
-    g.userData.wide = slot > 0;
+    // how far the view widens to the right: Pmods hang off the edge, desk modules lie further out
+    g.userData.wide = slot > 0 ? 2 : plugged.size ? 1 : 0;
     this.moduleGroup = g;
     this.scene.add(g);
     if (!this.userMoved) {
@@ -436,9 +493,7 @@ export class NexysA7Model implements BoardView {
   resetView() {
     this.view = 'persp';
     this.userMoved = false;
-    const wide = !!this.moduleGroup?.userData.wide;
-    const k = this.fit() * (wide ? 1.18 : 1);
-    const dx = wide ? 1.4 : 0;
+    const { k, dx } = this.widen();
     if (this.monitor) {
       this.camera.position.set(dx, 13 * k, 20 * k);
       this.controls.target.set(dx, 2.4, -2.5);
@@ -452,9 +507,7 @@ export class NexysA7Model implements BoardView {
   topView() {
     this.view = 'top';
     this.userMoved = false;
-    const wide = !!this.moduleGroup?.userData.wide;
-    const k = this.fit() * (wide ? 1.18 : 1);
-    const dx = wide ? 1.4 : 0;
+    const { k, dx } = this.widen();
     this.camera.position.set(dx, 19 * k, 0.6);
     this.controls.target.set(dx, 0, 0.5);
     this.controls.update();
@@ -757,7 +810,7 @@ export class NexysA7Model implements BoardView {
     addBtn('CPU_RESETN', 5.2, 1.5, capRed);
   }
 
-  private pick(ev: PointerEvent): Interactive | null {
+  private pick(ev: { clientX: number; clientY: number }): Interactive | null {
     const r = this.renderer.domElement.getBoundingClientRect();
     this.pointer.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
     this.raycaster.setFromCamera(this.pointer, this.camera);
@@ -767,22 +820,178 @@ export class NexysA7Model implements BoardView {
 
   private bindPointer() {
     const el = this.renderer.domElement;
-    el.addEventListener('pointerdown', (ev) => {
-      const p = this.pick(ev);
-      if (!p) return;
-      this.controls.enabled = false;
-      if (p.kind === 'sw') this.setSwitch(p.index, !this.switches[p.index], true);
-      else if (p.name) this.press(p.name, true);
-    });
-    const release = () => {
-      this.controls.enabled = true;
+    // capturing, so it runs before OrbitControls' own listener: with the controls disabled, pressing a button or
+    // turning a knob never turns the view as well
+    el.addEventListener(
+      'pointerdown',
+      (ev) => {
+        const p = this.pick(ev);
+        if (!p) return;
+        this.controls.enabled = false;
+        if (p.kind === 'sw') this.setSwitch(p.index, !this.switches[p.index], true);
+        else if (p.mod && p.part) this.grab(ev, p.mod, p.part);
+        else if (p.name) this.press(p.name, true);
+        el.style.cursor = p.part?.kind === 'turn' || p.part?.kind === 'lift' ? 'grabbing' : 'pointer';
+      },
+      true,
+    );
+    const release = (ev?: PointerEvent) => {
       for (const b of [...this.pressed]) this.press(b, false);
+      if (ev) this.drop(ev.pointerId);
+      else for (const id of [...this.grabs.keys()]) this.drop(id);
+      if (!this.grabs.size) this.controls.enabled = true;
     };
     window.addEventListener('pointerup', release);
-    window.addEventListener('blur', release);
-    el.addEventListener('pointermove', (ev) => {
-      el.style.cursor = this.pick(ev) ? 'pointer' : 'grab';
+    window.addEventListener('pointercancel', release);
+    window.addEventListener('blur', () => release());
+    // held parts follow the pointer even when it leaves the canvas
+    window.addEventListener('pointermove', (ev) => {
+      const g = this.grabs.get(ev.pointerId);
+      if (g) this.drag(g, ev);
     });
+    el.addEventListener('pointermove', (ev) => {
+      if (this.grabs.size) return;
+      const p = this.pick(ev);
+      el.style.cursor = !p ? 'grab' : p.part?.kind === 'lift' ? 'ns-resize' : 'pointer';
+    });
+    // over a knob or the sonar's target the wheel turns / moves it instead of zooming (capturing on the container,
+    // so OrbitControls on the canvas never sees it)
+    this.container.addEventListener(
+      'wheel',
+      (ev) => {
+        const p = this.pick(ev);
+        const part = p?.part;
+        if (!p?.mod || !part || (part.kind !== 'turn' && part.kind !== 'lift')) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (part !== this.wheelPart) this.wheelAcc = 0;
+        this.wheelPart = part;
+        // wheel up: clockwise, or the target further away
+        const d = -wheelPx(ev.deltaY, ev.deltaMode);
+        if (part.kind === 'lift') {
+          const v = part.fromY!(part.toY!(num(p.mod.state[part.key])) + d * 0.001);
+          if (v !== p.mod.state[part.key]) this.modSet(p.mod, part.key, v);
+          return;
+        }
+        this.wheelAcc += d;
+        const n = Math.trunc(this.wheelAcc / 100);
+        this.wheelAcc -= n * 100;
+        this.turn(p.mod, part, n);
+      },
+      { capture: true, passive: false },
+    );
+  }
+
+  // a module control changed on the model: show it and tell the Modules panel
+  private modSet(mod: ModEntry, key: string, v: number) {
+    mod.state[key] = v;
+    this.onModule(mod.id, key, v);
+  }
+
+  // n detents of the encoder (positive = clockwise), each a short press of its turn control like the card's ⟳ / ⟲
+  private turn(mod: ModEntry, part: ModPart, n: number) {
+    for (let i = 0; i < Math.abs(n); i++) {
+      const key = n > 0 ? part.cw! : part.ccw!;
+      mod.state[part.key] = num(mod.state[part.key]) + Math.sign(n);
+      this.onModule(mod.id, key, 1);
+      this.onModule(mod.id, key, 0);
+    }
+  }
+
+  private grab(ev: PointerEvent, mod: ModEntry, part: ModPart) {
+    const g: Grab = { mod, part, x: ev.clientX, y: ev.clientY };
+    this.grabs.set(ev.pointerId, g);
+    if (part.kind === 'press') this.modSet(mod, part.key, 1);
+    else if (part.kind === 'toggle') this.modSet(mod, part.key, num(mod.state[part.key]) ? 0 : 1);
+    else if (part.kind === 'turn') {
+      const c = this.toScreen(part.hit[0].getWorldPosition(new THREE.Vector3()));
+      Object.assign(g, { mode: 'wait', cx: c.x, cy: c.y, a: screenAngle(c.x, c.y, ev.clientX, ev.clientY), det: new Detents() });
+      // held still: push the shaft (a quick tap pushes it briefly on release). Decided after the next frame, as
+      // pointer moves wait for it: a slow frame must not turn the start of a turn into a push
+      g.timer = window.setTimeout(
+        () =>
+          requestAnimationFrame(() => {
+            if (g.mode !== 'wait' || this.grabs.get(ev.pointerId) !== g) return;
+            g.mode = 'push';
+            if (part.push) this.modSet(mod, part.push, 1);
+          }),
+        250,
+      );
+    } else if (part.kind === 'lift') {
+      // screen pixels per unit of height where the part is (a top view sees it end-on: keep it draggable)
+      const at = part.hit[0].getWorldPosition(new THREE.Vector3());
+      const a = this.toScreen(at);
+      const b = this.toScreen(at.add(new THREE.Vector3(0, 1, 0)));
+      g.ppu = Math.max(30, a.y - b.y);
+      g.v0 = part.toY!(num(mod.state[part.key]));
+    }
+  }
+
+  private drag(g: Grab, ev: PointerEvent) {
+    const { mod, part } = g;
+    if (part.kind === 'lift') {
+      const v = part.fromY!(g.v0! + (g.y - ev.clientY) / g.ppu!);
+      if (v !== mod.state[part.key]) this.modSet(mod, part.key, v);
+      return;
+    }
+    if (part.kind !== 'turn') return;
+    if (g.mode === 'wait' && Math.hypot(ev.clientX - g.x, ev.clientY - g.y) > 6) {
+      clearTimeout(g.timer);
+      g.mode = 'turn';
+    }
+    if (g.mode !== 'turn') return;
+    // near the centre the direction is noise
+    if (Math.hypot(ev.clientX - g.cx!, ev.clientY - g.cy!) < 8) return;
+    const a = screenAngle(g.cx!, g.cy!, ev.clientX, ev.clientY);
+    this.turn(mod, part, g.det!.add(angleDelta(g.a!, a)));
+    g.a = a;
+    mod.state[part.key + 'Frac'] = g.det!.frac;
+  }
+
+  // the pointer let go of a module part (cancel: the model is being rebuilt, a tap is not a push)
+  private drop(id: number, cancel = false) {
+    const g = this.grabs.get(id);
+    if (!g) return;
+    this.grabs.delete(id);
+    const { mod, part } = g;
+    if (part.kind === 'press') this.modSet(mod, part.key, 0);
+    if (part.kind !== 'turn') return;
+    clearTimeout(g.timer);
+    mod.state[part.key + 'Frac'] = 0; // the knob springs back to its detent
+    if (!part.push || (cancel && g.mode === 'wait')) return;
+    if (g.mode === 'push') this.modSet(mod, part.push, 0);
+    else if (g.mode === 'wait') {
+      this.modSet(mod, part.push, 1);
+      window.setTimeout(() => this.modSet(mod, part.push!, 0), 150);
+    }
+  }
+
+  // a control changed on the module's card: move the part to match (the encoder's ⟳ / ⟲ turn the knob one detent)
+  setModuleValue(id: string, key: string, v: number) {
+    const mod = this.mods.find((m) => m.id === id);
+    if (!mod) return;
+    const knob = mod.model.parts.find((p) => p.kind === 'turn' && (p.cw === key || p.ccw === key));
+    if (knob) {
+      if (v) mod.state[knob.key] = num(mod.state[knob.key]) + (key === knob.cw ? 1 : -1);
+    } else mod.state[key] = v;
+  }
+
+  // readouts the model shows: LED brightness, the servo's angle
+  setModuleOutputs(id: string, out: ModState) {
+    const mod = this.mods.find((m) => m.id === id);
+    if (mod) Object.assign(mod.state, out);
+  }
+
+  // screen position (CSS px) of a module's part by control key; used by automated UI checks
+  modulePartPos(id: string, key: string): { x: number; y: number } | null {
+    const part = this.mods.find((m) => m.id === id)?.model.parts.find((p) => p.key === key);
+    return part ? this.toScreen(part.hit[0].getWorldPosition(new THREE.Vector3())) : null;
+  }
+
+  private toScreen(v: THREE.Vector3): { x: number; y: number } {
+    const p = v.clone().project(this.camera);
+    const r = this.renderer.domElement.getBoundingClientRect();
+    return { x: r.left + ((p.x + 1) / 2) * r.width, y: r.top + ((1 - p.y) / 2) * r.height };
   }
 
   setSwitch(i: number, on: boolean, notify = false) {
@@ -798,9 +1007,7 @@ export class NexysA7Model implements BoardView {
 
   // screen position (CSS px, relative to the canvas) of a switch knob; used by automated UI checks
   switchScreenPos(i: number): { x: number; y: number } {
-    const p = this.knobs[i].position.clone().project(this.camera);
-    const r = this.renderer.domElement.getBoundingClientRect();
-    return { x: r.left + ((p.x + 1) / 2) * r.width, y: r.top + ((1 - p.y) / 2) * r.height };
+    return this.toScreen(this.knobs[i].position);
   }
 
   isPressed(name: string) {
@@ -842,6 +1049,7 @@ export class NexysA7Model implements BoardView {
       const target = TOP + 0.22 + 0.09 - (this.pressed.has(name) ? 0.08 : 0);
       cap.position.y += (target - cap.position.y) * Math.min(1, dt * 30);
     }
+    for (const m of this.mods) m.model.show(m.state, Math.min(1, dt * 25));
     this.onFrame(dt);
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
