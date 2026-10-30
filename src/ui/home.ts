@@ -181,6 +181,11 @@ export function renderHome(d: HomeData): string {
   </div>
   <div class="hero-stage">
     <div class="stage" id="hero-stage"></div>
+    <div class="stage-tools" role="toolbar" aria-label="${h.viewTools}">
+      <button data-act="view-reset" title="${h.view3d}">${icon('cube', 14)}<span>${h.view3d}</span></button>
+      <button data-act="view-top" title="${h.viewTop}">${icon('top', 14)}<span>${h.viewTop}</span></button>
+      <button data-act="view-fit" title="${h.viewFit}">${icon('fit', 14)}<span>${h.viewFit}</span></button>
+    </div>
     <p class="stage-hint">${d.live ? `<span class="live-dot"></span>${h.live}` : h.idle}</p>
   </div>
 </section>

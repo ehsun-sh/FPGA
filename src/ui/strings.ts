@@ -90,6 +90,10 @@ export const HOME = {
     ],
     live: 'طرح درس ۱ روی این برد اجرا می‌شود. کلیدها را بزنید.',
     idle: 'کلیدها و دکمه‌ها را بزنید · برای چرخاندن بکشید · برای بزرگ‌نمایی اسکرول کنید',
+    view3d: 'سه‌بعدی',
+    viewTop: 'نمای بالا',
+    viewFit: 'برد در کادر',
+    viewTools: 'نمای برد',
     howTitle: 'هر درس چطور پیش می‌رود',
     steps: [
       ['code', 'بنویسید', 'هر درس یک مفهوم را توضیح می‌دهد و کد آماده‌ی Verilog و VHDL دارد.'],
@@ -122,6 +126,10 @@ export const HOME = {
     ],
     live: 'Lesson 1’s design is running on this board. Flip the switches.',
     idle: 'Click the switches and buttons · drag to rotate · scroll to zoom',
+    view3d: '3D',
+    viewTop: 'Top view',
+    viewFit: 'Fit board',
+    viewTools: 'Board view',
     howTitle: 'How a lesson works',
     steps: [
       ['code', 'Write', 'Each lesson explains one idea and comes with working Verilog and VHDL code.'],
