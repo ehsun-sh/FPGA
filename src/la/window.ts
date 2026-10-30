@@ -1,7 +1,7 @@
 // The logic-analyzer window: a virtual bench instrument (in the spirit of a USB logic analyzer and its PC software)
 // whose probes clip onto the board's header pins, on-board devices or internal design signals.
 import { deviceLabel, isBoardInput, type BoardDef, type BoardView } from '../boards';
-import type { Mapping } from '../boards/mapping';
+import { parseXdc, type Mapping } from '../boards/mapping';
 import type { Design } from '../hdl';
 import type { Runner } from '../sim/runner';
 import { Acquisition, type Edge, type Source, type Trace } from './capture';
@@ -25,6 +25,8 @@ export interface LaConfig {
   base: number; // seconds per division
   pos: number; // window centre relative to the trigger, in divisions
   trig: { ch: number; edge: Edge } | null;
+  // the channels follow the lesson's pins (its XDC, then the programmed design) until the user changes them
+  auto?: boolean;
 }
 
 const MAX_CH = 32;
@@ -50,6 +52,17 @@ export function defaultConfig(board: BoardDef): LaConfig {
   return { chans, decs: [], base: 1e-3, pos: 0, trig: null };
 }
 
+// one channel per pin the lesson uses, the clock aside: the programmed design's pins, else the pins its XDC constrains
+export function pinChannels(board: BoardDef, xdc: string, mapping: Mapping | null): ChanCfg[] {
+  const pins = mapping
+    ? mapping.bindings.map((b) => b.pin)
+    : [...parseXdc(xdc, board).pins.values()].sort((a, b) => a.line - b.line).map((p) => p.pin);
+  const all = [...new Set(pins)].filter((p) => board.pins[p] && board.pins[p].kind !== 'clk');
+  // more pins than channels: the design's outputs first, then its inputs, still listed in the lesson's order
+  const keep = new Set([...all.filter((p) => !isBoardInput(board.pins[p])), ...all.filter((p) => isBoardInput(board.pins[p]))].slice(0, MAX_CH));
+  return all.filter((p) => keep.has(p)).map((p) => ({ name: deviceLabel(board.pins[p], board), probe: `pin:${p}` }));
+}
+
 export class LogicAnalyzer {
   el: HTMLElement;
   private acq = new Acquisition();
@@ -65,6 +78,8 @@ export class LogicAnalyzer {
   private cursors: [number | null, number | null] = [null, null];
   private drag: { x: number; pos: number } | null = null;
   onChange: (cfg: LaConfig) => void = () => {};
+  // the current lesson's constraints, for a setup that follows the lesson's pins
+  xdc: () => string = () => '';
 
   constructor(
     parent: HTMLElement,
@@ -113,6 +128,8 @@ export class LogicAnalyzer {
   show() {
     this.el.hidden = false;
     this.attach();
+    // capture straight away when a design is running, so its signals show without pressing Run here too
+    if (this.design && this.acq.state === 'stopped') this.acq.run(this.runner.now, false);
     this.renderAll();
   }
 
@@ -126,6 +143,7 @@ export class LogicAnalyzer {
   // per-lesson configuration (the caller stores it; see onChange)
   load(cfg: LaConfig) {
     this.cfg = structuredClone(cfg);
+    this.follow();
     this.cursors = [null, null];
     this.resolve();
     if (this.open) this.renderAll();
@@ -140,8 +158,18 @@ export class LogicAnalyzer {
   setDesign(design: Design | null, mapping: Mapping | null) {
     this.design = design;
     this.mapping = mapping;
+    this.follow();
     this.resolve();
+    // a new design on the board: start capturing it
+    if (design && this.open && this.acq.state === 'stopped') this.acq.run(this.runner.now, false);
     if (this.open) this.renderAll();
+  }
+
+  // an automatic setup takes the lesson's pins (a trigger on a channel that is gone is dropped)
+  private follow() {
+    if (!this.cfg.auto) return;
+    this.cfg.chans = pinChannels(this.board, this.xdc(), this.mapping);
+    if (this.cfg.trig && this.cfg.trig.ch >= this.cfg.chans.length) this.cfg.trig = null;
   }
 
   // ------------------------------------------------------------------ plumbing to the simulator
@@ -193,6 +221,8 @@ export class LogicAnalyzer {
   }
 
   private save() {
+    // channels changed by hand: keep them from now on
+    if (this.cfg.auto && JSON.stringify(this.cfg.chans) !== JSON.stringify(pinChannels(this.board, this.xdc(), this.mapping))) this.cfg.auto = false;
     this.onChange(this.cfg);
   }
 
@@ -423,6 +453,7 @@ export class LogicAnalyzer {
       }
     } else if (what === 'preset') {
       this.cfg = structuredClone(this.presetFor());
+      this.follow();
     } else if (what === 'clear') {
       this.cfg.chans = [];
       this.cfg.decs = [];
