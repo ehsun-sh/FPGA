@@ -97,6 +97,17 @@ export class ModulePanel {
       this.control(it, key, v, kind === 'toggle' || kind === 'slider', false);
       this.syncCard(it, key, v);
     };
+    // a click on a module's body on the 3D model opens its card (not on the landing page, where the drawer is hidden)
+    this.view.onModuleOpen = (id) => {
+      if (this.el.closest('.stage')) return;
+      if (!this.open) this.show();
+      const c = this.list.querySelector<HTMLElement>(`.mod-card[data-id="${CSS.escape(id)}"]`);
+      if (!c) return;
+      this.list.scrollTop = c.offsetTop - this.list.offsetTop;
+      c.classList.remove('flash');
+      void c.offsetWidth; // restart the highlight when the same card is opened again
+      c.classList.add('flash');
+    };
     this.menu.addEventListener('click', (e) => {
       const b = (e.target as HTMLElement).closest('[data-type]') as HTMLElement | null;
       if (b) this.add(b.dataset.type!);

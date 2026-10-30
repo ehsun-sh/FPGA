@@ -1547,6 +1547,9 @@ function act(name: string) {
     case "view-top":
       board.topView();
       break;
+    case "view-fit":
+      board.fitView();
+      break;
     case "toggle-flow":
       $("#flow").classList.toggle("collapsed");
       break;

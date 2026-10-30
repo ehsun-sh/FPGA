@@ -47,12 +47,16 @@ export interface BoardView {
   isPressed(name: string): boolean;
   resetView(): void;
   topView(): void;
+  // the current view (perspective or top) re-framed on the board
+  fitView(): void;
   // show logic-analyzer probe clips on header pins (package pin names), if the view supports it
   setProbes?(probes: { pin: string; color: string }[]): void;
   // external modules wired to header pins (package pins); a Pmod plugs straight into its header
   setModules?(mods: ModuleSpec[]): void;
   // a module's control was operated on the view (same keys and values as the module's card), if the view supports it
   onModule?: (id: string, key: string, v: number) => void;
+  // the body of a module was clicked on the view: show its settings, if the view supports it
+  onModuleOpen?: (id: string) => void;
   // a control changed on the module's card: show it on the view
   setModuleValue?(id: string, key: string, v: number): void;
   // readouts the view can show on a module (LED brightness per LED, servo angle ...)

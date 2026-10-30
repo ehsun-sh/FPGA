@@ -226,6 +226,7 @@ export class NexysA7Model implements BoardView {
   onButton: (b: string, pressed: boolean) => void = () => {};
   onFrame: (dt: number) => void = () => {};
   onModule: (id: string, key: string, v: number) => void = () => {};
+  onModuleOpen: (id: string) => void = () => {};
 
   private knobs: THREE.Mesh[] = [];
   private btnCaps = new Map<ButtonName, THREE.Mesh>();
@@ -238,6 +239,8 @@ export class NexysA7Model implements BoardView {
   private doneMat!: THREE.MeshStandardMaterial;
   private doneGlow!: THREE.Sprite;
   private pickables: THREE.Object3D[] = [];
+  // a press on a module's body, opening its settings if the pointer comes up where it went down
+  private opening: { id: string; pointer: number; x: number; y: number } | null = null;
   private mods: ModEntry[] = [];
   private grabs = new Map<number, Grab>(); // by pointer id
   private wheelAcc = 0;
@@ -376,6 +379,12 @@ export class NexysA7Model implements BoardView {
           h.userData.pick = { kind: 'mod', index: 0, mod: entry, part } as Interactive;
           this.pickables.push(h);
         }
+      // the rest of the model: a click opens the module's settings
+      model.traverse((o) => {
+        if (!(o instanceof THREE.Mesh) || o.userData.pick) return;
+        o.userData.pick = { kind: 'mod', index: 0, mod: entry } as Interactive;
+        this.pickables.push(o);
+      });
       mm.show(entry.state, 1);
       if (oneHeader) {
         plugged.add(hi!);
@@ -511,6 +520,12 @@ export class NexysA7Model implements BoardView {
     this.camera.position.set(dx, 19 * k, 0.6);
     this.controls.target.set(dx, 0, 0.5);
     this.controls.update();
+  }
+
+  // brings the board back into the frame in the view it is in (after the user turned, panned or zoomed it)
+  fitView() {
+    if (this.view === 'top') this.topView();
+    else this.resetView();
   }
 
   private resize() {
@@ -827,6 +842,11 @@ export class NexysA7Model implements BoardView {
       (ev) => {
         const p = this.pick(ev);
         if (!p) return;
+        // the body of a module: a click (not a drag, which still turns the view) opens its settings
+        if (p.mod && !p.part) {
+          this.opening = { id: p.mod.id, pointer: ev.pointerId, x: ev.clientX, y: ev.clientY };
+          return;
+        }
         this.controls.enabled = false;
         if (p.kind === 'sw') this.setSwitch(p.index, !this.switches[p.index], true);
         else if (p.mod && p.part) this.grab(ev, p.mod, p.part);
@@ -836,6 +856,10 @@ export class NexysA7Model implements BoardView {
       true,
     );
     const release = (ev?: PointerEvent) => {
+      const o = this.opening;
+      this.opening = null;
+      if (o && ev?.type === 'pointerup' && ev.pointerId === o.pointer && Math.hypot(ev.clientX - o.x, ev.clientY - o.y) < 6)
+        this.onModuleOpen(o.id);
       for (const b of [...this.pressed]) this.press(b, false);
       if (ev) this.drop(ev.pointerId);
       else for (const id of [...this.grabs.keys()]) this.drop(id);
