@@ -1,8 +1,41 @@
 // Physical 3D models of the add-on modules: Pmod cards, the HC-SR04 sonar and the SG90 servo.
-// Each builder returns a group whose origin is the module's connector; the card extends along +x.
+// Each builder returns a group whose origin is the module's connector; the card extends along +x. Its parts list says
+// what the pointer can do with the model (press, flip, turn, lift), named by the same control keys as the module's
+// card in the Modules panel, and show() moves the parts to the module's current state.
 import * as THREE from 'three';
+import { DETENT, sonarCm, sonarHeight } from './controls';
 
 const PX = 160; // texture pixels per unit
+
+// press: momentary button; toggle: flips on a click; turn: rotary encoder knob (drag around it or use the wheel);
+// lift: a value set by dragging a part up and down (the sonar's target)
+export interface ModPart {
+  kind: 'press' | 'toggle' | 'turn' | 'lift';
+  // the control key; for 'turn' the state key of the knob position in detents (`${key}Frac` holds the part of a
+  // detent turned so far by a drag)
+  key: string;
+  hit: THREE.Mesh[]; // what the pointer can grab
+  // 'turn': the momentary controls for one detent counter-clockwise / clockwise, and the button under the shaft
+  ccw?: string;
+  cw?: string;
+  push?: string;
+  // 'lift': the part's height for a value, and the value for a height
+  toY?: (v: number) => number;
+  fromY?: (y: number) => number;
+}
+
+// control values (0/1 for buttons and switches, centimetres, ...) and readouts (LED brightness, servo angle)
+export type ModState = Record<string, number | number[] | undefined>;
+
+export interface ModModel {
+  group: THREE.Group;
+  parts: ModPart[];
+  // moves the parts towards the state; f = the share of the way to go this frame (0..1)
+  show(s: ModState, f: number): void;
+}
+
+const num = (v: ModState[string], d = 0) => (typeof v === 'number' ? v : d);
+const toward = (cur: number, target: number, f: number) => cur + (target - cur) * f;
 
 function tex(w: number, h: number, draw: (g: CanvasRenderingContext2D, w: number, h: number) => void): THREE.CanvasTexture {
   const c = document.createElement('canvas');
@@ -151,30 +184,40 @@ function pmodHeader(g: THREE.Object3D, m: Mats, y: number) {
     }
 }
 
-function tactile(g: THREE.Object3D, m: Mats, x: number, y: number, z: number, cap: THREE.Material) {
-  box(g, 0.32, 0.1, 0.32, m.black, x, y, z);
+// a tactile switch; show() pushes the cap down while the button is pressed
+function tactile(g: THREE.Object3D, m: Mats, x: number, y: number, z: number, cap: THREE.Material, key: string, parts: ModPart[]) {
+  const base = box(g, 0.32, 0.1, 0.32, m.black, x, y, z);
   box(g, 0.3, 0.02, 0.3, m.metal, x, y + 0.1, z);
-  add(g, new THREE.CylinderGeometry(0.1, 0.1, 0.1, 20), cap, x, y + 0.17, z);
+  const c = add(g, new THREE.CylinderGeometry(0.1, 0.1, 0.1, 20), cap, x, y + 0.17, z);
   for (const [dx, dz] of [[-0.18, -0.12], [-0.18, 0.12], [0.18, -0.12], [0.18, 0.12]]) box(g, 0.05, 0.02, 0.04, m.metal, x + dx, y, z + dz);
+  parts.push({ kind: 'press', key, hit: [c, base] });
+  return (s: ModState, f: number) => (c.position.y = toward(c.position.y, y + 0.17 - (num(s[key]) ? 0.06 : 0), f));
 }
 
-function slide(g: THREE.Object3D, m: Mats, x: number, y: number, z: number, on: boolean) {
-  box(g, 0.26, 0.12, 0.44, m.white, x, y, z);
-  box(g, 0.08, 0.1, 0.12, m.black, x, y + 0.12, z + (on ? -0.1 : 0.1));
+// a slide switch; ON = lever pushed towards the back of the card
+function slide(g: THREE.Object3D, m: Mats, x: number, y: number, z: number, key: string, parts: ModPart[]) {
+  const body = box(g, 0.26, 0.12, 0.44, m.white, x, y, z);
+  const lever = box(g, 0.08, 0.1, 0.12, m.black, x, y + 0.12, z + 0.1);
+  parts.push({ kind: 'toggle', key, hit: [lever, body] });
+  return (s: ModState, f: number) => (lever.position.z = toward(lever.position.z, z + (num(s[key]) ? -0.1 : 0.1), f));
 }
 
+// an SMD LED; returns the dome's material, which glows with the LED's brightness
 function led(g: THREE.Object3D, x: number, y: number, z: number) {
-  const red = new THREE.MeshStandardMaterial({ color: '#ff3a2a', emissive: '#7a0d06', roughness: 0.2, transparent: true, opacity: 0.92 });
+  const red = new THREE.MeshStandardMaterial({ color: '#ff3a2a', emissive: '#ff2a14', emissiveIntensity: 0.12, roughness: 0.2, transparent: true, opacity: 0.92 });
   box(g, 0.14, 0.05, 0.09, new THREE.MeshStandardMaterial({ color: '#f0eadc', roughness: 0.4 }), x, y, z);
   const dome = add(g, new THREE.SphereGeometry(0.045, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), red, x, y + 0.05, z);
   dome.castShadow = false;
+  return red;
 }
 
 // --- Pmods: card above the board's socket, connector at the origin ---
 const PMOD_PINS = ['3V3', 'GND', 'IO4', 'IO3', 'IO2', 'IO1'];
 
-function pmodCard(type: string, title: string, accent: string): THREE.Group {
+function pmodCard(type: string, title: string, accent: string): ModModel {
   const g = new THREE.Group();
+  const parts: ModPart[] = [];
+  const anims: ((s: ModState, f: number) => void)[] = [];
   const m = mats();
   const L = type === 'pmod_enc' ? 1.9 : 2.05;
   const Wd = 1.18;
@@ -192,28 +235,44 @@ function pmodCard(type: string, title: string, accent: string): THREE.Group {
   for (let i = 0; i < 4; i++) smd(g, m, 0.9, top, -0.45 + i * 0.3, '#2a2a2a');
   if (type === 'pmod_btn') {
     const caps = ['#d84040', '#e0c040', '#3a78d8', '#3ab060'].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.45 }));
-    for (let i = 0; i < 4; i++) tactile(g, m, cx + 0.45, top, -0.45 + i * 0.3, caps[i]);
+    for (let i = 0; i < 4; i++) anims.push(tactile(g, m, cx + 0.45, top, -0.45 + i * 0.3, caps[i], `btn${i}`, parts));
   } else if (type === 'pmod_swt') {
-    for (let i = 0; i < 4; i++) slide(g, m, cx + 0.4, top, -0.45 + i * 0.3, i % 2 === 0);
+    for (let i = 0; i < 4; i++) anims.push(slide(g, m, cx + 0.4, top, -0.45 + i * 0.3, `sw${i}`, parts));
   } else if (type === 'pmod_8ld') {
+    const leds: THREE.MeshStandardMaterial[] = [];
     for (let i = 0; i < 8; i++) {
-      led(g, cx + 0.5, top, -0.52 + i * 0.15);
+      leds.push(led(g, cx + 0.5, top, -0.52 + i * 0.15));
       smd(g, m, cx + 0.1, top, -0.52 + i * 0.15);
     }
+    anims.push((s) => {
+      const b = Array.isArray(s.leds) ? s.leds : [];
+      leds.forEach((mat, i) => (mat.emissiveIntensity = 0.12 + (b[i] ?? 0) * 4));
+    });
   } else if (type === 'pmod_enc') {
-    // rotary encoder: metal can, threaded bushing, knurled shaft and a knob
+    // rotary encoder: metal can, threaded bushing, knurled shaft and a knob that turns in detents and pushes down
     box(g, 0.62, 0.32, 0.62, m.metal, cx + 0.2, top, 0.1);
-    add(g, new THREE.CylinderGeometry(0.14, 0.14, 0.14, 20), m.metal, cx + 0.2, top + 0.39, 0.1);
-    const knob = new THREE.MeshStandardMaterial({ color: '#202226', roughness: 0.35, metalness: 0.3 });
-    add(g, new THREE.CylinderGeometry(0.25, 0.27, 0.3, 28), knob, cx + 0.2, top + 0.61, 0.1);
-    box(g, 0.03, 0.01, 0.18, m.white, cx + 0.2, top + 0.76, 0.02);
-    slide(g, m, cx + 0.55, top, -0.45, false);
+    const bush = add(g, new THREE.CylinderGeometry(0.14, 0.14, 0.14, 20), m.metal, cx + 0.2, top + 0.39, 0.1);
+    const knobMat = new THREE.MeshStandardMaterial({ color: '#202226', roughness: 0.35, metalness: 0.3 });
+    const knob = new THREE.Group();
+    const y0 = top + 0.61;
+    knob.position.set(cx + 0.2, y0, 0.1);
+    const cap = add(knob, new THREE.CylinderGeometry(0.25, 0.27, 0.3, 28), knobMat, 0, 0, 0);
+    const mark = box(knob, 0.03, 0.01, 0.18, m.white, 0, 0.15, -0.08);
+    g.add(knob);
+    parts.push({ kind: 'turn', key: 'pos', ccw: 'ccw', cw: 'cw', push: 'btn', hit: [cap, mark, bush] });
+    anims.push((s, f) => {
+      // clockwise seen from above is a negative turn about +y
+      knob.rotation.y = toward(knob.rotation.y, -(num(s.pos) + num(s.posFrac)) * DETENT, Math.min(1, f * 1.5));
+      knob.position.y = toward(knob.position.y, y0 - (num(s.btn) ? 0.06 : 0), f);
+    });
+    // the slide switch sits beside the knob, where the knob does not hide it from the usual viewpoint
+    anims.push(slide(g, m, cx + 0.72, top, 0.3, 'swt', parts));
   }
-  return g;
+  return { group: g, parts, show: (s, f) => anims.forEach((a) => a(s, f)) };
 }
 
 // --- HC-SR04: blue board standing on the desk, two transducers facing up, 4-pin header at the origin side ---
-function hcsr04(): THREE.Group {
+function hcsr04(): ModModel {
   const g = new THREE.Group();
   const m = mats();
   const L = 2.2;
@@ -247,11 +306,55 @@ function hcsr04(): THREE.Group {
   // 4-pin straight header along the near edge
   box(g, 0.12, 0.1, 0.5, m.black, 0.12, top, 0);
   for (let i = 0; i < 4; i++) add(g, new THREE.BoxGeometry(0.04, 0.3, 0.04), m.gold, 0.12, top + 0.1, -0.18 + i * 0.12);
-  return g;
+  // the target the sound bounces off: a card held above the transducers, dragged up and down to set the distance
+  const label = document.createElement('canvas');
+  label.width = 288;
+  label.height = 160;
+  const labelTex = new THREE.CanvasTexture(label);
+  labelTex.colorSpace = THREE.SRGBColorSpace;
+  let shown = -1;
+  const write = (cm: number) => {
+    const c = label.getContext('2d')!;
+    c.fillStyle = '#e9dcc0';
+    c.fillRect(0, 0, label.width, label.height);
+    c.strokeStyle = '#b89f6e';
+    c.lineWidth = 6;
+    c.strokeRect(3, 3, label.width - 6, label.height - 6);
+    c.fillStyle = '#3a2f1e';
+    c.font = '700 64px sans-serif';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText(`${cm} cm`, label.width / 2, label.height / 2 + 4);
+    labelTex.needsUpdate = true;
+  };
+  const board = new THREE.MeshStandardMaterial({ color: '#d9c7a2', roughness: 0.85 });
+  const target = new THREE.Group();
+  const plate = add(target, new THREE.BoxGeometry(1.8, 0.07, 1.0), [board, board, new THREE.MeshStandardMaterial({ map: labelTex, roughness: 0.8 }), board, board, board], 0, 0, 0);
+  target.position.set(1.2, sonarHeight(50), 0);
+  g.add(target);
+  // faint beams from the transducers to the target
+  const beamMat = new THREE.MeshBasicMaterial({ color: '#7fd6ff', transparent: true, opacity: 0.16, depthWrite: false });
+  const beams = [0.7, 1.7].map((x) => {
+    const b = add(g, new THREE.CylinderGeometry(0.34, 0.3, 1, 24, 1, true), beamMat, x, 0, 0);
+    b.castShadow = b.receiveShadow = false;
+    return b;
+  });
+  const base = top + 0.45;
+  const show = (s: ModState, f: number) => {
+    const cm = num(s.cm, 50);
+    target.position.y = toward(target.position.y, sonarHeight(cm), Math.min(1, f * 1.5));
+    const h = Math.max(0.01, target.position.y - 0.035 - base);
+    for (const b of beams) {
+      b.scale.y = h;
+      b.position.y = base + h / 2;
+    }
+    if (Math.round(cm) !== shown) write((shown = Math.round(cm)));
+  };
+  return { group: g, parts: [{ kind: 'lift', key: 'cm', hit: [plate], toY: sonarHeight, fromY: sonarCm }], show };
 }
 
 // --- SG90 servo: blue plastic case with mounting ears, output spline and a white horn ---
-function servo(): THREE.Group {
+function servo(): ModModel {
   const g = new THREE.Group();
   const m = mats();
   const blue = new THREE.MeshPhysicalMaterial({ color: '#2b5fd0', roughness: 0.25, transmission: 0.15, thickness: 0.3 });
@@ -274,23 +377,31 @@ function servo(): THREE.Group {
   for (const x of [0.12, 1.48]) add(g, new THREE.CylinderGeometry(0.05, 0.05, 0.08, 12), m.black, x, 0.76, 0);
   box(g, 0.6, 0.18, 0.6, blue, 0.55, 1.0, 0); // gear bump
   add(g, new THREE.CylinderGeometry(0.1, 0.1, 0.15, 16), m.white, 0.55, 1.25, 0);
-  // horn
+  // single-arm horn, so its angle can be read; it follows the angle the design's pulses ask for
   const horn = new THREE.Group();
-  box(horn, 1.0, 0.06, 0.14, m.white, 0, 0, 0);
+  box(horn, 0.62, 0.06, 0.14, m.white, 0.31, 0, 0);
+  add(horn, new THREE.CylinderGeometry(0.07, 0.07, 0.06, 14), m.white, 0.62, 0, 0);
   add(horn, new THREE.CylinderGeometry(0.11, 0.11, 0.06, 18), m.white, 0, 0.03, 0);
   horn.position.set(0.55, 1.32, 0);
-  horn.rotation.y = 0.5;
+  horn.rotation.y = -Math.PI / 2;
   g.add(horn);
   // cable stub: brown, red, orange
   ['#5a3a22', '#d03030', '#f08a20'].forEach((c, i) => {
     const w = new THREE.MeshStandardMaterial({ color: c, roughness: 0.6 });
     add(g, new THREE.CylinderGeometry(0.035, 0.035, 0.3, 8), w, 0.08, 0.2, -0.07 + i * 0.07).rotation.z = Math.PI / 2;
   });
-  return g;
+  // 0° points the arm to the right (+x), 90° to the front, 180° to the left; without pulses it stays where it is
+  let angle = -Math.PI / 2;
+  const show = (s: ModState, f: number) => {
+    const deg = num(s.deg, -1);
+    if (deg >= 0) angle = (-deg * Math.PI) / 180;
+    horn.rotation.y = toward(horn.rotation.y, angle, f * 0.5);
+  };
+  return { group: g, parts: [], show };
 }
 
 // generic breakout for any other module type
-function breakout(title: string, accent: string, pins: number): THREE.Group {
+function breakout(title: string, accent: string, pins: number): ModModel {
   const g = new THREE.Group();
   const m = mats();
   const L = 1.8;
@@ -301,11 +412,11 @@ function breakout(title: string, accent: string, pins: number): THREE.Group {
   g.add(card);
   box(g, 0.4, 0.07, 0.4, m.black, 1.0, 0.12, 0);
   box(g, 0.12, 0.1, Math.min(1.1, pins * 0.12), m.black, 0.12, 0.12, 0);
-  return g;
+  return { group: g, parts: [], show: () => {} };
 }
 
 // plugged Pmods hang off the right edge; desk modules lie on the desk next to the board
-export function moduleModel(type: string, title: string, accent: string, pins: number): THREE.Group {
+export function moduleModel(type: string, title: string, accent: string, pins: number): ModModel {
   if (type.startsWith('pmod_')) return pmodCard(type, title, accent);
   if (type === 'hcsr04') return hcsr04();
   if (type === 'servo') return servo();

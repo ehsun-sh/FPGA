@@ -2360,17 +2360,6 @@ body.in-playground .titlebar .nav-links [data-act='playground'],
   color: var(--muted);
   font-size: 12px;
 }
-.lang-ctl {
-  display: flex;
-  align-items: center;
-  color: var(--muted);
-}
-.lang-ctl > .i {
-  margin: 0 4px 0 6px;
-}
-.lang-ctl button {
-  font-family: var(--ui);
-}
 
 /* toolbar: one row, consistent icons */
 .toolbar {
@@ -3094,9 +3083,6 @@ body.in-playground .titlebar .nav-links [data-act='playground'],
     top: 8px;
     margin-top: 8px;
   }
-  .lang-ctl > .i {
-    display: none;
-  }
   .hero,
   .how,
   .course {
@@ -3116,8 +3102,8 @@ body.in-playground .titlebar .nav-links [data-act='playground'],
   .hw-dev {
     display: none;
   }
-  .lang-ctl button {
-    padding: 3px 8px;
+  .lang-btn {
+    padding-inline: 8px 6px;
   }
   .facts {
     gap: 8px 18px;
@@ -3133,22 +3119,95 @@ body.in-playground .titlebar .nav-links [data-act='playground'],
   }
 }
 
-/* language switch: flag buttons, always on the physical right of the top bar */
-.lang-ctl button {
+/* language menu: the current language's flag and name, always on the physical right of the top bar */
+.lang-dd {
+  position: relative;
+  flex: none;
+}
+[dir="rtl"] .titlebar .lang-dd,
+[dir="rtl"] .home-nav .lang-dd {
+  order: -1;
+}
+.lang-btn,
+.lang-menu button {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 7px;
+  font-weight: 500;
+  white-space: nowrap;
 }
-.lang-ctl .flag {
+.lang-btn {
+  min-height: 30px;
+  padding: 4px 8px 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--text);
+}
+.lang-btn:hover,
+.lang-dd.open .lang-btn {
+  background: var(--panel);
+  border-color: var(--muted);
+}
+.lang-btn .i-chevronDown {
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+.lang-dd.open .i-chevronDown {
+  transform: rotate(180deg);
+}
+.lang-dd .flag {
   width: 20px;
   height: 10px;
   border-radius: 2px;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
   flex: none;
 }
-[dir="rtl"] .titlebar .lang-ctl,
-[dir="rtl"] .home-nav .lang-ctl {
-  order: -1;
+.lang-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  min-width: 168px;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 12px 28px -10px rgba(60, 40, 10, 0.35);
+}
+.lang-menu[hidden] {
+  display: none;
+}
+.lang-menu button {
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font-size: 13.5px;
+  text-align: start;
+}
+.lang-menu button:hover,
+.lang-menu button:focus-visible {
+  background: var(--panel-2);
+  outline: none;
+}
+.lang-menu button:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.lang-menu button span {
+  flex: 1;
+}
+.lang-menu .i-check {
+  color: var(--brand);
+  visibility: hidden;
+}
+.lang-menu [aria-checked='true'] {
+  font-weight: 700;
+}
+.lang-menu [aria-checked='true'] .i-check {
+  visibility: visible;
 }
 
 /* playground: the editor gets most of the width */

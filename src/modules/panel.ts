@@ -89,6 +89,14 @@ export class ModulePanel {
       this.menu.hidden = !this.menu.hidden;
     });
     document.addEventListener('click', () => (this.menu.hidden = true));
+    // a button, switch, knob or the sonar's target operated on the 3D model works like the same control on the card
+    this.view.onModule = (id, key, v) => {
+      const it = this.items.find((i) => i.saved.id === id);
+      if (!it) return;
+      const kind = it.def.controls.find((c) => c.key === key)?.kind;
+      this.control(it, key, v, kind === 'toggle' || kind === 'slider', false);
+      this.syncCard(it, key, v);
+    };
     this.menu.addEventListener('click', (e) => {
       const b = (e.target as HTMLElement).closest('[data-type]') as HTMLElement | null;
       if (b) this.add(b.dataset.type!);
@@ -208,7 +216,19 @@ export class ModulePanel {
   }
 
   private update3d() {
-    this.view.setModules?.(this.items.filter((i) => !i.def.onboard).map((i) => ({ type: i.def.type, label: i.def.name, color: i.def.color, pins: Object.values(i.saved.pins), pmod: !!i.def.pmod })));
+    this.view.setModules?.(
+      this.items
+        .filter((i) => !i.def.onboard)
+        .map((i) => {
+          // control values, plus numeric readouts such as the encoder's position
+          const values = { ...i.saved.values };
+          for (const c of i.def.controls) {
+            const r = c.kind === 'readout' ? i.inst.read?.(c.key) : undefined;
+            if (typeof r === 'string' && r.trim() && Number.isFinite(+r)) values[c.key] = +r;
+          }
+          return { id: i.saved.id, type: i.def.type, label: i.def.name, color: i.def.color, pins: Object.values(i.saved.pins), pmod: !!i.def.pmod, values };
+        }),
+    );
   }
 
   private pinLabel(pin: string): string {
@@ -358,28 +378,58 @@ export class ModulePanel {
     this.list.addEventListener('pointerleave', (e) => press(e, 0), true);
   }
 
-  private control(it: Item, key: string, v: number, save = true) {
+  // drives the module's control; the 3D model follows unless the change came from it
+  private control(it: Item, key: string, v: number, save = true, to3d = true) {
     this.runner.bus.now = this.runner.now;
     it.inst.set?.(key, v);
     this.runner.poke();
+    if (to3d) this.view.setModuleValue?.(it.saved.id, key, v);
     if (save) {
       it.saved.values = { ...it.saved.values, [key]: v };
       this.onSave(this.items.map((i) => i.saved));
     }
   }
 
-  // updates the readouts and LEDs a few times a second
+  // a control operated on the 3D model: show the new value on the card
+  private syncCard(it: Item, key: string, v: number) {
+    const el = this.list.querySelector(`.mod-card[data-id="${it.saved.id}"]`);
+    if (!el) return;
+    const t = el.querySelector<HTMLInputElement>(`[data-toggle="${key}"]`);
+    if (t) t.checked = !!v;
+    const r = el.querySelector<HTMLInputElement>(`input[data-key="${key}"]`);
+    if (r) {
+      r.value = String(v);
+      const c = it.def.controls.find((x) => x.kind === 'slider' && x.key === key) as { unit: string } | undefined;
+      (r.nextElementSibling as HTMLOutputElement).textContent = `${fmt(v)} ${c?.unit ?? ''}`;
+    }
+    el.querySelector(`[data-press="${key}"]`)?.classList.toggle('down', !!v);
+  }
+
+  // updates the readouts and LEDs a few times a second: on the cards while the drawer is open, on the 3D model always
   frame(force = false) {
-    if (!this.open) return;
     const now = performance.now();
     if (!force && now - this.lastRead < 100) return;
     this.lastRead = now;
     for (const it of this.items) {
-      const el = this.list.querySelector(`.mod-card[data-id="${it.saved.id}"]`);
+      // read each value once: reading the LEDs restarts their brightness measurement
+      const cache = new Map<string, ReturnType<NonNullable<ModuleInst['read']>> | undefined>();
+      const read = (k: string, live = false) => {
+        if (!cache.has(k)) cache.set(k, live && !this.runner.sim ? undefined : it.inst.read?.(k));
+        return cache.get(k);
+      };
+      if (it.def.shows && !it.def.onboard) {
+        const out: Record<string, number | number[]> = {};
+        for (const k of it.def.shows) {
+          const v = read(k, k === 'leds');
+          out[k] = typeof v === 'number' || Array.isArray(v) ? v : k === 'leds' ? [] : -1;
+        }
+        this.view.setModuleOutputs?.(it.saved.id, out);
+      }
+      const el = this.open && this.list.querySelector(`.mod-card[data-id="${it.saved.id}"]`);
       if (!el) continue;
-      el.querySelectorAll<HTMLElement>('[data-read]').forEach((r) => (r.textContent = String(it.inst.read?.(r.dataset.read!) ?? '')));
+      el.querySelectorAll<HTMLElement>('[data-read]').forEach((r) => (r.textContent = String(read(r.dataset.read!) ?? '')));
       el.querySelectorAll<HTMLElement>('[data-leds]').forEach((r) => {
-        const v = (this.runner.sim ? it.inst.read?.(r.dataset.leds!) : null) as number[] | null;
+        const v = read(r.dataset.leds!, true) as number[] | undefined;
         r.querySelectorAll('span').forEach((s, i) => ((s as HTMLElement).style.opacity = String(0.15 + 0.85 * (v?.[i] ?? 0))));
       });
     }
