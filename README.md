@@ -118,5 +118,5 @@ are split into the value driven and the level on the wire. Vectors up to 32 bits
 ## Deploy
 
 The site runs as a Cloudflare Worker at <https://learn.shahmohammadi.dev/fpga/>. `wrangler.toml` builds `dist/`
-into the Worker's static assets and `worker/index.js` serves them under `/fpga`. Cloudflare builds `main` with
-`npm run build` and deploys with `npx wrangler deploy`; every push to `main` redeploys.
+into the Worker's static assets and `worker/index.js` serves them under `/fpga`. The `Deploy` GitHub Actions workflow builds and runs
+`npx wrangler deploy` on every push to `main`; it needs the repo secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
