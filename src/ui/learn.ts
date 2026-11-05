@@ -16,6 +16,13 @@ export const LEARN_UI = {
     levelTitle: 'سطح درس',
     goalsToc: 'هدف‌ها',
     xref: (n: string, title: string) => `درس ${n}: ${title}`,
+    hint: (n: string) => `راهنمایی ${n}`,
+    showSolution: 'نمایش راه‌حل',
+    solutionLocked: 'بعد از دو تلاش یا دیدن هر دو راهنمایی فعال می‌شود',
+    solution: 'راه‌حل',
+    copyIn: 'گذاشتن در ویرایشگر',
+    copyConfirm: 'کد فعلی ویرایشگر جایگزین می‌شود. ادامه؟',
+    solvedHelp: 'حل شده با راه‌حل',
   },
   en: {
     objectives: 'By the end of this lesson you can',
@@ -25,6 +32,13 @@ export const LEARN_UI = {
     levelTitle: 'Lesson level',
     goalsToc: 'Goals',
     xref: (n: string, title: string) => `lesson ${n}: ${title}`,
+    hint: (n: string) => `Hint ${n}`,
+    showSolution: 'Show solution',
+    solutionLocked: 'Enabled after two attempts or both hints',
+    solution: 'Solution',
+    copyIn: 'Copy into editor',
+    copyConfirm: 'This replaces the code in the editor. Continue?',
+    solvedHelp: 'solved with the solution',
   },
 };
 
@@ -55,6 +69,37 @@ export function takeawaysHtml(tx: LoopText, lang: L): string {
   return `<section class="takeaways" id="sec-takeaways"><h2>${icon('list', 18)}${LEARN_UI[lang].takeaways}</h2><ul>${tx.takeaways
     .map((t) => `<li>${t}</li>`)
     .join('')}</ul></section>`;
+}
+
+// staged help for an exercise: hint 1, then hint 2, then the solution once it is unlocked
+export interface HelpState {
+  attempts: number; // failed checks
+  hints: number; // hints open, 0–2
+  solution: boolean; // the solution was revealed
+}
+export const solutionUnlocked = (s: HelpState) => s.attempts >= 2 || s.hints >= 2;
+
+export function helpHtml(
+  hints: { fa: string; en: string }[] | undefined,
+  solution: string | undefined,
+  st: HelpState,
+  lang: L,
+  num: (n: number) => string,
+  code: (src: string) => string,
+): string {
+  if (!hints?.length && !solution) return '';
+  const u = LEARN_UI[lang];
+  const open = (hints ?? []).slice(0, st.hints);
+  const shown = open.map((h, i) => `<div class="hint" dir="auto"><b>${u.hint(num(i + 1))}</b> ${h[lang]}</div>`).join('');
+  const next = hints && st.hints < hints.length ? `<button class="chip-btn" data-act="hint">${icon('book', 13)}${u.hint(num(st.hints + 1))}</button>` : '';
+  let sol = '';
+  if (solution && st.solution)
+    sol = `<div class="solution"><div class="sol-h"><b>${u.solution}</b><button class="chip-btn" data-act="copy-solution">${icon('pencil', 13)}${u.copyIn}</button></div>${code(solution)}</div>`;
+  else if (solution) {
+    const on = solutionUnlocked(st);
+    sol = `<button class="chip-btn" data-act="show-solution"${on ? '' : ` disabled aria-disabled="true" title="${u.solutionLocked}"`}>${icon('code', 13)}${u.showSolution}</button>${on ? '' : `<span class="dim sol-lock">${u.solutionLocked}</span>`}`;
+  }
+  return `<div class="ex-help" id="ex-help">${shown}<div class="help-btns">${next}${st.solution ? '' : sol}</div>${st.solution ? sol : ''}</div>`;
 }
 
 export { esc as escLearn };

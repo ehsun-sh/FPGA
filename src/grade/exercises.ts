@@ -5,6 +5,8 @@ import type { Lang } from '../hdl';
 import { decodeI2c, decodeSpi } from '../la/decode';
 import { BoardHarness, HEX7 } from './harness';
 import { ref } from '../lessons/helpers';
+import { HINTS } from './hints';
+import { solutionOf } from './solutions';
 
 export interface CheckItem {
   ok: boolean;
@@ -38,6 +40,8 @@ export interface Exercise {
   // the exercise is about the testbench, not the design
   testbench?: { mutate: Record<Lang, [RegExp, string]> };
   check?(h: BoardHarness, t: Tester): void;
+  hints?: { fa: string; en: string }[]; // exactly 2: [concept hint, code-skeleton hint]; HTML
+  solution?: { verilog: string; vhdl: string }; // a complete design (testbench exercise: the testbench) that passes
 }
 
 const hex = (v: number, n = 4) => '0x' + (v >>> 0).toString(16).toUpperCase().padStart(n, '0');
@@ -700,3 +704,10 @@ function uartEcho(h: BoardHarness, text: string, baud: number): { text: string; 
   return { text: out, errors };
 }
 
+
+// hints and reference solutions live in their own files; attach them once, at load
+for (const [id, ex] of Object.entries(EXERCISES)) {
+  if (HINTS[id]) ex.hints = HINTS[id];
+  const sol = solutionOf(id);
+  if (sol) ex.solution = sol;
+}

@@ -4040,3 +4040,85 @@ a.xref {
   text-underline-offset: 2px;
   cursor: pointer;
 }
+/* solved with the solution: a hollow check */
+.lesson-item .done.help {
+  color: #2e9e4a;
+  opacity: 0.9;
+}
+.lesson-item .done.help .i,
+.ch-card ol .done.help .n .i {
+  stroke-width: 1.5;
+}
+.lesson-item .done.help {
+  border: 1.5px solid #2e9e4a;
+  border-radius: 50%;
+  padding: 0 1px;
+  margin-inline-start: auto;
+  line-height: 0;
+}
+.ch-card ol .done.help .n {
+  background: transparent;
+  color: #22a35a;
+  border: 2px solid #22c55e;
+}
+.ex-done.help {
+  background: transparent;
+  outline: 1.5px solid currentColor;
+}
+.ex-help {
+  margin: 10px 0;
+}
+.ex-help .hint {
+  border-inline-start: 3px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 6px 0;
+  line-height: 1.8;
+  font-size: 14px;
+}
+.ex-help .hint code {
+  word-break: break-word;
+}
+.help-btns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+.chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: inherit;
+  cursor: pointer;
+}
+.chip-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.chip-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.sol-lock {
+  font-size: 12.5px;
+}
+.solution .sol-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+.solution pre.code {
+  max-height: 360px;
+  overflow: auto;
+}

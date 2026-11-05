@@ -48,7 +48,7 @@ import { toolIcons, toolLegend, toolsBox } from "./ui/tools";
 import { lessonTools, type Tool } from "./lessons/tools";
 import { lessonTime } from "./lessons/time";
 import { ref } from "./lessons/helpers";
-import { LEARN_UI, levelDot, objectivesHtml, takeawaysHtml } from "./ui/learn";
+import { helpHtml, LEARN_UI, levelDot, objectivesHtml, takeawaysHtml, type HelpState } from "./ui/learn";
 
 // ---------------------------------------------------------------- storage
 const store = {
@@ -982,9 +982,7 @@ function renderLessonList() {
     const items = c.lessons.map((l) => {
       const no = l === PLAYGROUND ? "★" : num(++n, uiLang);
       const cur = l.id === lesson.id;
-      const done = solved.has(l.id)
-        ? `<span class="done" title="${ui.solved}">${icon("check", 13)}<span class="sr-only">${ui.solved}</span></span>`
-        : "";
+      const done = doneMark(l.id);
       return `<button class="flow-item lesson-item ${cur ? "active" : ""}" data-lesson="${l.id}" dir="${dir}"${cur ? ' aria-current="page"' : ""}><span class="num">${no}</span><span class="lt">${esc(text(l).title)}</span>${levelDot(l, uiLang)}${toolIcons(l)}${done}</button>`;
     });
     const soon = (c.soon ?? []).map(
@@ -1034,18 +1032,43 @@ const solved = new Set<string>(
 );
 const exerciseCount = () => ALL_LESSONS.filter((l) => EXERCISES[l.id]).length;
 
+// lessons solved after the solution was shown: they count as done, with a hollow check
+const solvedHelp = new Set<string>((store.get("solved-help") ?? "").split(",").filter((x) => EXERCISES[x]));
+const doneMark = (id: string, cls = "done") => {
+  if (!solved.has(id)) return "";
+  const help = solvedHelp.has(id);
+  const t = help ? LEARN_UI[uiLang].solvedHelp : LESSON_UI[uiLang].solved;
+  return `<span class="${cls}${help ? " help" : ""}" title="${t}">${icon("check", 13)}<span class="sr-only">${t}</span></span>`;
+};
+
+// hint and solution state of an exercise, kept per lesson in localStorage
+const helpState = (id: string): HelpState => ({
+  attempts: Number(store.get(`attempts:${id}`) ?? 0),
+  hints: Number(store.get(`hints:${id}`) ?? 0),
+  solution: store.get(`solution:${id}`) === "1",
+});
+function renderHelp() {
+  const box = document.getElementById("ex-help");
+  if (box) box.outerHTML = exerciseHelpHtml();
+}
+function exerciseHelpHtml(): string {
+  const ex = EXERCISES[lesson.id];
+  if (!ex) return "";
+  return helpHtml(ex.hints, ex.solution?.[lang], helpState(lesson.id), uiLang, (n) => num(n, uiLang), (c) => codeBlock(c, lang));
+}
+
 function exerciseHtml(): string {
   const ui = LESSON_UI[uiLang];
   const ex = EXERCISES[lesson.id];
   const body = ex ? ex[uiLang] : text(lesson).exercise;
   if (!body) return "";
   const done = solved.has(lesson.id)
-    ? ` <span class="ex-done">✓ ${ui.solved}</span>`
+    ? ` <span class="ex-done${solvedHelp.has(lesson.id) ? " help" : ""}">✓ ${solvedHelp.has(lesson.id) ? LEARN_UI[uiLang].solvedHelp : ui.solved}</span>`
     : "";
   const btn = ex
     ? `<button class="big-run check" data-act="check">${icon("check", 15)}${ui.check}</button><div id="ex-result"></div>`
     : "";
-  return `<section class="exercise" id="sec-exercise"><h2>${icon("target", 18)}${ui.exercise}${done}</h2>${body}<p class="dim">${ex?.testbench ? ui.exerciseHintTb : ui.exerciseHint}</p>${btn}</section>`;
+  return `<section class="exercise" id="sec-exercise"><h2>${icon("target", 18)}${ui.exercise}${done}</h2>${body}<p class="dim">${ex?.testbench ? ui.exerciseHintTb : ui.exerciseHint}</p>${exerciseHelpHtml()}${btn}</section>`;
 }
 
 function checkExercise() {
@@ -1079,9 +1102,17 @@ function checkExercise() {
       r.passed ? ui.passed : ui.failed.replace(/:$/, ""),
       r.passed ? "ok" : "warning",
     );
+    if (!r.passed && !solved.has(l.id)) {
+      store.set(`attempts:${l.id}`, String(helpState(l.id).attempts + 1));
+      if (l === lesson) renderHelp();
+    }
     if (r.passed && !solved.has(l.id)) {
       solved.add(l.id);
       store.set("solved", [...solved].join(","));
+      if (helpState(l.id).solution) {
+        solvedHelp.add(l.id);
+        store.set("solved-help", [...solvedHelp].join(","));
+      }
       renderLessonList();
       applyUiLang();
     }
@@ -1324,6 +1355,7 @@ function setLang(lg: Lang) {
   document
     .querySelectorAll<HTMLElement>(".code-panel")
     .forEach((p) => (p.hidden = p.dataset.panel !== lang));
+  renderHelp(); // a revealed solution follows the HDL language
   log(
     `# set_property TARGET_LANGUAGE ${lang === "verilog" ? "Verilog" : "VHDL"} [current_project]`,
     "cmd",
@@ -1637,6 +1669,31 @@ function act(name: string) {
     case "lesson-intro":
       openLesson(LESSONS[0]);
       break;
+    case "hint": {
+      const n = helpState(lesson.id).hints;
+      store.set(`hints:${lesson.id}`, String(Math.min(2, n + 1)));
+      renderHelp();
+      break;
+    }
+    case "show-solution": {
+      const st = helpState(lesson.id);
+      if (!(st.attempts >= 2 || st.hints >= 2)) break;
+      store.set(`solution:${lesson.id}`, "1");
+      renderHelp();
+      break;
+    }
+    case "copy-solution": {
+      const sol = EXERCISES[lesson.id]?.solution?.[lang];
+      if (!sol || !confirm(LEARN_UI[uiLang].copyConfirm)) break;
+      if (EXERCISES[lesson.id].testbench) {
+        tbEditor.setText(sol, lang);
+        showTab("tb");
+      } else {
+        srcEditor.setText(sol, lang);
+        showTab("source");
+      }
+      break;
+    }
     case "reset-code":
       if (
         confirm(
@@ -1646,6 +1703,9 @@ function act(name: string) {
         store.del(srcKey(lesson, lang));
         store.del(xdcKey(lesson));
         store.del(tbKey(lesson, lang));
+        store.del(`attempts:${lesson.id}`);
+        store.del(`hints:${lesson.id}`);
+        renderHelp();
         srcEditor.setText(sourceFor(lesson, lang), lang);
         xdcEditor.setText(xdcFor(lesson), "xdc");
         loadTb();
@@ -2073,6 +2133,7 @@ function renderHomePage() {
     title: (l) => text(l).title,
     summary: (l) => text(l).summary,
     done: isDone,
+    help: (l) => solvedHelp.has(l.id),
     resume: seen.size ? lesson : null,
     minutes: (l) => {
       const t = timeOf(l);

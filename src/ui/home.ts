@@ -16,6 +16,7 @@ export interface HomeData {
   title: (l: Lesson) => string;
   summary: (l: Lesson) => string;
   done: (l: Lesson) => boolean;
+  help?: (l: Lesson) => boolean; // solved after the solution was shown (a hollow check)
   resume: Lesson | null; // the lesson to continue, or null for a first visit
   live: boolean; // a design is running on the hero board
   minutes: (l: Lesson) => number; // reading + practice time of a lesson
@@ -159,7 +160,7 @@ export function renderHome(d: HomeData): string {
           const k = ++i;
           const here = l === d.resume;
           const state = d.done(l) ? `<span class="sr-only"> · ${h.done}</span>` : '';
-          return `<li><button data-lesson="${l.id}" class="${d.done(l) ? 'done' : ''}${here ? ' here' : ''}"><span class="n">${d.done(l) ? icon('check', 13) : n(k)}</span><span class="t">${esc(d.title(l))}${state}</span>${levelDot(l, d.lang)}${toolIcons(l)}${here ? `<span class="here-tag">${h.here}</span>` : ''}</button></li>`;
+          return `<li><button data-lesson="${l.id}" class="${d.done(l) ? 'done' : ''}${d.done(l) && d.help?.(l) ? ' help' : ''}${here ? ' here' : ''}"><span class="n">${d.done(l) ? icon('check', 13) : n(k)}</span><span class="t">${esc(d.title(l))}${state}</span>${levelDot(l, d.lang)}${toolIcons(l)}${here ? `<span class="here-tag">${h.here}</span>` : ''}</button></li>`;
         })
         .join('');
       return `<article class="ch-card">
