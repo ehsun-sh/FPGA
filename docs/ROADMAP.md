@@ -242,16 +242,16 @@ three instrument buttons the learner cannot use yet.
 
 ### Acceptance checklist — Phase 1
 
-- [ ] Fresh browser → landing page → "Start with lesson 1": the workbench opens in Learn mode, the tour starts,
+- [x] Fresh browser → landing page → "Start with lesson 1": the workbench opens in Learn mode, the tour starts,
       the menubar and Flow Navigator extras are hidden, the bottom panel is collapsed, no `hw_server` lines.
-- [ ] Switching to Vivado mode restores today's UI pixel-for-pixel (compare with a screenshot from `main`).
-- [ ] The three instrument buttons appear only in lessons whose `lessonTools()` include them; Ctrl+L still works.
-- [ ] Run a lesson with a deliberate syntax error: the bottom panel opens on Messages and the chip shows the count.
-- [ ] Tour: all 5 steps position correctly at 1440 px and 1280 px; Esc skips; it never shows twice; Help re-runs it.
-- [ ] Language switch works from the lesson Code tabs and from `#doc-lang`; the toolbar one is hidden in Learn mode.
-- [ ] Time estimates render in both languages; `test/time.test.ts` passes.
-- [ ] Phone (390 px): toggle hidden, note shows once in the code pane, tour uses the phone steps.
-- [ ] `npm test`, `npm run build` green; README updated; PR lists how to verify.
+- [x] Switching to Vivado mode restores today's UI pixel-for-pixel (compare with a screenshot from `main`).
+- [x] The three instrument buttons appear only in lessons whose `lessonTools()` include them; Ctrl+L still works.
+- [x] Run a lesson with a deliberate syntax error: the bottom panel opens on Messages and the chip shows the count.
+- [x] Tour: all 5 steps position correctly at 1440 px and 1280 px; Esc skips; it never shows twice; Help re-runs it.
+- [x] Language switch works from the lesson Code tabs and from `#doc-lang`; the toolbar one is hidden in Learn mode.
+- [x] Time estimates render in both languages; `test/time.test.ts` passes.
+- [x] Phone (390 px): toggle hidden, note shows once in the code pane, tour uses the phone steps.
+- [x] `npm test`, `npm run build` green; README updated; PR lists how to verify.
 
 ---
 

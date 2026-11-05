@@ -7,6 +7,15 @@ and watch it run on an interactive 3D Digilent Nexys A7-100T on the right.
 
 ## Features
 
+- **Learn and Vivado modes**: the workbench starts in *Learn* mode, which shows only what a lesson needs (the lesson,
+  the code, Run on Board, the board and the lesson's own instruments) with a folded, quiet console. *Vivado* mode
+  (switch in the top bar, or View menu) brings back the menu bar, the full Flow Navigator, the Tcl prompt and every
+  instrument. Phones always use Learn mode, and show a one-time note that editing is easier on a laptop.
+- **Onboarding tour and Help**: a five-step tour explains the screen on the first visit (four steps on a phone). The
+  **?** menu in the top bar re-runs it and has the keyboard shortcuts, the simulator's limits, the downloads, a link
+  to report a problem and About.
+- **Time estimates**: each lesson shows its reading and practice time, and each chapter card its total. A legend
+  under the course progress explains the instrument icons on the lessons.
 - **Two-pane workspace**: code editor (CodeMirror, Verilog / VHDL / XDC) and a Three.js model of the Nexys A7-100T with
   clickable switches and buttons, glowing LEDs, RGB LEDs and 8-digit seven-segment display.
 - **Vivado-style flow**: Flow Navigator, Synthesis → Implementation → Bitstream → Program Device, Tcl console,
