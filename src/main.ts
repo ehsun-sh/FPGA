@@ -40,9 +40,13 @@ import { CodeEditor } from "./ui/editor";
 import { highlight } from "./ui/highlight";
 import { bindLangMenu, homeNav, renderHome } from "./ui/home";
 import { icon } from "./ui/icons";
-import { num, UI, type UiLang } from "./ui/strings";
+import { num, TOUR, UI, type UiLang } from "./ui/strings";
+import { startTour, type TourStep } from "./ui/tour";
+import { ISSUES_URL, limitsDialog, shortcutsDialog } from "./ui/help";
 import { versionLabel } from "./version";
-import { toolIcons, toolsBox } from "./ui/tools";
+import { toolIcons, toolLegend, toolsBox } from "./ui/tools";
+import { lessonTools, type Tool } from "./lessons/tools";
+import { lessonTime } from "./lessons/time";
 
 // ---------------------------------------------------------------- storage
 const store = {
@@ -118,6 +122,9 @@ app.innerHTML = `
     <button data-act="view-reset">Board: perspective view</button>
     <button data-act="view-top">Board: top view</button>
     <button data-act="toggle-flow">Toggle Flow Navigator</button>
+    <hr/>
+    <button data-act="mode-learn" role="menuitemradio" aria-checked="false">Workbench: Learn mode</button>
+    <button data-act="mode-vivado" role="menuitemradio" aria-checked="false">Workbench: Vivado mode</button>
   </div></div>
   <div class="menu"><button aria-haspopup="true" aria-expanded="false">Tools</button><div class="dropdown">
     <button data-act="la">Logic Analyzer <kbd>Ctrl+L</kbd></button>
@@ -125,6 +132,16 @@ app.innerHTML = `
     <button data-act="vga">VGA Monitor</button>
   </div></div>
   <div class="menu"><button aria-haspopup="true" aria-expanded="false">Help</button><div class="dropdown">
+    <button data-act="tour">Take the tour</button>
+    <button data-act="shortcuts">Keyboard shortcuts</button>
+    <button data-act="limits">Simulator limits</button>
+    <hr/>
+    <button data-act="download-src">Download design source</button>
+    <button data-act="download-tb">Download testbench</button>
+    <button data-act="download-xdc">Download constraints (.xdc)</button>
+    <button data-act="download-project">Download Vivado project (.zip)</button>
+    <hr/>
+    <button data-act="report-problem">Report a problem</button>
     <button data-act="about">About FPGA Lab</button>
     <button data-act="lesson-intro">Getting started</button>
   </div></div>
@@ -134,18 +151,18 @@ app.innerHTML = `
   <button class="tb" data-act="stop" title="Stop">${icon("stop", 14)}<span class="lbl">Stop</span></button>
   <button class="tb" data-act="reset" title="Reset the design (like re-programming)">${icon("reset", 14)}<span class="lbl">Reset</span></button>
   <button class="tb" data-act="sim" id="sim-btn" title="Run the testbench and show the waveforms (Shift+F6)">${icon("wave", 14)}<span class="lbl">Simulate</span></button>
-  <span class="sep"></span>
+  <span class="sep" id="tool-sep"></span>
   <button class="tb tool" data-act="la" id="la-btn" title="Logic Analyzer (Ctrl+L)">${icon("logic", 14)}<span class="lbl">Logic Analyzer</span></button>
   <button class="tb tool" data-act="serial" id="serial-btn" title="Serial Console on the USB-UART (Ctrl+M)">${icon("terminal", 14)}<span class="lbl">Serial Console</span></button>
   <button class="tb tool" data-act="vga" id="vga-btn" title="VGA Monitor">${icon("monitor", 14)}<span class="lbl">VGA Monitor</span></button>
-  <span class="sep"></span>
-  <div class="seg-ctl" role="group" aria-label="HDL language">
+  <span class="sep lang-sep"></span>
+  <div class="seg-ctl tb-lang" role="group" aria-label="HDL language">
     <button data-lang="verilog" aria-pressed="false">Verilog</button><button data-lang="vhdl" aria-pressed="false">VHDL</button>
   </div>
 </div>
 <main class="workspace">
   <aside class="flow" id="flow" aria-label="Flow Navigator">
-    <div class="flow-title">FLOW NAVIGATOR</div>
+    <div class="flow-title" id="flow-title">FLOW NAVIGATOR</div>
     <div class="flow-sec" data-sec="learn">
       <button class="sec-h" id="learn-h" aria-expanded="true"></button>
       <div class="sec-body" id="lesson-list"></div>
@@ -201,7 +218,11 @@ app.innerHTML = `
       <button data-tab="xdc" role="tab" aria-selected="false">${xdcName}</button>
       <button data-tab="tb" role="tab" aria-selected="false"><span id="tb-name">tb.v</span></button>
       <button data-tab="schematic" id="schem-tab" class="hidden" role="tab" aria-selected="false">${icon("schematic", 14)}Schematic</button>
+      <div class="seg-ctl" id="doc-lang" role="group" aria-label="HDL language">
+        <button data-lang="verilog" aria-pressed="false">Verilog</button><button data-lang="vhdl" aria-pressed="false">VHDL</button>
+      </div>
     </div>
+    <div class="phone-note" id="phone-note" role="note"><span id="phone-note-t"></span><button data-act="phone-note-close" id="phone-note-x">×</button></div>
     <div class="tab-body">
       <article class="lesson" id="lesson" tabindex="-1"></article>
       <div class="editor-host hidden" id="src-editor"></div>
@@ -213,7 +234,7 @@ app.innerHTML = `
   <div class="splitter v" id="split-v" title="Drag to resize"></div>
   <section class="pane right" aria-label="Hardware">
     <div class="hw-title">
-      <span class="rtabs" role="tablist" aria-label="Hardware and simulation"><button data-rtab="hw" class="active" role="tab" aria-selected="true"><b>HARDWARE MANAGER</b> <span class="dim">— localhost/xilinx_tcf/Digilent</span></button><button data-rtab="sim" role="tab" aria-selected="false"><b>SIMULATION</b> <span class="dim">— Behavioral</span></button></span>
+      <span class="rtabs" role="tablist" aria-label="Hardware and simulation"><button data-rtab="hw" class="active" role="tab" aria-selected="true"><span class="v-only"><b>HARDWARE MANAGER</b> <span class="dim">— localhost/xilinx_tcf/Digilent</span></span><b class="l-only">${boardDef.name}</b></button><button data-rtab="sim" role="tab" aria-selected="false"><span class="v-only"><b>SIMULATION</b> <span class="dim">— Behavioral</span></span><b class="l-only" id="sim-title-l"></b></button></span>
       <span class="hw-dev" id="hw-dev">${hwDev} (not programmed)</span>
     </div>
     <div class="board-host" id="board">
@@ -261,9 +282,12 @@ app.innerHTML = `
   <span id="st-design"></span>
   <span id="st-speed"></span>
   <span id="st-cycles"></span>
+  <button class="st-msgs hidden" id="st-msgs" data-act="show-messages"></button>
   <span class="st-version" title="FPGA Lab version">FPGA Lab ${versionLabel}</span>
 </footer>
 <div class="home" id="home" tabindex="-1" hidden></div>
+<dialog id="shortcuts" class="help-dlg"></dialog>
+<dialog id="limits" class="help-dlg"></dialog>
 <dialog id="about"><form method="dialog">
   <h2>FPGA Lab <span class="dim about-ver">${versionLabel}</span></h2>
   <p>An in-browser FPGA course with a Vivado-inspired workflow and simulated FPGA boards (currently: ${BOARDS.map((b) => `${b.vendor} ${b.name}`).join(", ")}).</p>
@@ -282,6 +306,23 @@ let lesson: Lesson =
 let lastCourse: Lesson = lesson === PLAYGROUND ? LESSONS[0] : lesson;
 let tab: "lesson" | "source" | "xdc" | "tb" | "schematic" = "lesson";
 let uiLang: UiLang = store.get("ui-lang") === "fa" ? "fa" : "en";
+// the Vivado-style start-up lines; Learn mode starts with a quiet console and prints them on the first switch
+let bannerShown = false;
+function logBanner() {
+  if (bannerShown) return;
+  bannerShown = true;
+  log("****** FPGA Lab — Vivado-style HDL environment (browser edition)", "plain");
+  log("INFO: [Labtools 27-2285] Connecting to hw_server url TCP:localhost:3121", "info");
+  log("INFO: [Labtools 27-3415] Connecting to cs_server url TCP:localhost:3042", "info");
+  log(
+    `INFO: [Labtools 27-1434] Device ${hwDev} on ${boardDef.vendor} ${boardDef.name} (JTAG device index = 0) is ready. Press ▶ Run on Board to program it.`,
+    "info",
+  );
+}
+
+// Learn mode shows a beginner only what a lesson needs; Vivado mode is the full Vivado-style chrome
+type Mode = "learn" | "vivado";
+let mode: Mode = store.get("mode") === "vivado" ? "vivado" : "learn";
 // lesson text in the selected site language (Persian lives in lessons.ts, English in en.ts)
 const text = (l: Lesson): LessonText =>
   uiLang === "en" && EN[l.id] ? EN[l.id] : l;
@@ -440,6 +481,10 @@ function renderMessages() {
       : "";
   badge.className =
     "badge " + (counts.error ? "err" : counts.warning ? "warn" : "");
+  const chip = $("#st-msgs");
+  chip.classList.toggle("hidden", !messages.length);
+  chip.classList.toggle("err", counts.error > 0);
+  chip.textContent = UI[uiLang].msgCount(num(messages.length, uiLang));
   if (!messages.length) {
     el.innerHTML = '<p class="dim">No messages.</p>';
     return;
@@ -951,7 +996,7 @@ function renderLessonList() {
       ? ""
       : `<span class="ch-prog${done === c.lessons.length ? " full" : ""}" title="${ui.chapterDone(num(done, uiLang), num(c.lessons.length, uiLang))}">${num(done, uiLang)}/${num(c.lessons.length, uiLang)}</span>`;
     return `<div class="chap${open ? " open" : ""}"><button class="chapter-h" dir="${dir}" data-chapter="${ci}" aria-expanded="${open}" aria-controls="chap-${ci}">${icon("chevron", 12)}<span class="ct">${lab ? "" : `<span class="cno">${num(ci + 1, uiLang)}</span>`}${esc(c.title[uiLang])}</span>${count}</button><div class="chap-body" id="chap-${ci}"${open ? "" : " hidden"}>${items.join("")}${soon.join("")}</div></div>`;
-  }).join("");
+  }).join("") + toolLegend(ALL_LESSONS, uiLang, true);
   el.querySelector<HTMLElement>(".lesson-item.active")?.scrollIntoView({ block: "nearest" });
 }
 
@@ -1027,6 +1072,7 @@ function checkExercise() {
     );
     for (const i of r.items)
       log(`${i.ok ? "  ✓" : "  ✗"} ${i[uiLang]}`, i.ok ? "ok" : "error");
+    showBottom("console", true);
     log(
       r.passed ? ui.passed : ui.failed.replace(/:$/, ""),
       r.passed ? "ok" : "warning",
@@ -1062,6 +1108,10 @@ function codeBlock(code: string, lg: "verilog" | "vhdl") {
   return `<pre class="code" dir="ltr"><code>${highlight(code, lg)}</code></pre>`;
 }
 
+// reading and practice minutes of a lesson, in the site language
+const timeOf = (l: Lesson) =>
+  lessonTime({ ...text(l), time: l.time }, !!(EXERCISES[l.id] || text(l).exercise), chapterOf(l) + 1);
+
 function renderLesson() {
   const idx = ALL_LESSONS.indexOf(lesson);
   const prev = ALL_LESSONS[idx - 1];
@@ -1078,15 +1128,11 @@ function renderLesson() {
       ? ""
       : `<span class="of">${u.lessonOf(num(pos + 1, uiLang), num(course.length, uiLang))}</span>`;
   const hasEx = !!(EXERCISES[lesson.id] || tx.exercise);
-  // reading time of the prose (about 180 words a minute), so a learner can plan a sitting
-  const words = `${tx.body} ${tx.tryIt} ${tx.exercise ?? ""}`
-    .replace(/<pre[\s\S]*?<\/pre>|<[^>]+>/g, " ")
-    .split(/\s+/)
-    .filter(Boolean).length;
+  const tm = timeOf(lesson);
   const read =
     pos < 0
       ? ""
-      : `<span class="read">${icon("clock", 13)}${ui.readTime(num(Math.max(2, Math.round(words / 180)), uiLang))}</span>`;
+      : `<span class="read">${icon("clock", 13)}${ui.time(num(tm.read, uiLang), num(tm.practice, uiLang))}</span>`;
   const toc = [
     ["sec-overview", "book", u.overview],
     ["sec-code", "code", u.code],
@@ -1115,8 +1161,10 @@ ${toolsBox(lesson, uiLang)}
     <span class="grow"></span>
     <button class="open-ed" data-act="open-editor" dir="${el.dir}">${icon("pencil", 13)}${ui.openEditor}</button>
   </div>
+  <p class="code-hint learn-link">${u.langHint}</p>
   <div class="code-panel" data-panel="verilog" ${lang === "verilog" ? "" : "hidden"}>${codeBlock(lesson.verilog, "verilog")}</div>
   <div class="code-panel" data-panel="vhdl" ${lang === "vhdl" ? "" : "hidden"}>${codeBlock(lesson.vhdl, "vhdl")}</div>
+  <button class="link-btn learn-link" data-act="reset-code">${icon("reset", 13)}${u.resetCode}</button>
 </section>
 <section class="try" id="sec-try"><h2>${icon("zap", 18)}${ui.tryIt}<span class="state-chip" id="try-state"></span></h2>${tx.tryIt}
   <div class="try-actions">
@@ -1183,6 +1231,7 @@ function openLesson(l: Lesson, switchTab = true) {
   renderLessonList();
   renderLesson();
   loadLa();
+  markLessonTools();
   if (switchTab) showTab(l === PLAYGROUND ? "source" : "lesson");
   log(`# open_lesson ${l.id}`, "cmd");
 }
@@ -1201,6 +1250,37 @@ function playgroundMode() {
         ? b.setAttribute("aria-current", "page")
         : b.removeAttribute("aria-current"),
     );
+}
+
+// in Learn mode the toolbar shows only the instruments this lesson uses (CSS hides the rest unless one is open)
+function markLessonTools() {
+  const ts = lessonTools(lesson);
+  const ids: [string, Tool][] = [["#la-btn", "la"], ["#serial-btn", "serial"], ["#vga-btn", "vga"]];
+  for (const [sel, t] of ids) $(sel).classList.toggle("hidden-tool", !ts.includes(t));
+  $("#tool-sep").classList.toggle("hidden-tool", !ids.some(([, t]) => ts.includes(t)));
+}
+
+// phones always get the Learn layout (no room for the Vivado chrome there); the stored choice is kept for desktops
+const effectiveMode = (): Mode => (phone.matches ? "learn" : mode);
+function applyMode() {
+  const m = effectiveMode();
+  document.body.classList.toggle("mode-learn", m === "learn");
+  document.body.classList.toggle("mode-vivado", m === "vivado");
+  document.querySelectorAll<HTMLElement>('[data-act="mode-learn"], [data-act="mode-vivado"]').forEach((b) => {
+    const on = b.dataset.act === `mode-${mode}`;
+    if (b.getAttribute("role") === "menuitemradio") b.setAttribute("aria-checked", String(on));
+    else b.setAttribute("aria-pressed", String(on));
+    b.classList.toggle("active", on);
+  });
+  $("#flow-title").textContent = m === "learn" ? UI[uiLang].courseTitle : UI[uiLang].flowTitle;
+  applyBottom();
+}
+function setMode(m: Mode) {
+  if (m === mode) return;
+  mode = m;
+  store.set("mode", m);
+  applyMode();
+  if (m === "vivado") logBanner();
 }
 
 function setLang(lg: Lang) {
@@ -1246,6 +1326,7 @@ function setUiLang(l: UiLang) {
   renderLessonList();
   renderLesson();
   modules.render();
+  renderMessages();
   if (homeOpen) renderHomePage();
 }
 
@@ -1256,10 +1337,18 @@ function applyUiLang() {
     uiLang === "fa" ? "FPGA Lab | محیط یادگیری به سبک Vivado" : "FPGA Lab | a Vivado-style learning environment";
   $("#titlebar").innerHTML = homeNav(
     uiLang,
-    `<div class="project" dir="ltr">${boardDef.vendor} <b>${boardDef.name}</b> · <b>${boardDef.part}</b></div>`,
+    `<div class="seg-ctl mode-ctl" role="group" aria-label="${u.modeGroup}"><button data-act="mode-learn" aria-pressed="false">${u.modeLearn}</button><button data-act="mode-vivado" aria-pressed="false" dir="ltr">${u.modeVivado}</button></div><div class="project" dir="ltr">${boardDef.vendor} <b>${boardDef.name}</b> · <b>${boardDef.part}</b></div>`,
     lesson === PLAYGROUND ? "playground" : "lab",
   );
   playgroundMode();
+  applyMode();
+  $("#sim-title-l").textContent = u.simTitle;
+  $("#phone-note-t").textContent = u.phoneNote;
+  $("#phone-note").dir = uiLang === "fa" ? "rtl" : "ltr";
+  $("#phone-note-x").setAttribute("aria-label", u.dismiss);
+  document.body.classList.toggle("phone-note-off", store.get("phone-note") === "1");
+  $("#shortcuts").innerHTML = shortcutsDialog(uiLang);
+  $("#limits").innerHTML = limitsDialog(uiLang);
   $("#board-hint").textContent = u.boardHint;
   if (!lastDesign) $("#st-design").textContent = u.noDesign;
   document
@@ -1296,7 +1385,28 @@ function showTab(t: typeof tab) {
   }
 }
 
-function showBottom(t: "console" | "messages" | "reports") {
+type BottomTab = "console" | "messages" | "reports";
+// In Learn mode the console starts folded to its tab bar. It opens when the learner clicks a tab, when a run ends with
+// errors or warnings, and when an exercise check finishes; it never folds by itself. Vivado mode keeps it open.
+let bottomOpen = store.get("bottom-open") === "1";
+const hasIssues = () => messages.some((m) => m.level !== "info");
+function applyBottom() {
+  const folded = effectiveMode() === "learn" && !bottomOpen;
+  $("#bottom").classList.toggle("collapsed", folded);
+  $("#split-h").classList.toggle("collapsed", folded);
+}
+function setBottomOpen(on: boolean) {
+  bottomOpen = on;
+  store.set("bottom-open", on ? "1" : "0");
+  applyBottom();
+}
+function bottomTabClick(t: BottomTab) {
+  const active = document.querySelector<HTMLElement>("#bottom-tabs [data-btab].active")?.dataset.btab;
+  if (effectiveMode() === "learn" && bottomOpen && active === t) setBottomOpen(false);
+  else showBottom(t, true);
+}
+function showBottom(t: BottomTab, expand = t === "messages" && hasIssues()) {
+  if (expand && !bottomOpen && effectiveMode() === "learn") setBottomOpen(true);
   document
     .querySelectorAll<HTMLElement>("#bottom-tabs [data-btab]")
     .forEach((b) => selectTab(b, b.dataset.btab === t));
@@ -1559,6 +1669,27 @@ function act(name: string) {
     case "view-fit":
       board.fitView();
       break;
+    case "tour":
+      runTour();
+      break;
+    case "shortcuts":
+    case "limits":
+      ($("#" + name) as HTMLDialogElement).showModal();
+      break;
+    case "report-problem":
+      window.open(ISSUES_URL, "_blank", "noopener");
+      break;
+    case "phone-note-close":
+      store.set("phone-note", "1");
+      document.body.classList.add("phone-note-off");
+      break;
+    case "show-messages":
+      showBottom("messages", true);
+      break;
+    case "mode-learn":
+    case "mode-vivado":
+      setMode(name === "mode-learn" ? "learn" : "vivado");
+      break;
     case "toggle-flow":
       $("#flow").classList.toggle("collapsed");
       break;
@@ -1588,7 +1719,7 @@ document.addEventListener("click", (ev) => {
   if (a) {
     if (a.tagName === "A") ev.preventDefault();
     act(a.dataset.act!);
-    if (a.dataset.act !== "skip") (document.activeElement as HTMLElement | null)?.blur?.();
+    if (a.dataset.act !== "skip" && a.dataset.act !== "help-menu") (document.activeElement as HTMLElement | null)?.blur?.();
   }
   const ch = t.closest("[data-chapter]") as HTMLElement | null;
   if (ch) toggleChapter(Number(ch.dataset.chapter));
@@ -1608,7 +1739,7 @@ document.addEventListener("click", (ev) => {
   const tb = t.closest("[data-tab]") as HTMLElement | null;
   if (tb) showTab(tb.dataset.tab as typeof tab);
   const bt = t.closest("[data-btab]") as HTMLElement | null;
-  if (bt) showBottom(bt.dataset.btab as "console");
+  if (bt) bottomTabClick(bt.dataset.btab as BottomTab);
   const rt = t.closest("[data-rtab]") as HTMLElement | null;
   if (rt) showRight(rt.dataset.rtab as "hw");
   const m = t.closest("[data-m]") as HTMLElement | null;
@@ -1918,6 +2049,10 @@ function renderHomePage() {
     summary: (l) => text(l).summary,
     done: isDone,
     resume: seen.size ? lesson : null,
+    minutes: (l) => {
+      const t = timeOf(l);
+      return t.read + t.practice;
+    },
     live: runner.running && lesson === ALL_LESSONS[0],
   });
   $("#hero-stage").appendChild(boardEl);
@@ -1948,9 +2083,43 @@ function showHome(on: boolean) {
   } else {
     boardPane.appendChild(boardEl);
     markSeen(lesson);
+    maybeAutoTour();
     // the page changed under the keyboard: start again from the lesson, not from the hidden landing page
     (lesson === PLAYGROUND ? $("#left") : $("#lesson")).focus({ preventScroll: true });
   }
+}
+
+// ---------------------------------------------------------------- onboarding tour
+// five steps on a desktop, four on a phone (where each pane has its own tab); shown once, re-run from Help
+function runTour() {
+  tourTimer ||= -1; // started by hand: no auto-start on top of it
+  if (homeOpen) goLab();
+  if (lesson === PLAYGROUND) openLesson(lastCourse);
+  if (tab !== "lesson") showTab("lesson");
+  const t = TOUR[uiLang];
+  const step = (target: string, [title, body]: [string, string]): TourStep => ({ target, title, body });
+  const steps = phone.matches
+    ? [
+        step('#mtabs [data-m="lesson"]', t.lesson),
+        step('#mtabs [data-m="code"]', t.code),
+        step(".toolbar .tb.run", t.run),
+        step('#mtabs [data-m="board"]', t.board),
+      ]
+    : [
+        step("#lesson", t.lesson),
+        step('#doc-tabs [data-tab="source"]', t.code),
+        step(".toolbar .tb.run", t.run),
+        step("#board", t.board),
+        step("#sec-exercise, #sec-try", t.check),
+      ];
+  startTour(steps, { lang: uiLang, onDone: () => store.set("tour-done", "1") });
+}
+let tourTimer = 0;
+function maybeAutoTour() {
+  if (store.get("tour-done") !== null || lesson === PLAYGROUND || tourTimer) return;
+  tourTimer = window.setTimeout(() => {
+    if (!homeOpen && lesson !== PLAYGROUND && store.get("tour-done") === null) runTour();
+  }, 600);
 }
 
 function goHome() {
@@ -1987,6 +2156,7 @@ function setMobile(v: MobileView, syncTab = true) {
   if (syncTab && v === "code" && tab === "lesson") showTab("source");
 }
 document.body.dataset.m = "lesson";
+phone.addEventListener("change", applyMode);
 
 // ---------------------------------------------------------------- init
 document.querySelectorAll<HTMLElement>("[data-lang]").forEach((b) => markLang(b));
@@ -1997,21 +2167,8 @@ $("#src-name").textContent = fileName();
 renderLessonList();
 loadLa();
 renderLesson();
+markLessonTools();
 renderMessages();
 route();
-log(
-  "****** FPGA Lab — Vivado-style HDL environment (browser edition)",
-  "plain",
-);
-log(
-  "INFO: [Labtools 27-2285] Connecting to hw_server url TCP:localhost:3121",
-  "info",
-);
-log(
-  "INFO: [Labtools 27-3415] Connecting to cs_server url TCP:localhost:3042",
-  "info",
-);
-log(
-  `INFO: [Labtools 27-1434] Device ${hwDev} on ${boardDef.vendor} ${boardDef.name} (JTAG device index = 0) is ready. Press ▶ Run on Board to program it.`,
-  "info",
-);
+if (effectiveMode() === "vivado") logBanner();
+if (!homeOpen) maybeAutoTour();

@@ -4,7 +4,9 @@ import type { Lesson } from '../lessons/lessons';
 import { icon, type IconName } from './icons';
 import { HOME, num, UI, type UiLang } from './strings';
 import { versionLabel } from '../version';
-import { toolIcons } from './tools';
+import { toolIcons, toolLegend } from './tools';
+import { helpMenu } from './help';
+import { formatMinutes } from '../lessons/time';
 
 export interface HomeData {
   lang: UiLang;
@@ -15,6 +17,7 @@ export interface HomeData {
   done: (l: Lesson) => boolean;
   resume: Lesson | null; // the lesson to continue, or null for a first visit
   live: boolean; // a design is running on the hero board
+  minutes: (l: Lesson) => number; // reading + practice time of a lesson
 }
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -34,6 +37,7 @@ export function homeNav(lang: UiLang, extra = '', current: NavPage = 'home'): st
     ${item('playground', 'flask', u.playground)}
   </nav>
   <span class="grow"></span>${extra}
+  ${helpMenu(lang, current === 'home' ? 'home' : 'lab')}
   ${langMenu(lang, u.language, current === 'home' ? 'home' : 'lab')}`;
 }
 
@@ -44,7 +48,7 @@ const FLAG: Record<UiLang, string> = {
 };
 const LANG_NAME: Record<UiLang, string> = { en: 'English', fa: 'فارسی' };
 
-// language menu: a button with the current language's flag and name; picking an item (data-ui) switches the site.
+// language menu and help menu share the same dropdown behaviour (bindLangMenu); language menu: a button with the current language's flag and name; picking an item (data-ui) switches the site.
 // `where` keeps the ids apart, as the landing page and the workbench each have one.
 function langMenu(cur: UiLang, label: string, where: string): string {
   const items = (['fa', 'en'] as UiLang[])
@@ -69,7 +73,7 @@ export function bindLangMenu() {
     b?.setAttribute('aria-expanded', 'false');
     if (refocus) b?.focus();
   };
-  const items = (dd: Element) => [...dd.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
+  const items = (dd: Element) => [...dd.querySelectorAll<HTMLElement>('[role="menuitemradio"], [role="menuitem"]')];
   const open = (dd: Element, focus: 'checked' | 'last') => {
     dd.classList.add('open');
     dd.querySelector('.lang-menu')?.removeAttribute('hidden');
@@ -90,6 +94,9 @@ export function bindLangMenu() {
         else open(dd, 'checked');
         return;
       }
+      // a help item was picked: close its menu (the action itself runs in the page's click handler)
+      const hit = t.closest('.help-dd [role="menuitem"]');
+      if (hit) close(hit.closest('.lang-dd')!);
       // a language was picked: the top bar is rebuilt, so give the focus to the new menu button
       const pick = t.closest('.lang-dd [data-ui]');
       if (pick) {
@@ -157,6 +164,7 @@ export function renderHome(d: HomeData): string {
       return `<article class="ch-card">
   <header><span class="ch-no">${h.chapter(n(ci + 1))}</span><span class="ch-count" title="${pct}%">${n(done)}/${n(c.lessons.length)}</span></header>
   <h3>${esc(c.title[d.lang])}</h3>
+  <p class="ch-time">${formatMinutes(c.lessons.reduce((t, l) => t + d.minutes(l), 0), d.lang)}</p>
   <div class="bar"><i style="width:${pct}%"></i></div>
   <ol>${items}</ol>
 </article>`;
@@ -203,6 +211,7 @@ export function renderHome(d: HomeData): string {
 <section class="course" id="home-lessons">
   <div class="course-h"><h2>${h.lessonsTitle}</h2><span class="dim">${h.lessonsSub(n(doneAll), n(all.length))}</span></div>
   <div class="bar big"><i style="width:${Math.round((100 * doneAll) / all.length)}%"></i></div>
+  ${toolLegend(all, d.lang)}
   <div class="ch-grid">${cards}
     <article class="ch-card lab-card">
       <header><span class="ch-no">${h.lab}</span></header>

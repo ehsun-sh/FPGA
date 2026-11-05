@@ -1423,7 +1423,7 @@ dialog button {
 .ex-result ul {
   list-style: none;
   padding: 0;
-  margin: 6px 0 0;
+  margin: 6px 0 10px;
 }
 .ex-result li {
   margin: 3px 0;
@@ -3610,4 +3610,351 @@ body.in-playground .pane.left {
 .lesson-tools button:hover {
   border-color: #1e40af;
   color: #1e40af;
+}
+
+/* ---------------------------------------------------------------- Learn mode (Phase 1.1)
+   Learn mode hides the Vivado chrome a beginner does not need yet. The DOM stays, so shortcuts keep working.
+   The playground keeps its usual layout in both modes; only the menu bar follows the mode there. */
+body:not(.mode-learn) .l-only,
+body.in-playground .l-only,
+body.mode-learn:not(.in-playground) .v-only,
+body:not(.mode-learn) .learn-link {
+  display: none !important;
+}
+body.mode-learn .menubar,
+body.mode-learn:not(.in-playground) .flow-sec:not([data-sec='learn']),
+body.mode-learn:not(.in-playground) .tb.hidden-tool:not(.active),
+body.mode-learn:not(.in-playground) .sep.hidden-tool,
+body.mode-learn:not(.in-playground) #hw-dev,
+body.mode-learn:not(.in-playground) #tcl-form {
+  display: none !important;
+}
+.titlebar .mode-ctl {
+  flex: none;
+  border-radius: 999px;
+}
+.titlebar .mode-ctl button {
+  padding: 4px 12px;
+  font-size: 12.5px;
+}
+.titlebar .mode-ctl button.active {
+  background: var(--brand, var(--accent));
+  color: #fff;
+}
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.link-btn:hover {
+  color: var(--text);
+}
+@media (max-width: 900px) {
+  .titlebar .mode-ctl {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------- quiet console (Phase 1.2) */
+@media (min-width: 901px) {
+  #bottom.collapsed {
+    height: auto !important;
+    min-height: 0;
+  }
+  #bottom.collapsed .bottom-body,
+  #split-h.collapsed {
+    display: none;
+  }
+}
+body.mode-learn #bottom-tabs [data-btab='messages'] {
+  order: -2;
+}
+body.mode-learn #bottom-tabs [data-btab='console'] {
+  order: -1;
+}
+.statusbar .st-msgs {
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  padding: 0 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.statusbar .st-msgs.err {
+  color: #fbbf24;
+  font-weight: 600;
+}
+.statusbar .st-msgs.hidden {
+  display: none;
+}
+.statusbar .st-msgs:not(.hidden) + .st-version {
+  margin-inline-start: 0;
+}
+.statusbar .st-msgs {
+  margin-inline-start: auto;
+}
+
+/* ---------------------------------------------------------------- onboarding tour (Phase 1.3) */
+.tour {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+}
+.tour-hole {
+  position: fixed;
+  border-radius: 10px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+  outline: 2px solid var(--brand, var(--accent));
+  pointer-events: none;
+  transition: all 0.2s ease;
+}
+.tour-card {
+  position: fixed;
+  width: min(340px, calc(100vw - 16px));
+  padding: 16px 18px 14px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.45);
+  transition: left 0.2s ease, top 0.2s ease;
+}
+.tour-card h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+.tour-card p {
+  margin: 0 0 14px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.tour-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tour-foot .grow {
+  flex: 1;
+}
+.tour-count {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.tour-foot button {
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.tour-foot .tour-skip {
+  border-color: transparent;
+  background: none;
+  color: var(--muted);
+}
+.tour-foot button.primary {
+  background: var(--brand, var(--accent));
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+}
+.tour-foot button[hidden] {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-hole,
+  .tour-card {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------- help menu and dialogs (Phase 1.4) */
+.help-dd .help-btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 15px;
+}
+.help-menu {
+  min-width: 220px;
+}
+.help-menu a[role='menuitem'] {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13.5px;
+  text-decoration: none;
+}
+.help-menu a[role='menuitem']:hover,
+.help-menu a[role='menuitem']:focus-visible {
+  background: var(--panel-2);
+  outline: none;
+}
+.help-menu .menu-h {
+  padding: 8px 10px 2px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.help-menu hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 4px 6px;
+}
+.help-dlg {
+  max-width: min(520px, calc(100vw - 32px));
+}
+.help-dlg table.keys {
+  border-collapse: collapse;
+  margin: 8px 0 14px;
+  width: 100%;
+}
+.help-dlg table.keys td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--line-soft, var(--line));
+}
+.help-dlg kbd {
+  font: 12px var(--mono);
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel-2);
+}
+.help-dlg ul.limits {
+  padding-inline-start: 20px;
+  line-height: 1.7;
+}
+.help-dlg ul.limits li:target {
+  background: var(--brand-soft, #fff3c4);
+}
+
+/* ---------------------------------------------------------------- one HDL language switch (Phase 1.5) */
+#doc-lang {
+  display: none;
+  flex: none;
+  align-self: center;
+  margin-inline: auto 8px;
+}
+#doc-lang button {
+  border-right: 0;
+  padding: 3px 10px;
+  font-size: 12.5px;
+}
+body.mode-learn:not(.in-playground) #doc-lang {
+  display: inline-flex;
+}
+body.mode-learn:not(.in-playground) .toolbar .tb-lang,
+body.mode-learn:not(.in-playground) .toolbar .lang-sep {
+  display: none;
+}
+.lesson .code-hint {
+  margin: 6px 0 10px;
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+/* ---------------------------------------------------------------- time estimates (Phase 1.6) */
+.ch-card .ch-time {
+  margin: -4px 0 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- instrument legend (Phase 1.7) */
+.legend-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin: 12px 0 4px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.legend-h {
+  font-weight: 600;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.legend b {
+  font-weight: 600;
+  color: var(--text);
+}
+.legend-wrap.compact {
+  margin: 8px 10px 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 11.5px;
+  gap: 4px 10px;
+}
+.legend-wrap.compact .legend {
+  gap: 4px 10px;
+}
+
+/* ---------------------------------------------------------------- phone note in the code pane (Phase 1.8) */
+.phone-note {
+  display: none;
+}
+@media (max-width: 900px) {
+  body[data-m='code']:not(.phone-note-off) .phone-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    flex: none;
+    margin: 8px 10px 0;
+    padding: 9px 12px;
+    border-radius: 10px;
+    background: var(--brand-soft, #fbe6d6);
+    color: var(--text);
+    font-size: 13.5px;
+    line-height: 1.55;
+  }
+  .phone-note span {
+    flex: 1;
+  }
+  .phone-note button {
+    flex: none;
+    border: 0;
+    background: none;
+    font-size: 18px;
+    line-height: 1;
+    padding: 0 4px;
+    color: var(--muted);
+    cursor: pointer;
+  }
 }

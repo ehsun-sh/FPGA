@@ -38,6 +38,17 @@ export const UI = {
     language: 'زبان سایت',
     onPage: 'بخش‌های این درس',
     prevNext: 'درس قبلی و بعدی',
+    flowTitle: 'FLOW NAVIGATOR',
+    courseTitle: 'دوره',
+    modeGroup: 'حالت میز کار',
+    modeLearn: 'آموزش',
+    modeVivado: 'Vivado',
+    simTitle: 'شبیه‌سازی',
+    resetCode: 'بازگرداندن کد درس',
+    msgCount: (n: string) => `${n} پیام`,
+    langHint: 'این انتخاب زبان ویرایشگر و تمرین را هم عوض می‌کند.',
+    phoneNote: 'ویرایش کد روی لپ‌تاپ راحت‌تر است. اینجا می‌توانید کد درس را اجرا کنید و تمرین‌ها را بخوانید.',
+    dismiss: 'بستن',
   },
   en: {
     tagline: 'a Vivado-style learning environment',
@@ -70,6 +81,17 @@ export const UI = {
     language: 'Site language',
     onPage: 'On this page',
     prevNext: 'Previous and next lesson',
+    flowTitle: 'FLOW NAVIGATOR',
+    courseTitle: 'Course',
+    modeGroup: 'Workbench mode',
+    modeLearn: 'Learn',
+    modeVivado: 'Vivado',
+    simTitle: 'Simulation',
+    resetCode: 'Reset lesson code',
+    msgCount: (n: string) => (n === '1' ? '1 message' : `${n} messages`),
+    langHint: 'This choice also sets the editor and exercise language.',
+    phoneNote: 'Editing is easier on a laptop. Here you can still run the lesson code and read the exercises.',
+    dismiss: 'Dismiss',
   },
 };
 
@@ -147,3 +169,21 @@ export const HOME = {
     footer: 'FPGA Lab · learn FPGA design in the browser. An educational replica, not affiliated with AMD/Xilinx or Digilent.',
   },
 };
+
+// the onboarding tour (Phase 1.3): [title, body] per step, in screen order
+export const TOUR = {
+  fa: {
+    lesson: ['درس را اینجا بخوانید', 'هر درس یک مفهوم را توضیح می‌دهد، کد آماده دارد و با یک تمرین تمام می‌شود.'],
+    code: ['کد اینجاست', 'تب top.v کد درس را در ویرایشگر باز می‌کند. می‌توانید آن را تغییر دهید؛ تغییرات در مرورگر ذخیره می‌شود.'],
+    run: ['اجرا روی برد', 'Run on Board کد را سنتز می‌کند و روی برد سه‌بعدی اجرا می‌کند (میان‌بر: Ctrl+Enter).'],
+    board: ['برد زنده است', 'روی کلیدها و دکمه‌ها کلیک کنید، برد را بچرخانید و LEDها و نمایشگر را ببینید.'],
+    check: ['خودتان را محک بزنید', 'هر درس یک تمرین دارد. «بررسی راه‌حل من» طرح شما را روی یک برد مجازی آزمایش می‌کند.'],
+  },
+  en: {
+    lesson: ['Read the lesson here', 'Each lesson explains one idea, ships working code and ends with an exercise.'],
+    code: ['The code lives here', "The top.v tab opens the lesson's code in the editor. Edit it freely; your changes are saved in the browser."],
+    run: ['Run it on the board', 'Run on Board synthesizes the code and runs it on the 3D board (shortcut: Ctrl+Enter).'],
+    board: ['The board is live', 'Click the switches and buttons, rotate the board, and watch the LEDs and the display.'],
+    check: ['Check yourself', 'Every lesson ends with an exercise. “Check my solution” tests your design on a virtual board.'],
+  },
+} satisfies Record<UiLang, Record<string, [string, string]>>;

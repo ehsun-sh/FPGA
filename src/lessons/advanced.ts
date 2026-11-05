@@ -2026,6 +2026,7 @@ end rtl;
   },
   {
     id: 'i2c',
+    time: { read: 6, practice: 25 },
     title: 'پروتکل I²C',
     summary: 'نوشتن و خواندن یک رجیستر در یک سنسور شبیه‌سازی‌شده با آدرس 0x48، روی Pmod JB.',
     body: `

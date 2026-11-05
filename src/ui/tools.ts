@@ -1,5 +1,5 @@
 // Lesson instruments as UI: small icons on a lesson in the course lists and the "tools in this lesson" box.
-import { lessonTools, TOOLS } from '../lessons/tools';
+import { lessonTools, TOOLS, type Tool } from '../lessons/tools';
 import type { Lesson } from '../lessons/lessons';
 import { icon } from './icons';
 
@@ -26,4 +26,32 @@ export function toolsBox(l: Lesson, lang: L): string {
       return `<li><span class="ti">${icon(x.icon, 16)}</span><div><b dir="ltr">${x.name}</b><p>${esc(x.desc(l, lang))}</p></div><button data-act="${x.act}">${open}</button></li>`;
     })
     .join('')}</ul></aside>`;
+}
+
+const SHORT: Record<Tool, Record<L, string>> = {
+  la: { fa: 'لاجیک‌آنالایزر', en: 'Logic analyzer' },
+  serial: { fa: 'کنسول سریال', en: 'Serial console' },
+  vga: { fa: 'مانیتور VGA', en: 'VGA monitor' },
+  modules: { fa: 'ماژول‌ها', en: 'Modules' },
+};
+
+// what the tool icons in the lesson lists mean: every instrument some lesson uses. `compact` is the Flow Navigator's
+// version (icon and short name only).
+export function toolLegend(lessons: Lesson[], lang: L, compact = false): string {
+  const used = new Set(lessons.flatMap(lessonTools));
+  const ts = (Object.keys(TOOLS) as Tool[]).filter((t) => used.has(t));
+  if (!ts.length) return '';
+  const head = lang === 'fa' ? 'ابزارهای درس:' : 'Lesson tools:';
+  const item = (t: Tool) => {
+    const x = TOOLS[t];
+    const short = SHORT[t][lang];
+    // in English the short description repeats the name, so the name alone is enough
+    const label = compact
+      ? `<span>${short}</span>`
+      : lang === 'fa'
+        ? `<b dir="ltr">${x.name}</b><span>${short}</span>`
+        : `<b>${x.name}</b>`;
+    return `<li>${icon(x.icon, compact ? 12 : 14)}${label}</li>`;
+  };
+  return `<div class="legend-wrap${compact ? ' compact' : ''}"><span class="legend-h">${head}</span><ul class="legend">${ts.map(item).join('')}</ul></div>`;
 }

@@ -388,6 +388,7 @@ export const TINY8_ISA = ISA;
 
 export const SOFTCORE_LESSON: Lesson = {
   id: 'softcore',
+  time: { read: 8, practice: 30 },
   title: 'پردازنده‌ی نرم (Soft-core): Tiny8',
   summary: 'ساخت یک پردازنده‌ی کوچک ۸ بیتی داخل FPGA و اجرای برنامه‌ای که در ROM آن نوشته شده.',
   body: `
