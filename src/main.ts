@@ -47,6 +47,7 @@ import { versionLabel } from "./version";
 import { toolIcons, toolLegend, toolsBox } from "./ui/tools";
 import { lessonTools, type Tool } from "./lessons/tools";
 import { lessonTime } from "./lessons/time";
+import { ref } from "./lessons/helpers";
 import { LEARN_UI, levelDot, objectivesHtml, takeawaysHtml } from "./ui/learn";
 
 // ---------------------------------------------------------------- storage
@@ -1113,10 +1114,21 @@ function codeBlock(code: string, lg: "verilog" | "vhdl") {
 const timeOf = (l: Lesson) =>
   lessonTime({ ...text(l), time: l.time }, !!(EXERCISES[l.id] || text(l).exercise), chapterOf(l) + 1);
 
-// a link to another lesson, labelled with its title; the click delegation on [data-lesson] opens it
-function lessonLink(id: string) {
-  const l = ALL_LESSONS.find((x) => x.id === id);
-  return l ? `<a class="xref" data-lesson="${id}" href="#lesson/${id}">${esc(text(l).title)}</a>` : esc(id);
+// fills the cross-reference links (ref() in lessons/helpers.ts): "lesson 5: Seven-segment display", numbered by
+// the course order, with data-lesson so the click delegation opens the lesson
+function fillRefs(root: HTMLElement) {
+  const course = ALL_LESSONS.filter((l) => l !== PLAYGROUND);
+  for (const a of root.querySelectorAll<HTMLAnchorElement>("a.xref[data-ref]")) {
+    const id = a.dataset.ref!;
+    const i = course.findIndex((l) => l.id === id);
+    if (i < 0) {
+      if (import.meta.env.DEV) throw new Error(`unknown lesson in ref(): ${id}`);
+      a.textContent = id;
+      continue;
+    }
+    a.textContent = LEARN_UI[uiLang].xref(num(i + 1, uiLang), text(course[i]).title);
+    a.dataset.lesson = id;
+  }
 }
 
 function renderLesson() {
@@ -1160,7 +1172,7 @@ function renderLesson() {
   ${pos < 0 ? "" : `<div class="bar"><i style="width:${Math.round((100 * (pos + 1)) / course.length)}%"></i></div>`}
   <h1>${esc(tx.title)}</h1><p class="summary">${esc(tx.summary)}</p>
 </div>
-${objectivesHtml(lesson, tx, uiLang, lessonLink)}
+${objectivesHtml(lesson, tx, uiLang, ref)}
 ${toolsBox(lesson, uiLang)}
 <nav class="lesson-toc" aria-label="${u.onPage}">${toc.map(([id, ic, label], i) => `<button data-jump="${id}" class="${i ? "" : "active"}">${icon(ic, 14)}${label}</button>`).join("")}</nav>
 <section id="sec-overview"><h2>${icon("book", 18)}${ui.explain}</h2>${tx.body}</section>
@@ -1188,6 +1200,7 @@ ${exerciseHtml()}
   ${navCard(prev, `${rtl ? "→" : "←"} ${u.prev}`, "prev")}
   ${navCard(next, `${u.next} ${rtl ? "←" : "→"}`, "next")}
 </nav>`;
+  fillRefs(el);
   el.scrollTop = 0;
   setRunState();
 }

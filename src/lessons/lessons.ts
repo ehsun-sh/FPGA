@@ -1,7 +1,7 @@
 // Step-by-step FPGA course. Lesson text is Persian (RTL); code and identifiers stay in English.
 import type { XdcGroup } from '../boards';
 import type { LaConfig } from '../la/window';
-import { truth } from './helpers';
+import { ref, truth } from './helpers';
 
 export interface Lesson {
   id: string;
@@ -481,7 +481,7 @@ end rtl;
   <li>VHDL: <code>process(CLK100MHZ)</code> و <code>if rising_edge(CLK100MHZ) then</code></li>
 </ul>
 <h3>Enable و Reset</h3>
-<p>در این درس ۱۶ فلیپ‌فلاپ داریم (یک رجیستر). وقتی <b>BTNC</b> فشرده است، مقدار کلیدها ذخیره می‌شود؛ وقتی دکمه رها شود LEDها مقدار قبلی را <b>نگه می‌دارند</b> حتی اگر کلیدها را عوض کنید. دکمه قرمز <b>CPU RESET</b> (فعال با صفر) رجیستر را صفر می‌کند.</p>
+<p>در این درس، ۱۶ فلیپ‌فلاپ داریم (یک رجیستر). وقتی <b>BTNC</b> فشرده است، مقدار کلیدها ذخیره می‌شود؛ وقتی دکمه رها شود LEDها مقدار قبلی را <b>نگه می‌دارند</b> حتی اگر کلیدها را عوض کنید. دکمه قرمز <b>CPU RESET</b> (فعال با صفر) رجیستر را صفر می‌کند.</p>
 <p class="note">💡 در بلوک‌های کلاک‌دار همیشه از <code>&lt;=</code> استفاده کنید تا همه فلیپ‌فلاپ‌ها هم‌زمان به‌روز شوند. گزارش سنتز باید <b>16 FF</b> نشان دهد.</p>`,
     verilog: `// a 16-bit register with clock enable and synchronous reset
 module top (
@@ -630,7 +630,7 @@ end rtl;
 <ul>
   <li>شمارنده ۱۸ بیتی <code>refresh</code> با کلاک 100MHz می‌شمارد.</li>
   <li>دو بیت بالای آن (<code>refresh[17:16]</code>) رقم فعال را انتخاب می‌کند؛ هر رقم حدود ۰٫۶۵ میلی‌ثانیه روشن است ← کل نمایشگر حدود ۳۸۰ بار در ثانیه تازه می‌شود.</li>
-  <li>یک MUX، نیبل (۴ بیت) مربوط به رقم فعال را انتخاب می‌کند و دیکودر درس ۵ آن را به پاره‌ها تبدیل می‌کند.</li>
+  <li>یک MUX، نیبل (۴ بیت) مربوط به رقم فعال را انتخاب می‌کند و دیکودر ${ref('seg7')} آن را به پاره‌ها تبدیل می‌کند.</li>
 </ul>
 <p>این درس ترکیب همه چیزهایی است که تا اینجا یاد گرفتیم: <b>شمارنده</b> + <b>MUX</b> + <b>دیکودر</b> + <b>سلسله‌مراتب</b>.</p>`,
     verilog: `// show SW[15:0] as four hex digits using time multiplexing

@@ -15,6 +15,7 @@ export const LEARN_UI = {
     level: { intro: 'مقدماتی', core: 'اصلی', advanced: 'پیشرفته' },
     levelTitle: 'سطح درس',
     goalsToc: 'هدف‌ها',
+    xref: (n: string, title: string) => `درس ${n}: ${title}`,
   },
   en: {
     objectives: 'By the end of this lesson you can',
@@ -23,6 +24,7 @@ export const LEARN_UI = {
     level: { intro: 'Intro', core: 'Core', advanced: 'Advanced' },
     levelTitle: 'Lesson level',
     goalsToc: 'Goals',
+    xref: (n: string, title: string) => `lesson ${n}: ${title}`,
   },
 };
 

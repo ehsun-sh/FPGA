@@ -4,6 +4,7 @@
 import type { Lang } from '../hdl';
 import { decodeI2c, decodeSpi } from '../la/decode';
 import { BoardHarness, HEX7 } from './harness';
+import { ref } from '../lessons/helpers';
 
 export interface CheckItem {
   ok: boolean;
@@ -199,8 +200,8 @@ export const EXERCISES: Record<string, Exercise> = {
     },
   },
   alu: {
-    fa: `<p>نتیجهٔ ALU یعنی r[3:0] را علاوه بر LEDها به صورت یک رقم هگز روی نمایشگر هفت‌قسمتی نشان دهید (فقط رقم ۰، یعنی AN0). از رمزگشای درس ۵ استفاده کنید و خطوط هفت‌قسمتی را در XDC فعال کنید.</p>`,
-    en: `<p>Show the ALU result r[3:0] as a hex digit on the seven-segment display (digit 0 only, AN0), in addition to the LEDs. Reuse the decoder from lesson 5 and uncomment the seven-segment lines in the XDC.</p>`,
+    fa: `<p>نتیجهٔ ALU یعنی r[3:0] را علاوه بر LEDها به صورت یک رقم هگز روی نمایشگر هفت‌قسمتی نشان دهید (فقط رقم ۰، یعنی AN0). از رمزگشای ${ref('seg7')} استفاده کنید و خطوط هفت‌قسمتی را در XDC فعال کنید.</p>`,
+    en: `<p>Show the ALU result r[3:0] as a hex digit on the seven-segment display (digit 0 only, AN0), in addition to the LEDs. Reuse the decoder from ${ref('seg7')} and uncomment the seven-segment lines in the XDC.</p>`,
     check(h, t) {
       needDevice(h, t, 'seg', XDC_SEG.fa, XDC_SEG.en);
       const cases: [number, number, number, number][] = [

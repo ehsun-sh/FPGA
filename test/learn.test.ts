@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { ALL_LESSONS, PLAYGROUND } from '../src/lessons/course';
 import { EN } from '../src/lessons/en';
+import { EXERCISES } from '../src/grade/exercises';
 
 const plain = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&[a-z]+;/g, 'x');
 const course = ALL_LESSONS.filter((l) => l !== PLAYGROUND);
@@ -25,4 +26,32 @@ describe('objectives, takeaways, level and prerequisites', () => {
         expect(i, `${p} comes before ${l.id}`).toBeLessThan(at);
       }
     });
+});
+
+describe('cross-references', () => {
+  // a lesson number in running text; «آدرس ۷» is not one, so «درس» must start a word
+  const NUM = /(?<![\u0600-\u06FF])درس\s*[۰-۹0-9]+|\blesson\s*[0-9]+/i;
+  const fields = ['body', 'tryIt', 'exercise', 'objectives', 'takeaways'] as const;
+  const texts = (id: string) =>
+    [ALL_LESSONS.find((l) => l.id === id)!, EN[id]].filter(Boolean).flatMap((t) => fields.flatMap((f) => [t[f as keyof typeof t]].flat())).filter((s): s is string => typeof s === 'string');
+  it('no lesson text hard-codes a lesson number', () => {
+    const hits: string[] = [];
+    for (const l of ALL_LESSONS)
+      for (const s of texts(l.id)) {
+        const m = NUM.exec(s);
+        if (m) hits.push(`${l.id}: …${s.slice(Math.max(0, m.index - 30), m.index + 20)}…`);
+      }
+    for (const [id, ex] of Object.entries(EXERCISES))
+      for (const s of [ex.fa, ex.en]) {
+        const m = NUM.exec(s);
+        if (m) hits.push(`exercise ${id}: …${s.slice(Math.max(0, m.index - 30), m.index + 20)}…`);
+      }
+    expect(hits).toEqual([]);
+  });
+  it('every data-ref points at a lesson', () => {
+    const all = [...ALL_LESSONS.flatMap((l) => texts(l.id)), ...Object.values(EXERCISES).flatMap((e) => [e.fa, e.en])].join('\n');
+    const ids = [...all.matchAll(/data-ref="([^"]+)"/g)].map((m) => m[1]);
+    expect(ids.length).toBeGreaterThan(0);
+    for (const id of ids) expect(ALL_LESSONS.some((l) => l.id === id), id).toBe(true);
+  });
 });
