@@ -3611,3 +3611,55 @@ body.in-playground .pane.left {
   border-color: #1e40af;
   color: #1e40af;
 }
+
+/* ---------------------------------------------------------------- Learn mode (Phase 1.1)
+   Learn mode hides the Vivado chrome a beginner does not need yet. The DOM stays, so shortcuts keep working.
+   The playground keeps its usual layout in both modes; only the menu bar follows the mode there. */
+body:not(.mode-learn) .l-only,
+body.in-playground .l-only,
+body.mode-learn:not(.in-playground) .v-only,
+body:not(.mode-learn) .learn-link {
+  display: none !important;
+}
+body.mode-learn .menubar,
+body.mode-learn:not(.in-playground) .flow-sec:not([data-sec='learn']),
+body.mode-learn:not(.in-playground) .tb.hidden-tool:not(.active),
+body.mode-learn:not(.in-playground) .sep.hidden-tool,
+body.mode-learn:not(.in-playground) #hw-dev,
+body.mode-learn:not(.in-playground) #tcl-form {
+  display: none !important;
+}
+.titlebar .mode-ctl {
+  flex: none;
+  border-radius: 999px;
+}
+.titlebar .mode-ctl button {
+  padding: 4px 12px;
+  font-size: 12.5px;
+}
+.titlebar .mode-ctl button.active {
+  background: var(--brand, var(--accent));
+  color: #fff;
+}
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.link-btn:hover {
+  color: var(--text);
+}
+@media (max-width: 900px) {
+  .titlebar .mode-ctl {
+    display: none;
+  }
+}

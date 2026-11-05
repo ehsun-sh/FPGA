@@ -43,6 +43,7 @@ import { icon } from "./ui/icons";
 import { num, UI, type UiLang } from "./ui/strings";
 import { versionLabel } from "./version";
 import { toolIcons, toolsBox } from "./ui/tools";
+import { lessonTools, type Tool } from "./lessons/tools";
 
 // ---------------------------------------------------------------- storage
 const store = {
@@ -118,6 +119,9 @@ app.innerHTML = `
     <button data-act="view-reset">Board: perspective view</button>
     <button data-act="view-top">Board: top view</button>
     <button data-act="toggle-flow">Toggle Flow Navigator</button>
+    <hr/>
+    <button data-act="mode-learn" role="menuitemradio" aria-checked="false">Workbench: Learn mode</button>
+    <button data-act="mode-vivado" role="menuitemradio" aria-checked="false">Workbench: Vivado mode</button>
   </div></div>
   <div class="menu"><button aria-haspopup="true" aria-expanded="false">Tools</button><div class="dropdown">
     <button data-act="la">Logic Analyzer <kbd>Ctrl+L</kbd></button>
@@ -134,18 +138,18 @@ app.innerHTML = `
   <button class="tb" data-act="stop" title="Stop">${icon("stop", 14)}<span class="lbl">Stop</span></button>
   <button class="tb" data-act="reset" title="Reset the design (like re-programming)">${icon("reset", 14)}<span class="lbl">Reset</span></button>
   <button class="tb" data-act="sim" id="sim-btn" title="Run the testbench and show the waveforms (Shift+F6)">${icon("wave", 14)}<span class="lbl">Simulate</span></button>
-  <span class="sep"></span>
+  <span class="sep" id="tool-sep"></span>
   <button class="tb tool" data-act="la" id="la-btn" title="Logic Analyzer (Ctrl+L)">${icon("logic", 14)}<span class="lbl">Logic Analyzer</span></button>
   <button class="tb tool" data-act="serial" id="serial-btn" title="Serial Console on the USB-UART (Ctrl+M)">${icon("terminal", 14)}<span class="lbl">Serial Console</span></button>
   <button class="tb tool" data-act="vga" id="vga-btn" title="VGA Monitor">${icon("monitor", 14)}<span class="lbl">VGA Monitor</span></button>
-  <span class="sep"></span>
-  <div class="seg-ctl" role="group" aria-label="HDL language">
+  <span class="sep lang-sep"></span>
+  <div class="seg-ctl tb-lang" role="group" aria-label="HDL language">
     <button data-lang="verilog" aria-pressed="false">Verilog</button><button data-lang="vhdl" aria-pressed="false">VHDL</button>
   </div>
 </div>
 <main class="workspace">
   <aside class="flow" id="flow" aria-label="Flow Navigator">
-    <div class="flow-title">FLOW NAVIGATOR</div>
+    <div class="flow-title" id="flow-title">FLOW NAVIGATOR</div>
     <div class="flow-sec" data-sec="learn">
       <button class="sec-h" id="learn-h" aria-expanded="true"></button>
       <div class="sec-body" id="lesson-list"></div>
@@ -213,7 +217,7 @@ app.innerHTML = `
   <div class="splitter v" id="split-v" title="Drag to resize"></div>
   <section class="pane right" aria-label="Hardware">
     <div class="hw-title">
-      <span class="rtabs" role="tablist" aria-label="Hardware and simulation"><button data-rtab="hw" class="active" role="tab" aria-selected="true"><b>HARDWARE MANAGER</b> <span class="dim">— localhost/xilinx_tcf/Digilent</span></button><button data-rtab="sim" role="tab" aria-selected="false"><b>SIMULATION</b> <span class="dim">— Behavioral</span></button></span>
+      <span class="rtabs" role="tablist" aria-label="Hardware and simulation"><button data-rtab="hw" class="active" role="tab" aria-selected="true"><span class="v-only"><b>HARDWARE MANAGER</b> <span class="dim">— localhost/xilinx_tcf/Digilent</span></span><b class="l-only">${boardDef.name}</b></button><button data-rtab="sim" role="tab" aria-selected="false"><span class="v-only"><b>SIMULATION</b> <span class="dim">— Behavioral</span></span><b class="l-only" id="sim-title-l"></b></button></span>
       <span class="hw-dev" id="hw-dev">${hwDev} (not programmed)</span>
     </div>
     <div class="board-host" id="board">
@@ -282,6 +286,9 @@ let lesson: Lesson =
 let lastCourse: Lesson = lesson === PLAYGROUND ? LESSONS[0] : lesson;
 let tab: "lesson" | "source" | "xdc" | "tb" | "schematic" = "lesson";
 let uiLang: UiLang = store.get("ui-lang") === "fa" ? "fa" : "en";
+// Learn mode shows a beginner only what a lesson needs; Vivado mode is the full Vivado-style chrome
+type Mode = "learn" | "vivado";
+let mode: Mode = store.get("mode") === "vivado" ? "vivado" : "learn";
 // lesson text in the selected site language (Persian lives in lessons.ts, English in en.ts)
 const text = (l: Lesson): LessonText =>
   uiLang === "en" && EN[l.id] ? EN[l.id] : l;
@@ -1117,6 +1124,7 @@ ${toolsBox(lesson, uiLang)}
   </div>
   <div class="code-panel" data-panel="verilog" ${lang === "verilog" ? "" : "hidden"}>${codeBlock(lesson.verilog, "verilog")}</div>
   <div class="code-panel" data-panel="vhdl" ${lang === "vhdl" ? "" : "hidden"}>${codeBlock(lesson.vhdl, "vhdl")}</div>
+  <button class="link-btn learn-link" data-act="reset-code">${icon("reset", 13)}${u.resetCode}</button>
 </section>
 <section class="try" id="sec-try"><h2>${icon("zap", 18)}${ui.tryIt}<span class="state-chip" id="try-state"></span></h2>${tx.tryIt}
   <div class="try-actions">
@@ -1183,6 +1191,7 @@ function openLesson(l: Lesson, switchTab = true) {
   renderLessonList();
   renderLesson();
   loadLa();
+  markLessonTools();
   if (switchTab) showTab(l === PLAYGROUND ? "source" : "lesson");
   log(`# open_lesson ${l.id}`, "cmd");
 }
@@ -1201,6 +1210,35 @@ function playgroundMode() {
         ? b.setAttribute("aria-current", "page")
         : b.removeAttribute("aria-current"),
     );
+}
+
+// in Learn mode the toolbar shows only the instruments this lesson uses (CSS hides the rest unless one is open)
+function markLessonTools() {
+  const ts = lessonTools(lesson);
+  const ids: [string, Tool][] = [["#la-btn", "la"], ["#serial-btn", "serial"], ["#vga-btn", "vga"]];
+  for (const [sel, t] of ids) $(sel).classList.toggle("hidden-tool", !ts.includes(t));
+  $("#tool-sep").classList.toggle("hidden-tool", !ids.some(([, t]) => ts.includes(t)));
+}
+
+// phones always get the Learn layout (no room for the Vivado chrome there); the stored choice is kept for desktops
+const effectiveMode = (): Mode => (phone.matches ? "learn" : mode);
+function applyMode() {
+  const m = effectiveMode();
+  document.body.classList.toggle("mode-learn", m === "learn");
+  document.body.classList.toggle("mode-vivado", m === "vivado");
+  document.querySelectorAll<HTMLElement>('[data-act="mode-learn"], [data-act="mode-vivado"]').forEach((b) => {
+    const on = b.dataset.act === `mode-${mode}`;
+    if (b.getAttribute("role") === "menuitemradio") b.setAttribute("aria-checked", String(on));
+    else b.setAttribute("aria-pressed", String(on));
+    b.classList.toggle("active", on);
+  });
+  $("#flow-title").textContent = m === "learn" ? UI[uiLang].courseTitle : UI[uiLang].flowTitle;
+}
+function setMode(m: Mode) {
+  if (m === mode) return;
+  mode = m;
+  store.set("mode", m);
+  applyMode();
 }
 
 function setLang(lg: Lang) {
@@ -1256,10 +1294,12 @@ function applyUiLang() {
     uiLang === "fa" ? "FPGA Lab | محیط یادگیری به سبک Vivado" : "FPGA Lab | a Vivado-style learning environment";
   $("#titlebar").innerHTML = homeNav(
     uiLang,
-    `<div class="project" dir="ltr">${boardDef.vendor} <b>${boardDef.name}</b> · <b>${boardDef.part}</b></div>`,
+    `<div class="seg-ctl mode-ctl" role="group" aria-label="${u.modeGroup}"><button data-act="mode-learn" aria-pressed="false">${u.modeLearn}</button><button data-act="mode-vivado" aria-pressed="false" dir="ltr">${u.modeVivado}</button></div><div class="project" dir="ltr">${boardDef.vendor} <b>${boardDef.name}</b> · <b>${boardDef.part}</b></div>`,
     lesson === PLAYGROUND ? "playground" : "lab",
   );
   playgroundMode();
+  applyMode();
+  $("#sim-title-l").textContent = u.simTitle;
   $("#board-hint").textContent = u.boardHint;
   if (!lastDesign) $("#st-design").textContent = u.noDesign;
   document
@@ -1558,6 +1598,10 @@ function act(name: string) {
       break;
     case "view-fit":
       board.fitView();
+      break;
+    case "mode-learn":
+    case "mode-vivado":
+      setMode(name === "mode-learn" ? "learn" : "vivado");
       break;
     case "toggle-flow":
       $("#flow").classList.toggle("collapsed");
@@ -1987,6 +2031,7 @@ function setMobile(v: MobileView, syncTab = true) {
   if (syncTab && v === "code" && tab === "lesson") showTab("source");
 }
 document.body.dataset.m = "lesson";
+phone.addEventListener("change", applyMode);
 
 // ---------------------------------------------------------------- init
 document.querySelectorAll<HTMLElement>("[data-lang]").forEach((b) => markLang(b));
@@ -1997,6 +2042,7 @@ $("#src-name").textContent = fileName();
 renderLessonList();
 loadLa();
 renderLesson();
+markLessonTools();
 renderMessages();
 route();
 log(

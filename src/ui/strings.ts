@@ -38,6 +38,13 @@ export const UI = {
     language: 'زبان سایت',
     onPage: 'بخش‌های این درس',
     prevNext: 'درس قبلی و بعدی',
+    flowTitle: 'FLOW NAVIGATOR',
+    courseTitle: 'دوره',
+    modeGroup: 'حالت میز کار',
+    modeLearn: 'آموزش',
+    modeVivado: 'Vivado',
+    simTitle: 'شبیه‌سازی',
+    resetCode: 'بازگرداندن کد درس',
   },
   en: {
     tagline: 'a Vivado-style learning environment',
@@ -70,6 +77,13 @@ export const UI = {
     language: 'Site language',
     onPage: 'On this page',
     prevNext: 'Previous and next lesson',
+    flowTitle: 'FLOW NAVIGATOR',
+    courseTitle: 'Course',
+    modeGroup: 'Workbench mode',
+    modeLearn: 'Learn',
+    modeVivado: 'Vivado',
+    simTitle: 'Simulation',
+    resetCode: 'Reset lesson code',
   },
 };
 
