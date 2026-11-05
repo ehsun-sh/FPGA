@@ -265,6 +265,7 @@ app.innerHTML = `
   <span id="st-design"></span>
   <span id="st-speed"></span>
   <span id="st-cycles"></span>
+  <button class="st-msgs hidden" id="st-msgs" data-act="show-messages"></button>
   <span class="st-version" title="FPGA Lab version">FPGA Lab ${versionLabel}</span>
 </footer>
 <div class="home" id="home" tabindex="-1" hidden></div>
@@ -286,6 +287,20 @@ let lesson: Lesson =
 let lastCourse: Lesson = lesson === PLAYGROUND ? LESSONS[0] : lesson;
 let tab: "lesson" | "source" | "xdc" | "tb" | "schematic" = "lesson";
 let uiLang: UiLang = store.get("ui-lang") === "fa" ? "fa" : "en";
+// the Vivado-style start-up lines; Learn mode starts with a quiet console and prints them on the first switch
+let bannerShown = false;
+function logBanner() {
+  if (bannerShown) return;
+  bannerShown = true;
+  log("****** FPGA Lab — Vivado-style HDL environment (browser edition)", "plain");
+  log("INFO: [Labtools 27-2285] Connecting to hw_server url TCP:localhost:3121", "info");
+  log("INFO: [Labtools 27-3415] Connecting to cs_server url TCP:localhost:3042", "info");
+  log(
+    `INFO: [Labtools 27-1434] Device ${hwDev} on ${boardDef.vendor} ${boardDef.name} (JTAG device index = 0) is ready. Press ▶ Run on Board to program it.`,
+    "info",
+  );
+}
+
 // Learn mode shows a beginner only what a lesson needs; Vivado mode is the full Vivado-style chrome
 type Mode = "learn" | "vivado";
 let mode: Mode = store.get("mode") === "vivado" ? "vivado" : "learn";
@@ -447,6 +462,10 @@ function renderMessages() {
       : "";
   badge.className =
     "badge " + (counts.error ? "err" : counts.warning ? "warn" : "");
+  const chip = $("#st-msgs");
+  chip.classList.toggle("hidden", !messages.length);
+  chip.classList.toggle("err", counts.error > 0);
+  chip.textContent = UI[uiLang].msgCount(num(messages.length, uiLang));
   if (!messages.length) {
     el.innerHTML = '<p class="dim">No messages.</p>';
     return;
@@ -1034,6 +1053,7 @@ function checkExercise() {
     );
     for (const i of r.items)
       log(`${i.ok ? "  ✓" : "  ✗"} ${i[uiLang]}`, i.ok ? "ok" : "error");
+    showBottom("console", true);
     log(
       r.passed ? ui.passed : ui.failed.replace(/:$/, ""),
       r.passed ? "ok" : "warning",
@@ -1233,12 +1253,14 @@ function applyMode() {
     b.classList.toggle("active", on);
   });
   $("#flow-title").textContent = m === "learn" ? UI[uiLang].courseTitle : UI[uiLang].flowTitle;
+  applyBottom();
 }
 function setMode(m: Mode) {
   if (m === mode) return;
   mode = m;
   store.set("mode", m);
   applyMode();
+  if (m === "vivado") logBanner();
 }
 
 function setLang(lg: Lang) {
@@ -1284,6 +1306,7 @@ function setUiLang(l: UiLang) {
   renderLessonList();
   renderLesson();
   modules.render();
+  renderMessages();
   if (homeOpen) renderHomePage();
 }
 
@@ -1336,7 +1359,28 @@ function showTab(t: typeof tab) {
   }
 }
 
-function showBottom(t: "console" | "messages" | "reports") {
+type BottomTab = "console" | "messages" | "reports";
+// In Learn mode the console starts folded to its tab bar. It opens when the learner clicks a tab, when a run ends with
+// errors or warnings, and when an exercise check finishes; it never folds by itself. Vivado mode keeps it open.
+let bottomOpen = store.get("bottom-open") === "1";
+const hasIssues = () => messages.some((m) => m.level !== "info");
+function applyBottom() {
+  const folded = effectiveMode() === "learn" && !bottomOpen;
+  $("#bottom").classList.toggle("collapsed", folded);
+  $("#split-h").classList.toggle("collapsed", folded);
+}
+function setBottomOpen(on: boolean) {
+  bottomOpen = on;
+  store.set("bottom-open", on ? "1" : "0");
+  applyBottom();
+}
+function bottomTabClick(t: BottomTab) {
+  const active = document.querySelector<HTMLElement>("#bottom-tabs [data-btab].active")?.dataset.btab;
+  if (effectiveMode() === "learn" && bottomOpen && active === t) setBottomOpen(false);
+  else showBottom(t, true);
+}
+function showBottom(t: BottomTab, expand = t === "messages" && hasIssues()) {
+  if (expand && !bottomOpen && effectiveMode() === "learn") setBottomOpen(true);
   document
     .querySelectorAll<HTMLElement>("#bottom-tabs [data-btab]")
     .forEach((b) => selectTab(b, b.dataset.btab === t));
@@ -1599,6 +1643,9 @@ function act(name: string) {
     case "view-fit":
       board.fitView();
       break;
+    case "show-messages":
+      showBottom("messages", true);
+      break;
     case "mode-learn":
     case "mode-vivado":
       setMode(name === "mode-learn" ? "learn" : "vivado");
@@ -1652,7 +1699,7 @@ document.addEventListener("click", (ev) => {
   const tb = t.closest("[data-tab]") as HTMLElement | null;
   if (tb) showTab(tb.dataset.tab as typeof tab);
   const bt = t.closest("[data-btab]") as HTMLElement | null;
-  if (bt) showBottom(bt.dataset.btab as "console");
+  if (bt) bottomTabClick(bt.dataset.btab as BottomTab);
   const rt = t.closest("[data-rtab]") as HTMLElement | null;
   if (rt) showRight(rt.dataset.rtab as "hw");
   const m = t.closest("[data-m]") as HTMLElement | null;
@@ -2045,19 +2092,4 @@ renderLesson();
 markLessonTools();
 renderMessages();
 route();
-log(
-  "****** FPGA Lab — Vivado-style HDL environment (browser edition)",
-  "plain",
-);
-log(
-  "INFO: [Labtools 27-2285] Connecting to hw_server url TCP:localhost:3121",
-  "info",
-);
-log(
-  "INFO: [Labtools 27-3415] Connecting to cs_server url TCP:localhost:3042",
-  "info",
-);
-log(
-  `INFO: [Labtools 27-1434] Device ${hwDev} on ${boardDef.vendor} ${boardDef.name} (JTAG device index = 0) is ready. Press ▶ Run on Board to program it.`,
-  "info",
-);
+if (effectiveMode() === "vivado") logBanner();

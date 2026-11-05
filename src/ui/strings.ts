@@ -45,6 +45,7 @@ export const UI = {
     modeVivado: 'Vivado',
     simTitle: 'شبیه‌سازی',
     resetCode: 'بازگرداندن کد درس',
+    msgCount: (n: string) => `${n} پیام`,
   },
   en: {
     tagline: 'a Vivado-style learning environment',
@@ -84,6 +85,7 @@ export const UI = {
     modeVivado: 'Vivado',
     simTitle: 'Simulation',
     resetCode: 'Reset lesson code',
+    msgCount: (n: string) => (n === '1' ? '1 message' : `${n} messages`),
   },
 };
 

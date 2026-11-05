@@ -3663,3 +3663,45 @@ body.mode-learn:not(.in-playground) #tcl-form {
     display: none;
   }
 }
+
+/* ---------------------------------------------------------------- quiet console (Phase 1.2) */
+@media (min-width: 901px) {
+  #bottom.collapsed {
+    height: auto !important;
+    min-height: 0;
+  }
+  #bottom.collapsed .bottom-body,
+  #split-h.collapsed {
+    display: none;
+  }
+}
+body.mode-learn #bottom-tabs [data-btab='messages'] {
+  order: -2;
+}
+body.mode-learn #bottom-tabs [data-btab='console'] {
+  order: -1;
+}
+.statusbar .st-msgs {
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  padding: 0 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.statusbar .st-msgs.err {
+  color: #fbbf24;
+  font-weight: 600;
+}
+.statusbar .st-msgs.hidden {
+  display: none;
+}
+.statusbar .st-msgs:not(.hidden) + .st-version {
+  margin-inline-start: 0;
+}
+.statusbar .st-msgs {
+  margin-inline-start: auto;
+}
