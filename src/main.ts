@@ -42,6 +42,7 @@ import { bindLangMenu, homeNav, renderHome } from "./ui/home";
 import { icon } from "./ui/icons";
 import { num, TOUR, UI, type UiLang } from "./ui/strings";
 import { startTour, type TourStep } from "./ui/tour";
+import { ISSUES_URL, limitsDialog, shortcutsDialog } from "./ui/help";
 import { versionLabel } from "./version";
 import { toolIcons, toolsBox } from "./ui/tools";
 import { lessonTools, type Tool } from "./lessons/tools";
@@ -130,6 +131,16 @@ app.innerHTML = `
     <button data-act="vga">VGA Monitor</button>
   </div></div>
   <div class="menu"><button aria-haspopup="true" aria-expanded="false">Help</button><div class="dropdown">
+    <button data-act="tour">Take the tour</button>
+    <button data-act="shortcuts">Keyboard shortcuts</button>
+    <button data-act="limits">Simulator limits</button>
+    <hr/>
+    <button data-act="download-src">Download design source</button>
+    <button data-act="download-tb">Download testbench</button>
+    <button data-act="download-xdc">Download constraints (.xdc)</button>
+    <button data-act="download-project">Download Vivado project (.zip)</button>
+    <hr/>
+    <button data-act="report-problem">Report a problem</button>
     <button data-act="about">About FPGA Lab</button>
     <button data-act="lesson-intro">Getting started</button>
   </div></div>
@@ -270,6 +281,8 @@ app.innerHTML = `
   <span class="st-version" title="FPGA Lab version">FPGA Lab ${versionLabel}</span>
 </footer>
 <div class="home" id="home" tabindex="-1" hidden></div>
+<dialog id="shortcuts" class="help-dlg"></dialog>
+<dialog id="limits" class="help-dlg"></dialog>
 <dialog id="about"><form method="dialog">
   <h2>FPGA Lab <span class="dim about-ver">${versionLabel}</span></h2>
   <p>An in-browser FPGA course with a Vivado-inspired workflow and simulated FPGA boards (currently: ${BOARDS.map((b) => `${b.vendor} ${b.name}`).join(", ")}).</p>
@@ -1324,6 +1337,8 @@ function applyUiLang() {
   playgroundMode();
   applyMode();
   $("#sim-title-l").textContent = u.simTitle;
+  $("#shortcuts").innerHTML = shortcutsDialog(uiLang);
+  $("#limits").innerHTML = limitsDialog(uiLang);
   $("#board-hint").textContent = u.boardHint;
   if (!lastDesign) $("#st-design").textContent = u.noDesign;
   document
@@ -1647,6 +1662,13 @@ function act(name: string) {
     case "tour":
       runTour();
       break;
+    case "shortcuts":
+    case "limits":
+      ($("#" + name) as HTMLDialogElement).showModal();
+      break;
+    case "report-problem":
+      window.open(ISSUES_URL, "_blank", "noopener");
+      break;
     case "show-messages":
       showBottom("messages", true);
       break;
@@ -1683,7 +1705,7 @@ document.addEventListener("click", (ev) => {
   if (a) {
     if (a.tagName === "A") ev.preventDefault();
     act(a.dataset.act!);
-    if (a.dataset.act !== "skip") (document.activeElement as HTMLElement | null)?.blur?.();
+    if (a.dataset.act !== "skip" && a.dataset.act !== "help-menu") (document.activeElement as HTMLElement | null)?.blur?.();
   }
   const ch = t.closest("[data-chapter]") as HTMLElement | null;
   if (ch) toggleChapter(Number(ch.dataset.chapter));
@@ -2052,6 +2074,7 @@ function showHome(on: boolean) {
 // ---------------------------------------------------------------- onboarding tour
 // five steps on a desktop, four on a phone (where each pane has its own tab); shown once, re-run from Help
 function runTour() {
+  tourTimer ||= -1; // started by hand: no auto-start on top of it
   if (homeOpen) goLab();
   if (lesson === PLAYGROUND) openLesson(lastCourse);
   if (tab !== "lesson") showTab("lesson");
