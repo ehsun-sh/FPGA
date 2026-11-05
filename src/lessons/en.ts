@@ -8,6 +8,8 @@ export interface LessonText {
   body: string;
   tryIt: string;
   exercise?: string;
+  objectives?: string[];
+  takeaways?: string[];
 }
 
 export const EN: Record<string, LessonText> = {

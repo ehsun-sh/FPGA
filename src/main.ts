@@ -47,6 +47,7 @@ import { versionLabel } from "./version";
 import { toolIcons, toolLegend, toolsBox } from "./ui/tools";
 import { lessonTools, type Tool } from "./lessons/tools";
 import { lessonTime } from "./lessons/time";
+import { LEARN_UI, levelDot, objectivesHtml, takeawaysHtml } from "./ui/learn";
 
 // ---------------------------------------------------------------- storage
 const store = {
@@ -983,7 +984,7 @@ function renderLessonList() {
       const done = solved.has(l.id)
         ? `<span class="done" title="${ui.solved}">${icon("check", 13)}<span class="sr-only">${ui.solved}</span></span>`
         : "";
-      return `<button class="flow-item lesson-item ${cur ? "active" : ""}" data-lesson="${l.id}" dir="${dir}"${cur ? ' aria-current="page"' : ""}><span class="num">${no}</span><span class="lt">${esc(text(l).title)}</span>${toolIcons(l)}${done}</button>`;
+      return `<button class="flow-item lesson-item ${cur ? "active" : ""}" data-lesson="${l.id}" dir="${dir}"${cur ? ' aria-current="page"' : ""}><span class="num">${no}</span><span class="lt">${esc(text(l).title)}</span>${levelDot(l, uiLang)}${toolIcons(l)}${done}</button>`;
     });
     const soon = (c.soon ?? []).map(
       (s) =>
@@ -1112,6 +1113,12 @@ function codeBlock(code: string, lg: "verilog" | "vhdl") {
 const timeOf = (l: Lesson) =>
   lessonTime({ ...text(l), time: l.time }, !!(EXERCISES[l.id] || text(l).exercise), chapterOf(l) + 1);
 
+// a link to another lesson, labelled with its title; the click delegation on [data-lesson] opens it
+function lessonLink(id: string) {
+  const l = ALL_LESSONS.find((x) => x.id === id);
+  return l ? `<a class="xref" data-lesson="${id}" href="#lesson/${id}">${esc(text(l).title)}</a>` : esc(id);
+}
+
 function renderLesson() {
   const idx = ALL_LESSONS.indexOf(lesson);
   const prev = ALL_LESSONS[idx - 1];
@@ -1134,9 +1141,11 @@ function renderLesson() {
       ? ""
       : `<span class="read">${icon("clock", 13)}${ui.time(num(tm.read, uiLang), num(tm.practice, uiLang))}</span>`;
   const toc = [
+    ...(tx.objectives?.length ? [["sec-goals", "target", LEARN_UI[uiLang].goalsToc]] : []),
     ["sec-overview", "book", u.overview],
     ["sec-code", "code", u.code],
     ["sec-try", "zap", u.tryIt],
+    ...(tx.takeaways?.length ? [["sec-takeaways", "list", LEARN_UI[uiLang].takeaways]] : []),
     ...(hasEx ? [["sec-exercise", "target", u.exercise]] : []),
   ] as [string, Parameters<typeof icon>[0], string][];
   const navCard = (l: Lesson | undefined, label: string, cls: string) =>
@@ -1151,6 +1160,7 @@ function renderLesson() {
   ${pos < 0 ? "" : `<div class="bar"><i style="width:${Math.round((100 * (pos + 1)) / course.length)}%"></i></div>`}
   <h1>${esc(tx.title)}</h1><p class="summary">${esc(tx.summary)}</p>
 </div>
+${objectivesHtml(lesson, tx, uiLang, lessonLink)}
 ${toolsBox(lesson, uiLang)}
 <nav class="lesson-toc" aria-label="${u.onPage}">${toc.map(([id, ic, label], i) => `<button data-jump="${id}" class="${i ? "" : "active"}">${icon(ic, 14)}${label}</button>`).join("")}</nav>
 <section id="sec-overview"><h2>${icon("book", 18)}${ui.explain}</h2>${tx.body}</section>
@@ -1172,6 +1182,7 @@ ${toolsBox(lesson, uiLang)}
     <button class="big-run sim" data-act="sim">${icon("wave", 15)}${ui.simulate}</button>
   </div>
 </section>
+${takeawaysHtml(tx, uiLang)}
 ${exerciseHtml()}
 <nav class="lesson-nav" aria-label="${u.prevNext}">
   ${navCard(prev, `${rtl ? "→" : "←"} ${u.prev}`, "prev")}
@@ -1727,6 +1738,7 @@ document.addEventListener("click", (ev) => {
   if (sec) toggleFlowSection((sec.parentElement as HTMLElement).dataset.sec!);
   const l = t.closest("[data-lesson]") as HTMLElement | null;
   if (l) {
+    if (l.tagName === "A") ev.preventDefault(); // cross-reference links: open in place, no hash jump
     const found = ALL_LESSONS.find((x) => x.id === l.dataset.lesson);
     // from the landing page, the lesson already on the board keeps running
     if (found && !(homeOpen && found === lesson)) openLesson(found);

@@ -9,6 +9,8 @@ import { PS2_LESSON } from './ps2';
 import { SENSORS_LESSON } from './sensors';
 import { SOFTCORE_LESSON } from './softcore';
 import { VGA_LESSON } from './vga';
+import { EN } from './en';
+import { GOALS, PREREQ, type Level } from './goals';
 
 type Text = { fa: string; en: string };
 
@@ -38,5 +40,19 @@ export const CHAPTERS: Chapter[] = [
 ];
 
 export const ALL_LESSONS: Lesson[] = CHAPTERS.flatMap((c) => c.lessons);
+
+// merge the learning-loop data into the lessons once, at load: chapters 1–2 are intro, 3–5 core, 6–7 advanced
+const LEVELS: Level[] = ['intro', 'intro', 'core', 'core', 'core', 'advanced', 'advanced'];
+CHAPTERS.forEach((c, ci) => {
+  for (const l of c.lessons) {
+    if (l === PLAYGROUND) continue;
+    l.level = LEVELS[ci];
+    if (PREREQ[l.id]) l.prereq = PREREQ[l.id];
+    const g = GOALS[l.id];
+    if (!g) continue;
+    Object.assign(l, g.fa);
+    if (EN[l.id]) Object.assign(EN[l.id], g.en);
+  }
+});
 export const chapterOf = (l: Lesson) => CHAPTERS.findIndex((c) => c.lessons.includes(l));
 export { PLAYGROUND };

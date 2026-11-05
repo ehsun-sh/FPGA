@@ -5,6 +5,7 @@ import { icon, type IconName } from './icons';
 import { HOME, num, UI, type UiLang } from './strings';
 import { versionLabel } from '../version';
 import { toolIcons, toolLegend } from './tools';
+import { levelDot } from './learn';
 import { helpMenu } from './help';
 import { formatMinutes } from '../lessons/time';
 
@@ -158,7 +159,7 @@ export function renderHome(d: HomeData): string {
           const k = ++i;
           const here = l === d.resume;
           const state = d.done(l) ? `<span class="sr-only"> · ${h.done}</span>` : '';
-          return `<li><button data-lesson="${l.id}" class="${d.done(l) ? 'done' : ''}${here ? ' here' : ''}"><span class="n">${d.done(l) ? icon('check', 13) : n(k)}</span><span class="t">${esc(d.title(l))}${state}</span>${toolIcons(l)}${here ? `<span class="here-tag">${h.here}</span>` : ''}</button></li>`;
+          return `<li><button data-lesson="${l.id}" class="${d.done(l) ? 'done' : ''}${here ? ' here' : ''}"><span class="n">${d.done(l) ? icon('check', 13) : n(k)}</span><span class="t">${esc(d.title(l))}${state}</span>${levelDot(l, d.lang)}${toolIcons(l)}${here ? `<span class="here-tag">${h.here}</span>` : ''}</button></li>`;
         })
         .join('');
       return `<article class="ch-card">

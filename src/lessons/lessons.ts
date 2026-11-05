@@ -17,6 +17,11 @@ export interface Lesson {
   la?: LaConfig; // logic-analyzer setup for this lesson
   tb?: { verilog: string; vhdl: string }; // testbench (otherwise one is generated from the ports)
   time?: { read: number; practice: number }; // minutes, when the estimate in time.ts is off for this lesson
+  // the learning loop (goals.ts, merged in course.ts): what you will learn and what to remember
+  objectives?: string[]; // 3 items, plain text
+  takeaways?: string[]; // 3–4 items, inline <code> allowed
+  level?: 'intro' | 'core' | 'advanced';
+  prereq?: string[]; // lesson ids that should come first
 }
 
 export const VHDL_HEADER = `library ieee;
