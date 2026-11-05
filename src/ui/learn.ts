@@ -40,6 +40,15 @@ export const LEARN_UI = {
     exMark: 'تمرین',
     passed: 'انجام شد',
     notYet: 'هنوز نه',
+    why: 'چرا؟',
+    lim: (what: string) => `این شبیه‌ساز هنوز ${what} را پشتیبانی نمی‌کند.`,
+    limWhat: {
+      'lim-generate': 'ساختار generate',
+      'lim-function': 'function و task (یا procedure)',
+      'lim-package': 'بسته‌های VHDL به جز ieee',
+      'lim-width': 'بردارهای پهن‌تر از ۳۲ بیت',
+      'lim-xz': 'مقدار x یا z در این‌جا',
+    } as Record<string, string>,
   },
   en: {
     objectives: 'By the end of this lesson you can',
@@ -72,6 +81,15 @@ export const LEARN_UI = {
     exMark: 'Exercise',
     passed: 'passed',
     notYet: 'not yet',
+    why: 'Why?',
+    lim: (what: string) => `This simulator does not support ${what} yet.`,
+    limWhat: {
+      'lim-generate': 'generate blocks',
+      'lim-function': 'functions and tasks (or procedures)',
+      'lim-package': 'VHDL packages other than ieee',
+      'lim-width': 'vectors wider than 32 bits',
+      'lim-xz': 'an x or z value here',
+    } as Record<string, string>,
   },
 };
 

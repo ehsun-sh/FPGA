@@ -4282,3 +4282,17 @@ fieldset.q legend {
   color: #fff;
   background: #22a35a;
 }
+/* simulator-limit messages */
+.msg .lim-line {
+  font-weight: 600;
+}
+.msg .why-lim {
+  margin-inline-start: 6px;
+  color: var(--accent);
+  text-decoration: underline;
+}
+.limits li.hit {
+  background: var(--accent-soft);
+  border-radius: 6px;
+  outline: 2px solid var(--accent);
+}

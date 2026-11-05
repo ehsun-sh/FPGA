@@ -496,16 +496,37 @@ function renderMessages() {
     messages
       .map(
         (m, i) =>
-          `<div class="msg ${m.level}" data-i="${i}"><span class="mi">${m.level === "error" ? "⛔" : m.level === "warning" ? "⚠️" : "ℹ️"}</span><span>[${esc(m.code)}] ${esc(m.text)}${
+          `<div class="msg ${m.level}" data-i="${i}"><span class="mi">${m.level === "error" ? "⛔" : m.level === "warning" ? "⚠️" : "ℹ️"}</span><span>${limLine(m.code)}[${esc(m.code)}] ${esc(m.text)}${
             m.line
               ? ` <a href="#" class="loc">${fileLabel(m.file)}:${m.line}</a>`
               : ""
-          }</span></div>`,
+          }${m.code.startsWith("lim-") ? ` <a href="#${esc(m.code)}" class="why-lim" data-lim="${esc(m.code)}">${LEARN_UI[uiLang].why}</a>` : ""}</span></div>`,
       )
       .join("");
 }
 
+// a simulator limit gets a plain-language first line and a link into the limits dialog
+function limLine(code: string) {
+  if (!code.startsWith("lim-")) return "";
+  const u = LEARN_UI[uiLang];
+  return `<b class="lim-line" dir="auto">${esc(u.lim(u.limWhat[code] ?? code))}</b><br>`;
+}
+function openLimit(code: string) {
+  const dlg = $("#limits") as HTMLDialogElement;
+  dlg.showModal();
+  const li = dlg.querySelector<HTMLElement>(`#${CSS.escape(code)}`);
+  dlg.querySelectorAll(".limits li.hit").forEach((x) => x.classList.remove("hit"));
+  li?.classList.add("hit");
+  li?.scrollIntoView({ block: "center" });
+}
+
 $("#messages").addEventListener("click", (ev) => {
+  const why = (ev.target as HTMLElement).closest(".why-lim") as HTMLElement | null;
+  if (why) {
+    ev.preventDefault();
+    openLimit(why.dataset.lim!);
+    return;
+  }
   const t = (ev.target as HTMLElement).closest(".msg") as HTMLElement | null;
   if (!t) return;
   ev.preventDefault();
