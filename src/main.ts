@@ -217,6 +217,9 @@ app.innerHTML = `
       <button data-tab="xdc" role="tab" aria-selected="false">${xdcName}</button>
       <button data-tab="tb" role="tab" aria-selected="false"><span id="tb-name">tb.v</span></button>
       <button data-tab="schematic" id="schem-tab" class="hidden" role="tab" aria-selected="false">${icon("schematic", 14)}Schematic</button>
+      <div class="seg-ctl" id="doc-lang" role="group" aria-label="HDL language">
+        <button data-lang="verilog" aria-pressed="false">Verilog</button><button data-lang="vhdl" aria-pressed="false">VHDL</button>
+      </div>
     </div>
     <div class="tab-body">
       <article class="lesson" id="lesson" tabindex="-1"></article>
@@ -1156,6 +1159,7 @@ ${toolsBox(lesson, uiLang)}
     <span class="grow"></span>
     <button class="open-ed" data-act="open-editor" dir="${el.dir}">${icon("pencil", 13)}${ui.openEditor}</button>
   </div>
+  <p class="code-hint learn-link">${u.langHint}</p>
   <div class="code-panel" data-panel="verilog" ${lang === "verilog" ? "" : "hidden"}>${codeBlock(lesson.verilog, "verilog")}</div>
   <div class="code-panel" data-panel="vhdl" ${lang === "vhdl" ? "" : "hidden"}>${codeBlock(lesson.vhdl, "vhdl")}</div>
   <button class="link-btn learn-link" data-act="reset-code">${icon("reset", 13)}${u.resetCode}</button>

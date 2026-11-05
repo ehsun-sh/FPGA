@@ -46,6 +46,7 @@ export const UI = {
     simTitle: 'شبیه‌سازی',
     resetCode: 'بازگرداندن کد درس',
     msgCount: (n: string) => `${n} پیام`,
+    langHint: 'این انتخاب زبان ویرایشگر و تمرین را هم عوض می‌کند.',
   },
   en: {
     tagline: 'a Vivado-style learning environment',
@@ -86,6 +87,7 @@ export const UI = {
     simTitle: 'Simulation',
     resetCode: 'Reset lesson code',
     msgCount: (n: string) => (n === '1' ? '1 message' : `${n} messages`),
+    langHint: 'This choice also sets the editor and exercise language.',
   },
 };
 
