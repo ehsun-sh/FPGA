@@ -40,7 +40,8 @@ import { CodeEditor } from "./ui/editor";
 import { highlight } from "./ui/highlight";
 import { bindLangMenu, homeNav, renderHome } from "./ui/home";
 import { icon } from "./ui/icons";
-import { num, UI, type UiLang } from "./ui/strings";
+import { num, TOUR, UI, type UiLang } from "./ui/strings";
+import { startTour, type TourStep } from "./ui/tour";
 import { versionLabel } from "./version";
 import { toolIcons, toolsBox } from "./ui/tools";
 import { lessonTools, type Tool } from "./lessons/tools";
@@ -1643,6 +1644,9 @@ function act(name: string) {
     case "view-fit":
       board.fitView();
       break;
+    case "tour":
+      runTour();
+      break;
     case "show-messages":
       showBottom("messages", true);
       break;
@@ -2039,9 +2043,42 @@ function showHome(on: boolean) {
   } else {
     boardPane.appendChild(boardEl);
     markSeen(lesson);
+    maybeAutoTour();
     // the page changed under the keyboard: start again from the lesson, not from the hidden landing page
     (lesson === PLAYGROUND ? $("#left") : $("#lesson")).focus({ preventScroll: true });
   }
+}
+
+// ---------------------------------------------------------------- onboarding tour
+// five steps on a desktop, four on a phone (where each pane has its own tab); shown once, re-run from Help
+function runTour() {
+  if (homeOpen) goLab();
+  if (lesson === PLAYGROUND) openLesson(lastCourse);
+  if (tab !== "lesson") showTab("lesson");
+  const t = TOUR[uiLang];
+  const step = (target: string, [title, body]: [string, string]): TourStep => ({ target, title, body });
+  const steps = phone.matches
+    ? [
+        step('#mtabs [data-m="lesson"]', t.lesson),
+        step('#mtabs [data-m="code"]', t.code),
+        step(".toolbar .tb.run", t.run),
+        step('#mtabs [data-m="board"]', t.board),
+      ]
+    : [
+        step("#lesson", t.lesson),
+        step('#doc-tabs [data-tab="source"]', t.code),
+        step(".toolbar .tb.run", t.run),
+        step("#board", t.board),
+        step("#sec-exercise, #sec-try", t.check),
+      ];
+  startTour(steps, { lang: uiLang, onDone: () => store.set("tour-done", "1") });
+}
+let tourTimer = 0;
+function maybeAutoTour() {
+  if (store.get("tour-done") !== null || lesson === PLAYGROUND || tourTimer) return;
+  tourTimer = window.setTimeout(() => {
+    if (!homeOpen && lesson !== PLAYGROUND && store.get("tour-done") === null) runTour();
+  }, 600);
 }
 
 function goHome() {
@@ -2093,3 +2130,4 @@ markLessonTools();
 renderMessages();
 route();
 if (effectiveMode() === "vivado") logBanner();
+if (!homeOpen) maybeAutoTour();
