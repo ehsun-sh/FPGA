@@ -74,3 +74,28 @@ describe('predict first', () => {
       });
     });
 });
+
+describe('quick-check quiz', () => {
+  const words = (s: string) => s.replace(/<[^>]+>/g, '').trim().split(/\s+/).length;
+  for (const l of course)
+    it(`${l.id}: 3 questions in both languages`, () => {
+      const fa = l.quiz!;
+      const en = EN[l.id].quiz!;
+      expect(fa.length).toBe(3);
+      expect(en.length).toBe(3);
+      fa.forEach((q, i) => {
+        expect(q.options.length).toBeGreaterThanOrEqual(3);
+        expect(q.options.length).toBeLessThanOrEqual(4);
+        expect(en[i].options.length).toBe(q.options.length);
+        expect(en[i].answer).toBe(q.answer);
+        expect(q.answer).toBeGreaterThanOrEqual(0);
+        expect(q.answer).toBeLessThan(q.options.length);
+        for (const w of [q.why, en[i].why]) expect(words(w!), w).toBeLessThanOrEqual(25);
+        for (const o of [...q.options, ...en[i].options]) expect(o).not.toMatch(/all of the above|همهٔ موارد/i);
+      });
+    });
+  it('the right answers are spread over the options', () => {
+    const at = course.flatMap((l) => l.quiz!.map((q) => q.answer));
+    for (const k of [0, 1, 2]) expect(at.filter((a) => a === k).length).toBeGreaterThan(10);
+  });
+});

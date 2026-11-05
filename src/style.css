@@ -4243,3 +4243,42 @@ fieldset.q legend {
     outline-offset: 2px;
   }
 }
+.quiz {
+  margin: 16px 0;
+}
+.lesson .quiz h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.quiz-pass {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f7a35;
+  background: var(--ok-soft);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+.quiz fieldset.q {
+  border-bottom: 1px solid var(--line-soft);
+  padding-bottom: 10px;
+}
+.pmarks {
+  display: inline-flex;
+  gap: 3px;
+  margin-inline-start: 4px;
+  flex: none;
+}
+.pmarks .pm {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 4px;
+  color: var(--muted);
+  opacity: 0.45;
+}
+.pmarks .pm.ok {
+  opacity: 1;
+  color: #fff;
+  background: #22a35a;
+}

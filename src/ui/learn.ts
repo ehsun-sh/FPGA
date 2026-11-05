@@ -32,6 +32,14 @@ export const LEARN_UI = {
     runToReveal: 'حالا طرح را اجرا کنید تا پاسخ را ببینید.',
     right: 'درست',
     wrong: 'نادرست',
+    quiz: 'خودآزمایی',
+    check: 'بررسی',
+    quizPassed: '✓ خودآزمایی کامل شد',
+    tryAgain: 'دوباره امتحان کنید.',
+    quizMark: 'خودآزمایی',
+    exMark: 'تمرین',
+    passed: 'انجام شد',
+    notYet: 'هنوز نه',
   },
   en: {
     objectives: 'By the end of this lesson you can',
@@ -56,6 +64,14 @@ export const LEARN_UI = {
     runToReveal: 'Now run the design to see the answer.',
     right: 'Right',
     wrong: 'Not quite',
+    quiz: 'Quick check',
+    check: 'Check',
+    quizPassed: '✓ Quick check passed',
+    tryAgain: 'Try again.',
+    quizMark: 'Quick check',
+    exMark: 'Exercise',
+    passed: 'passed',
+    notYet: 'not yet',
   },
 };
 
@@ -144,7 +160,7 @@ function optionsHtml(name: string, q: Question, picked: number, lock: boolean, m
   return `<div class="q-opts" role="radiogroup">${q.options
     .map((o, i) => {
       const cls = mark && i === q.answer ? ' right' : mark && i === picked ? ' wrong' : '';
-      return `<label class="q-opt${cls}" dir="auto"><input type="radio" name="${name}" value="${i}"${i === picked ? ' checked' : ''}${lock ? ' disabled' : ''}/> <span>${esc(o)}</span></label>`;
+      return `<label class="q-opt${cls}" dir="auto"><input type="radio" name="${name}" value="${i}"${i === picked ? ' checked' : ''}${lock ? ' disabled' : ''}/> <span>${o}</span></label>`;
     })
     .join('')}</div>`;
 }
@@ -163,9 +179,9 @@ export function predictHtml(qs: Question[] | undefined, st: PredictState, lang: 
     .map((q, i) => {
       const p = st.picks[i] ?? -1;
       const res = st.revealed
-        ? `<p class="q-why ${p === q.answer ? 'ok' : 'bad'}" dir="auto"><b>${p === q.answer ? '✓ ' + u.right : '✗ ' + u.wrong}.</b> ${esc(q.why)}</p>`
+        ? `<p class="q-why ${p === q.answer ? 'ok' : 'bad'}" dir="auto"><b>${p === q.answer ? '✓ ' + u.right : '✗ ' + u.wrong}.</b> ${q.why}</p>`
         : '';
-      return `<fieldset class="q" data-q="${i}"><legend dir="auto">${esc(q.q)}</legend>${optionsHtml(`pred-${i}`, q, p, st.locked, st.revealed)}${res}</fieldset>`;
+      return `<fieldset class="q" data-q="${i}"><legend dir="auto">${q.q}</legend>${optionsHtml(`pred-${i}`, q, p, st.locked, st.revealed)}${res}</fieldset>`;
     })
     .join('');
   const all = qs.every((_, i) => (st.picks[i] ?? -1) >= 0);
@@ -177,6 +193,38 @@ export function predictHtml(qs: Question[] | undefined, st: PredictState, lang: 
         : `<span class="dim">${u.runToReveal}</span>`
       : '';
   return `<div class="predict" id="predict"><h3>${icon('target', 15)}${u.predict}</h3>${items}<div class="help-btns">${foot}</div></div>`;
+}
+
+// the quick-check quiz. answers: what the learner picked and checked per question (-1 = not checked yet)
+export interface QuizState {
+  picks: number[]; // current radio choice
+  checked: number[]; // the choice that was last checked, -1 if none
+  passed: boolean; // stored: passed once
+}
+export function quizHtml(qs: Question[] | undefined, st: QuizState, lang: L): string {
+  if (!qs?.length) return '';
+  const u = LEARN_UI[lang];
+  const items = qs
+    .map((q, i) => {
+      const c = st.checked[i] ?? -1;
+      const ok = c === q.answer;
+      const res = c >= 0 ? `<p class="q-why ${ok ? 'ok' : 'bad'}" dir="auto" role="status"><b>${ok ? '✓ ' + u.right : '✗ ' + u.wrong}.</b> ${ok ? q.why ?? '' : u.tryAgain}</p>` : '';
+      const pick = st.picks[i] ?? -1;
+      return `<fieldset class="q" data-q="${i}"><legend dir="auto">${num(i + 1, lang)}. ${q.q}</legend>${optionsHtml(`quiz-${i}`, q, pick, ok, ok)}<div class="help-btns">${ok ? '' : `<button class="chip-btn" data-act="quiz-check" data-qi="${i}"${pick < 0 ? ' disabled' : ''}>${icon('check', 13)}${u.check}</button>`}</div>${res}</fieldset>`;
+    })
+    .join('');
+  const done = st.passed ? `<span class="quiz-pass">${u.quizPassed}</span>` : '';
+  return `<section class="quiz" id="sec-quiz"><h2>${icon('list', 18)}${u.quiz}${done}</h2>${items}</section>`;
+}
+const num = (n: number, lang: L) => (lang === 'fa' ? String(n).replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]) : String(n));
+
+// the two progress marks on a landing-page lesson row: quiz and exercise, filled when passed
+export function progressMarks(hasQuiz: boolean, quizOk: boolean, hasEx: boolean, exOk: boolean, lang: L): string {
+  const u = LEARN_UI[lang];
+  const m = (has: boolean, ok: boolean, ic: 'list' | 'target', label: string) =>
+    has ? `<span class="pm${ok ? ' ok' : ''}" title="${label}: ${ok ? u.passed : u.notYet}">${icon(ic, 12)}<span class="sr-only">${label}: ${ok ? u.passed : u.notYet}</span></span>` : '';
+  const out = m(hasQuiz, quizOk, 'list', u.quizMark) + m(hasEx, exOk, 'target', u.exMark);
+  return out ? `<span class="pmarks">${out}</span>` : '';
 }
 
 export { esc as escLearn };

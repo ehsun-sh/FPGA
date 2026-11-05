@@ -11,7 +11,8 @@ import { SOFTCORE_LESSON } from './softcore';
 import { VGA_LESSON } from './vga';
 import { EN } from './en';
 import { GOALS, PREREQ, type Level } from './goals';
-import { PREDICT } from './predict';
+import { PREDICT, type Question } from './predict';
+import { QUIZ } from './quiz';
 
 type Text = { fa: string; en: string };
 
@@ -42,6 +43,19 @@ export const CHAPTERS: Chapter[] = [
 
 export const ALL_LESSONS: Lesson[] = CHAPTERS.flatMap((c) => c.lessons);
 
+// the quiz is written with the right answer first; a fixed per-question order (the same in both languages) spreads it
+function shuffled(q: Question, key: string): Question {
+  let h = 2166136261;
+  for (const c of key) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0;
+  const idx = q.options.map((_, i) => i);
+  for (let i = idx.length - 1; i > 0; i--) {
+    h = Math.imul(h ^ (h >>> 13), 0x5bd1e995) >>> 0;
+    const j = h % (i + 1);
+    [idx[i], idx[j]] = [idx[j], idx[i]];
+  }
+  return { ...q, options: idx.map((i) => q.options[i]), answer: idx.indexOf(q.answer) };
+}
+
 // merge the learning-loop data into the lessons once, at load: chapters 1–2 are intro, 3–5 core, 6–7 advanced
 const LEVELS: Level[] = ['intro', 'intro', 'core', 'core', 'core', 'advanced', 'advanced'];
 CHAPTERS.forEach((c, ci) => {
@@ -53,6 +67,11 @@ CHAPTERS.forEach((c, ci) => {
     if (g) {
       Object.assign(l, g.fa);
       if (EN[l.id]) Object.assign(EN[l.id], g.en);
+    }
+    const z = QUIZ[l.id];
+    if (z) {
+      l.quiz = z.fa.map((q, i) => shuffled(q, `${l.id}:${i}`));
+      if (EN[l.id]) EN[l.id].quiz = z.en.map((q, i) => shuffled(q, `${l.id}:${i}`));
     }
     const p = PREDICT[l.id];
     if (p) {

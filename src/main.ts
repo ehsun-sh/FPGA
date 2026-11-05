@@ -48,7 +48,7 @@ import { toolIcons, toolLegend, toolsBox } from "./ui/tools";
 import { lessonTools, type Tool } from "./lessons/tools";
 import { lessonTime } from "./lessons/time";
 import { ref } from "./lessons/helpers";
-import { helpHtml, predictHtml, resultHtml, LEARN_UI, levelDot, objectivesHtml, takeawaysHtml, type HelpState, type PredictState } from "./ui/learn";
+import { helpHtml, predictHtml, progressMarks, quizHtml, resultHtml, LEARN_UI, levelDot, objectivesHtml, takeawaysHtml, type HelpState, type PredictState, type QuizState } from "./ui/learn";
 
 // ---------------------------------------------------------------- storage
 const store = {
@@ -984,7 +984,7 @@ function renderLessonList() {
     const items = c.lessons.map((l) => {
       const no = l === PLAYGROUND ? "★" : num(++n, uiLang);
       const cur = l.id === lesson.id;
-      const done = doneMark(l.id);
+      const done = doneMark(l);
       return `<button class="flow-item lesson-item ${cur ? "active" : ""}" data-lesson="${l.id}" dir="${dir}"${cur ? ' aria-current="page"' : ""}><span class="num">${no}</span><span class="lt">${esc(text(l).title)}</span>${levelDot(l, uiLang)}${toolIcons(l)}${done}</button>`;
     });
     const soon = (c.soon ?? []).map(
@@ -1036,8 +1036,9 @@ const exerciseCount = () => ALL_LESSONS.filter((l) => EXERCISES[l.id]).length;
 
 // lessons solved after the solution was shown: they count as done, with a hollow check
 const solvedHelp = new Set<string>((store.get("solved-help") ?? "").split(",").filter((x) => EXERCISES[x]));
-const doneMark = (id: string, cls = "done") => {
-  if (!solved.has(id)) return "";
+const doneMark = (l: Lesson, cls = "done") => {
+  const id = l.id;
+  if (l === PLAYGROUND || !isDone(l)) return "";
   const help = solvedHelp.has(id);
   const t = help ? LEARN_UI[uiLang].solvedHelp : LESSON_UI[uiLang].solved;
   return `<span class="${cls}${help ? " help" : ""}" title="${t}">${icon("check", 13)}<span class="sr-only">${t}</span></span>`;
@@ -1088,6 +1089,33 @@ const predictBox = () => predictHtml(text(lesson).predict, predictState(), uiLan
 function renderPredict() {
   const el = document.getElementById("predict");
   if (el) el.outerHTML = predictBox();
+}
+
+// ---------------------------------------------------------------- quick-check quiz
+// passed once all questions are currently right; stored in quiz:<id>. Picks live for the visit only.
+const quizPicks = new Map<string, { picks: number[]; checked: number[] }>();
+const quizPassed = (l: Lesson) => store.get(`quiz:${l.id}`) === "1";
+function quizState(): QuizState {
+  const m = quizPicks.get(lesson.id) ?? { picks: [], checked: [] };
+  return { ...m, passed: quizPassed(lesson) };
+}
+const quizBox = () => quizHtml(text(lesson).quiz, quizState(), uiLang);
+function renderQuiz() {
+  const el = document.getElementById("sec-quiz");
+  if (el) el.outerHTML = quizBox();
+}
+function checkQuiz(i: number) {
+  const qs = text(lesson).quiz ?? [];
+  const m = quizPicks.get(lesson.id) ?? { picks: [], checked: [] };
+  m.checked[i] = m.picks[i] ?? -1;
+  quizPicks.set(lesson.id, m);
+  if (!quizPassed(lesson) && qs.every((q, k) => m.checked[k] === q.answer)) {
+    store.set(`quiz:${lesson.id}`, "1");
+    renderLessonList();
+    applyUiLang();
+  }
+  renderQuiz();
+  document.querySelector<HTMLElement>(`#sec-quiz [data-q="${i}"] .q-why`)?.focus?.();
 }
 
 // the last checker result, for "Show on board"
@@ -1225,6 +1253,7 @@ function renderLesson() {
     ["sec-code", "code", u.code],
     ["sec-try", "zap", u.tryIt],
     ...(tx.takeaways?.length ? [["sec-takeaways", "list", LEARN_UI[uiLang].takeaways]] : []),
+    ...(tx.quiz?.length ? [["sec-quiz", "list", LEARN_UI[uiLang].quiz]] : []),
     ...(hasEx ? [["sec-exercise", "target", u.exercise]] : []),
   ] as [string, Parameters<typeof icon>[0], string][];
   const navCard = (l: Lesson | undefined, label: string, cls: string) =>
@@ -1263,6 +1292,7 @@ ${toolsBox(lesson, uiLang)}
   </div>
 </section>
 ${takeawaysHtml(tx, uiLang)}
+${quizBox()}
 ${exerciseHtml()}
 <nav class="lesson-nav" aria-label="${u.prevNext}">
   ${navCard(prev, `${rtl ? "→" : "←"} ${u.prev}`, "prev")}
@@ -1286,6 +1316,8 @@ $("#lesson").addEventListener("click", (ev) => {
         behavior: "smooth",
       });
   }
+  const qc = t.closest('[data-act="quiz-check"]') as HTMLElement | null;
+  if (qc) checkQuiz(Number(qc.dataset.qi));
   const sc = t.closest("[data-scene]") as HTMLElement | null;
   const scene = sc && lastResult[Number(sc.dataset.scene)]?.detail?.scene;
   if (scene) showScene(scene);
@@ -1308,6 +1340,13 @@ $("#lesson").addEventListener("change", (ev) => {
     const lock = document.querySelector<HTMLButtonElement>('#predict [data-act="predict-lock"]');
     const n = text(lesson).predict?.length ?? 0;
     if (lock) lock.disabled = !Array.from({ length: n }, (_, i) => picks[i] ?? -1).every((p) => p >= 0);
+  }
+  if (inp.name.startsWith("quiz-")) {
+    const m = quizPicks.get(lesson.id) ?? { picks: [], checked: [] };
+    m.picks[q] = Number(inp.value);
+    quizPicks.set(lesson.id, m);
+    const btn = document.querySelector<HTMLButtonElement>(`#sec-quiz [data-act="quiz-check"][data-qi="${q}"]`);
+    if (btn) btn.disabled = false;
   }
 });
 
@@ -1738,6 +1777,8 @@ function act(name: string) {
       run?.classList.add("pulse");
       break;
     }
+    case "quiz-check":
+      break; // handled by the lesson click listener, which knows the question
     case "predict-reveal":
       predictPending.delete(lesson.id);
       renderPredict();
@@ -2185,8 +2226,14 @@ function markSeen(l: Lesson) {
   seen.add(l.id);
   store.set("seen", [...seen].join(","));
 }
-const isDone = (l: Lesson) =>
-  EXERCISES[l.id] ? solved.has(l.id) : seen.has(l.id);
+// a lesson is done when its exercise is solved (if it has one) and its quiz is passed (if it has one); a lesson
+// with neither is done once opened
+const isDone = (l: Lesson) => {
+  const ex = !!EXERCISES[l.id];
+  const qz = !!l.quiz?.length;
+  if (!ex && !qz) return seen.has(l.id);
+  return (!ex || solved.has(l.id)) && (!qz || quizPassed(l));
+};
 
 const homeEl = $("#home");
 const boardEl = $("#board");
@@ -2207,6 +2254,7 @@ function renderHomePage() {
     summary: (l) => text(l).summary,
     done: isDone,
     help: (l) => solvedHelp.has(l.id),
+    marks: (l) => progressMarks(!!l.quiz?.length, quizPassed(l), !!EXERCISES[l.id], solved.has(l.id), uiLang),
     resume: seen.size ? lesson : null,
     minutes: (l) => {
       const t = timeOf(l);
