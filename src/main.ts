@@ -48,7 +48,7 @@ import { toolIcons, toolLegend, toolsBox } from "./ui/tools";
 import { lessonTools, type Tool } from "./lessons/tools";
 import { lessonTime } from "./lessons/time";
 import { ref } from "./lessons/helpers";
-import { helpHtml, resultHtml, LEARN_UI, levelDot, objectivesHtml, takeawaysHtml, type HelpState } from "./ui/learn";
+import { helpHtml, predictHtml, resultHtml, LEARN_UI, levelDot, objectivesHtml, takeawaysHtml, type HelpState, type PredictState } from "./ui/learn";
 
 // ---------------------------------------------------------------- storage
 const store = {
@@ -879,6 +879,8 @@ function setRunState() {
       ? `● Running ${runner.design?.top ?? ""}`
       : u.ready;
   el.className = "run-state " + st;
+  // predict-first: the Reveal button appears once the design runs
+  if (predictPending.has(lesson.id) && runner.running && !document.querySelector('#predict [data-act="predict-reveal"]')) renderPredict();
   // the status chip in the lesson's "try it" section
   const chip = document.getElementById("try-state");
   if (chip) {
@@ -1071,6 +1073,23 @@ function exerciseHtml(): string {
   return `<section class="exercise" id="sec-exercise"><h2>${icon("target", 18)}${ui.exercise}${done}</h2>${body}<p class="dim">${ex?.testbench ? ui.exerciseHintTb : ui.exerciseHint}</p>${exerciseHelpHtml()}${btn}</section>`;
 }
 
+// ---------------------------------------------------------------- predict first
+// picks are stored in predict:<id> as soon as they are locked in; until the design runs and the learner presses
+// Reveal (this visit only), the answer stays hidden. A return visit shows the stored guess answered.
+const predictPending = new Set<string>();
+const predictPicks = new Map<string, number[]>();
+function predictState(): PredictState {
+  const id = lesson.id;
+  const stored = store.get(`predict:${id}`);
+  const picks = predictPicks.get(id) ?? (stored ? stored.split(",").map(Number) : []);
+  return { picks, locked: stored !== null, revealed: stored !== null && !predictPending.has(id), running: runner.running };
+}
+const predictBox = () => predictHtml(text(lesson).predict, predictState(), uiLang);
+function renderPredict() {
+  const el = document.getElementById("predict");
+  if (el) el.outerHTML = predictBox();
+}
+
 // the last checker result, for "Show on board"
 let lastResult: CheckItem[] = [];
 
@@ -1237,6 +1256,7 @@ ${toolsBox(lesson, uiLang)}
   <button class="link-btn learn-link" data-act="reset-code">${icon("reset", 13)}${u.resetCode}</button>
 </section>
 <section class="try" id="sec-try"><h2>${icon("zap", 18)}${ui.tryIt}<span class="state-chip" id="try-state"></span></h2>${tx.tryIt}
+  ${predictBox()}
   <div class="try-actions">
     <button class="big-run" data-act="run">${icon("play", 15)}${ui.runOn(esc(boardDef.name))}</button>
     <button class="big-run sim" data-act="sim">${icon("wave", 15)}${ui.simulate}</button>
@@ -1273,6 +1293,21 @@ $("#lesson").addEventListener("click", (ev) => {
   if (codeBtn) {
     const lg = codeBtn.dataset.code as Lang;
     setLang(lg);
+  }
+});
+
+// a radio pick in predict-first or the quiz
+$("#lesson").addEventListener("change", (ev) => {
+  const inp = ev.target as HTMLInputElement;
+  if (inp.type !== "radio") return;
+  const q = Number(inp.closest<HTMLElement>("[data-q]")?.dataset.q);
+  if (inp.name.startsWith("pred-")) {
+    const picks = [...(predictPicks.get(lesson.id) ?? [])];
+    picks[q] = Number(inp.value);
+    predictPicks.set(lesson.id, picks);
+    const lock = document.querySelector<HTMLButtonElement>('#predict [data-act="predict-lock"]');
+    const n = text(lesson).predict?.length ?? 0;
+    if (lock) lock.disabled = !Array.from({ length: n }, (_, i) => picks[i] ?? -1).every((p) => p >= 0);
   }
 });
 
@@ -1688,6 +1723,24 @@ function act(name: string) {
       break;
     case "lesson-intro":
       openLesson(LESSONS[0]);
+      break;
+    case "predict-lock": {
+      const qs = text(lesson).predict ?? [];
+      const picks = predictPicks.get(lesson.id) ?? [];
+      if (qs.some((_, i) => (picks[i] ?? -1) < 0)) break;
+      store.set(`predict:${lesson.id}`, picks.join(","));
+      predictPending.add(lesson.id);
+      renderPredict();
+      // nudge towards Run, once
+      const run = document.querySelector<HTMLElement>('#sec-try .big-run[data-act="run"]');
+      run?.classList.remove("pulse");
+      void run?.offsetWidth;
+      run?.classList.add("pulse");
+      break;
+    }
+    case "predict-reveal":
+      predictPending.delete(lesson.id);
+      renderPredict();
       break;
     case "hint": {
       const n = helpState(lesson.id).hints;

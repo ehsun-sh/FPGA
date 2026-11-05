@@ -11,6 +11,7 @@ import { SOFTCORE_LESSON } from './softcore';
 import { VGA_LESSON } from './vga';
 import { EN } from './en';
 import { GOALS, PREREQ, type Level } from './goals';
+import { PREDICT } from './predict';
 
 type Text = { fa: string; en: string };
 
@@ -49,9 +50,15 @@ CHAPTERS.forEach((c, ci) => {
     l.level = LEVELS[ci];
     if (PREREQ[l.id]) l.prereq = PREREQ[l.id];
     const g = GOALS[l.id];
-    if (!g) continue;
-    Object.assign(l, g.fa);
-    if (EN[l.id]) Object.assign(EN[l.id], g.en);
+    if (g) {
+      Object.assign(l, g.fa);
+      if (EN[l.id]) Object.assign(EN[l.id], g.en);
+    }
+    const p = PREDICT[l.id];
+    if (p) {
+      l.predict = p.fa;
+      if (EN[l.id]) EN[l.id].predict = p.en;
+    }
   }
 });
 export const chapterOf = (l: Lesson) => CHAPTERS.findIndex((c) => c.lessons.includes(l));

@@ -55,3 +55,22 @@ describe('cross-references', () => {
     for (const id of ids) expect(ALL_LESSONS.some((l) => l.id === id), id).toBe(true);
   });
 });
+
+describe('predict first', () => {
+  const ids = ['intro', 'gates', 'mux', 'adder', 'seg7', 'decoder', 'shifter', 'alu', 'ff', 'counter', 'testbench', 'shiftreg', 'multiplex', 'stopwatch'];
+  for (const id of ids)
+    it(`${id}: 1–2 questions in both languages with matching options`, () => {
+      const l = ALL_LESSONS.find((x) => x.id === id)!;
+      const fa = l.predict!;
+      const en = EN[id].predict!;
+      expect(fa.length).toBeGreaterThanOrEqual(1);
+      expect(fa.length).toBeLessThanOrEqual(2);
+      expect(en.length).toBe(fa.length);
+      fa.forEach((q, i) => {
+        expect(en[i].options.length).toBe(q.options.length);
+        expect(en[i].answer).toBe(q.answer);
+        expect(q.answer).toBeGreaterThanOrEqual(0);
+        expect(q.answer).toBeLessThan(q.options.length);
+      });
+    });
+});

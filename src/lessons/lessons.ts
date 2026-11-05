@@ -2,6 +2,7 @@
 import type { XdcGroup } from '../boards';
 import type { LaConfig } from '../la/window';
 import { ref, truth } from './helpers';
+import type { Question } from './predict';
 
 export interface Lesson {
   id: string;
@@ -22,6 +23,8 @@ export interface Lesson {
   takeaways?: string[]; // 3–4 items, inline <code> allowed
   level?: 'intro' | 'core' | 'advanced';
   prereq?: string[]; // lesson ids that should come first
+  predict?: Question[]; // guess what the board shows before running (chapters 1–3)
+  quiz?: Question[]; // the quick-check quiz
 }
 
 export const VHDL_HEADER = `library ieee;

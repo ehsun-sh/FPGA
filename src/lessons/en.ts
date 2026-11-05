@@ -1,5 +1,6 @@
 // English text for the lessons. Code and constraints are shared with the Persian version (lessons.ts).
 import { ref, truth } from './helpers';
+import type { Question } from './predict';
 import { TINY8_ISA } from './softcore';
 
 export interface LessonText {
@@ -10,6 +11,8 @@ export interface LessonText {
   exercise?: string;
   objectives?: string[];
   takeaways?: string[];
+  predict?: Question[];
+  quiz?: Question[];
 }
 
 export const EN: Record<string, LessonText> = {
