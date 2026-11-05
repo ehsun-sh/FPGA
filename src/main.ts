@@ -222,6 +222,7 @@ app.innerHTML = `
         <button data-lang="verilog" aria-pressed="false">Verilog</button><button data-lang="vhdl" aria-pressed="false">VHDL</button>
       </div>
     </div>
+    <div class="phone-note" id="phone-note" role="note"><span id="phone-note-t"></span><button data-act="phone-note-close" id="phone-note-x">×</button></div>
     <div class="tab-body">
       <article class="lesson" id="lesson" tabindex="-1"></article>
       <div class="editor-host hidden" id="src-editor"></div>
@@ -1342,6 +1343,10 @@ function applyUiLang() {
   playgroundMode();
   applyMode();
   $("#sim-title-l").textContent = u.simTitle;
+  $("#phone-note-t").textContent = u.phoneNote;
+  $("#phone-note").dir = uiLang === "fa" ? "rtl" : "ltr";
+  $("#phone-note-x").setAttribute("aria-label", u.dismiss);
+  document.body.classList.toggle("phone-note-off", store.get("phone-note") === "1");
   $("#shortcuts").innerHTML = shortcutsDialog(uiLang);
   $("#limits").innerHTML = limitsDialog(uiLang);
   $("#board-hint").textContent = u.boardHint;
@@ -1673,6 +1678,10 @@ function act(name: string) {
       break;
     case "report-problem":
       window.open(ISSUES_URL, "_blank", "noopener");
+      break;
+    case "phone-note-close":
+      store.set("phone-note", "1");
+      document.body.classList.add("phone-note-off");
       break;
     case "show-messages":
       showBottom("messages", true);

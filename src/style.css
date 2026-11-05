@@ -3925,3 +3925,36 @@ body.mode-learn:not(.in-playground) .toolbar .lang-sep {
 .legend-wrap.compact .legend {
   gap: 4px 10px;
 }
+
+/* ---------------------------------------------------------------- phone note in the code pane (Phase 1.8) */
+.phone-note {
+  display: none;
+}
+@media (max-width: 900px) {
+  body[data-m='code']:not(.phone-note-off) .phone-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    flex: none;
+    margin: 8px 10px 0;
+    padding: 9px 12px;
+    border-radius: 10px;
+    background: var(--brand-soft, #fbe6d6);
+    color: var(--text);
+    font-size: 13.5px;
+    line-height: 1.55;
+  }
+  .phone-note span {
+    flex: 1;
+  }
+  .phone-note button {
+    flex: none;
+    border: 0;
+    background: none;
+    font-size: 18px;
+    line-height: 1;
+    padding: 0 4px;
+    color: var(--muted);
+    cursor: pointer;
+  }
+}

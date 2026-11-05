@@ -47,6 +47,8 @@ export const UI = {
     resetCode: 'بازگرداندن کد درس',
     msgCount: (n: string) => `${n} پیام`,
     langHint: 'این انتخاب زبان ویرایشگر و تمرین را هم عوض می‌کند.',
+    phoneNote: 'ویرایش کد روی لپ‌تاپ راحت‌تر است. اینجا می‌توانید کد درس را اجرا کنید و تمرین‌ها را بخوانید.',
+    dismiss: 'بستن',
   },
   en: {
     tagline: 'a Vivado-style learning environment',
@@ -88,6 +90,8 @@ export const UI = {
     resetCode: 'Reset lesson code',
     msgCount: (n: string) => (n === '1' ? '1 message' : `${n} messages`),
     langHint: 'This choice also sets the editor and exercise language.',
+    phoneNote: 'Editing is easier on a laptop. Here you can still run the lesson code and read the exercises.',
+    dismiss: 'Dismiss',
   },
 };
 
