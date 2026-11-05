@@ -50,7 +50,17 @@ and watch it run on an interactive 3D Digilent Nexys A7-100T on the right.
   LEDs, the seven-segment display and pins (UART, SPI and I²C are decoded). Time-heavy exercises ask for a
   `parameter` / `generic` (such as `DIV`) that the checker sets to a small value. The testbench exercise runs the
   student's testbench on the lesson design and on a broken one. Solved exercises are remembered in the browser and
-  marked in the lesson list.
+  marked in the lesson list. Every exercise has two staged hints (the idea, then a code skeleton) and a reference
+  solution in Verilog and VHDL, which unlocks after two failed checks or both hints; a lesson solved after viewing the
+  solution gets a hollow check. Chapter 1–3 checkers show an Expected / Yours table, and *Show on board* sets the
+  switches (and presses the button) of a failing case on the 3D board.
+- **The learning loop in every lesson**: each lesson opens with what you will be able to do, its level (Intro, Core,
+  Advanced) and links to the lessons it builds on, and ends with key takeaways and a three-question quick check with
+  explanations. Lessons in chapters 1–3 ask you to predict what the board will show before you run it. A lesson
+  counts as done when its exercise is solved and its quick check passed; the landing page shows both marks.
+  Cross-references between lessons are links ("lesson 5: Seven-segment display") numbered from the course order.
+- **Friendly simulator-limit errors**: `generate`, functions and tasks, non-ieee VHDL packages, vectors over 32 bits
+  and stray `x` / `z` values get a plain-language first line in Messages and a *Why?* link into the limits list.
 - **Logic analyzer** (Tools → Logic Analyzer, Ctrl+L): a virtual USB logic analyzer window with up to 32 channels
   sampled every board clock. Probes clip onto Pmod JA–JD pins (drawn as flywires on the 3D board), any on-board
   device pin, or internal design signals. Single / Run / Stop acquisition, edge trigger, time base and position,

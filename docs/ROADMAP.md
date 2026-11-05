@@ -398,15 +398,15 @@ and there is no way to make progress on a phone.
 
 ### Acceptance checklist — Phase 2
 
-- [ ] Every course lesson shows objectives, level, prerequisites (where defined), takeaways, a 3-question quiz; both languages.
-- [ ] No hard-coded lesson numbers remain in lesson text; cross-reference links open the right lesson.
-- [ ] Every exercise has 2 hints and Verilog + VHDL solutions; `test/exercises.test.ts` proves both languages pass.
-- [ ] Hint/solution gating works as specified; "solved with help" shows the hollow check.
-- [ ] Chapter 1–3 checkers show the Expected/Yours table; *Show on board* reproduces the failing case.
-- [ ] Predict-first appears in chapters 1–3 and reveals after Run.
-- [ ] `generate` in the editor produces the friendly message with a working *Why?* link.
-- [ ] Progress on the landing page reflects quiz + exercise; phone users can complete quizzes.
-- [ ] `npm test`, `npm run build` green; README updated.
+- [x] Every course lesson shows objectives, level, prerequisites (where defined), takeaways, a 3-question quiz; both languages.
+- [x] No hard-coded lesson numbers remain in lesson text; cross-reference links open the right lesson.
+- [x] Every exercise has 2 hints and Verilog + VHDL solutions; `test/exercises.test.ts` proves both languages pass.
+- [x] Hint/solution gating works as specified; "solved with help" shows the hollow check.
+- [x] Chapter 1–3 checkers show the Expected/Yours table; *Show on board* reproduces the failing case.
+- [x] Predict-first appears in chapters 1–3 and reveals after Run.
+- [x] `generate` in the editor produces the friendly message with a working *Why?* link.
+- [x] Progress on the landing page reflects quiz + exercise; phone users can complete quizzes.
+- [x] `npm test`, `npm run build` green; README updated.
 
 ---
 
