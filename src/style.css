@@ -4122,3 +4122,39 @@ a.xref {
   max-height: 360px;
   overflow: auto;
 }
+/* checker evidence: expected vs yours */
+.ev-wrap {
+  overflow-x: auto;
+  margin-top: 6px;
+}
+table.evidence {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+table.evidence th,
+table.evidence td {
+  border-bottom: 1px solid var(--line-soft);
+  padding: 6px 8px;
+  text-align: start;
+  vertical-align: top;
+}
+table.evidence th {
+  font-weight: 600;
+  color: var(--muted);
+}
+table.evidence tr.ok .mk {
+  color: #1f7a35;
+}
+table.evidence tr.bad .mk {
+  color: #b3261e;
+}
+table.evidence code {
+  white-space: nowrap;
+}
+table.evidence .scene-btn {
+  margin-inline-start: 8px;
+  margin-top: 4px;
+  padding: 2px 10px;
+  font-size: 12px;
+}

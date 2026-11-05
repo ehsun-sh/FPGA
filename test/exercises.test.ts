@@ -45,6 +45,17 @@ describe('exercise checkers', () => {
       });
   }
 
+  it('chapter 1–3 checkers report expected-vs-yours evidence', () => {
+    for (const id of ['intro', 'gates', 'mux', 'adder', 'seg7', 'ff', 'counter', 'shiftreg', 'multiplex', 'stopwatch', 'decoder', 'shifter', 'alu']) {
+      const r = grade(lesson(id), EXERCISES[id].solution!.verilog);
+      expect(r.items.some((i) => i.detail), id).toBe(true);
+      const bad = grade(lesson('intro'), lesson('intro').verilog);
+      const f = bad.items.find((i) => !i.ok)!;
+      expect(f.detail?.scene?.sw).toBeDefined();
+      expect(f.detail!.expected).not.toBe(f.detail!.actual);
+    }
+  });
+
   it('every exercise has exactly 2 hints in both languages', () => {
     for (const [id, ex] of Object.entries(EXERCISES)) {
       expect(ex.hints?.length, id).toBe(2);

@@ -23,6 +23,8 @@ export const LEARN_UI = {
     copyIn: 'گذاشتن در ویرایشگر',
     copyConfirm: 'کد فعلی ویرایشگر جایگزین می‌شود. ادامه؟',
     solvedHelp: 'حل شده با راه‌حل',
+    cols: ['بررسی', 'انتظار', 'شما'],
+    showOnBoard: 'نمایش روی برد',
   },
   en: {
     objectives: 'By the end of this lesson you can',
@@ -39,6 +41,8 @@ export const LEARN_UI = {
     copyIn: 'Copy into editor',
     copyConfirm: 'This replaces the code in the editor. Continue?',
     solvedHelp: 'solved with the solution',
+    cols: ['Check', 'Expected', 'Yours'],
+    showOnBoard: 'Show on board',
   },
 };
 
@@ -100,6 +104,26 @@ export function helpHtml(
     sol = `<button class="chip-btn" data-act="show-solution"${on ? '' : ` disabled aria-disabled="true" title="${u.solutionLocked}"`}>${icon('code', 13)}${u.showSolution}</button>${on ? '' : `<span class="dim sol-lock">${u.solutionLocked}</span>`}`;
   }
   return `<div class="ex-help" id="ex-help">${shown}<div class="help-btns">${next}${st.solution ? '' : sol}</div>${st.solution ? sol : ''}</div>`;
+}
+
+// the checker's result: a plain list, or a table with the evidence when any item has it
+export interface ResultItem {
+  ok: boolean;
+  fa: string;
+  en: string;
+  detail?: { expected: string; actual: string; scene?: { sw?: number; btn?: string } };
+}
+export function resultHtml(items: ResultItem[], lang: L): string {
+  if (!items.some((i) => i.detail)) return `<ul>${items.map((i) => `<li dir="auto" class="${i.ok ? 'ok' : 'bad'}">${i.ok ? '✓' : '✗'} ${esc(i[lang])}</li>`).join('')}</ul>`;
+  const u = LEARN_UI[lang];
+  const rows = items
+    .map((it, n) => {
+      const d = it.detail;
+      const btn = !it.ok && d?.scene ? `<button class="chip-btn scene-btn" data-scene="${n}">${icon('cpu', 13)}${u.showOnBoard}</button>` : '';
+      return `<tr class="${it.ok ? 'ok' : 'bad'}"><td dir="auto"><span class="mk">${it.ok ? '✓' : '✗'}</span> ${esc(it[lang])}${btn}</td><td dir="ltr"><code>${esc(d?.expected ?? '')}</code></td><td dir="ltr"><code>${esc(d?.actual ?? '')}</code></td></tr>`;
+    })
+    .join('');
+  return `<div class="ev-wrap"><table class="evidence"><thead><tr>${u.cols.map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 export { esc as escLearn };

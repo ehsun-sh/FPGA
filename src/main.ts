@@ -30,7 +30,7 @@ import { formatTime, TbSim } from "./sim/tbsim";
 import { WaveView } from "./wave/view";
 import { VgaScreen } from "./vga/screen";
 import { ModulePanel, type SavedModule } from "./modules/panel";
-import { EXERCISES } from "./grade/exercises";
+import { EXERCISES, type CheckItem } from "./grade/exercises";
 import { gradeExercise } from "./grade/grade";
 import { buildNetlist, type Netlist } from "./synth/netlist";
 import { SchematicPanel } from "./synth/panel";
@@ -48,7 +48,7 @@ import { toolIcons, toolLegend, toolsBox } from "./ui/tools";
 import { lessonTools, type Tool } from "./lessons/tools";
 import { lessonTime } from "./lessons/time";
 import { ref } from "./lessons/helpers";
-import { helpHtml, LEARN_UI, levelDot, objectivesHtml, takeawaysHtml, type HelpState } from "./ui/learn";
+import { helpHtml, resultHtml, LEARN_UI, levelDot, objectivesHtml, takeawaysHtml, type HelpState } from "./ui/learn";
 
 // ---------------------------------------------------------------- storage
 const store = {
@@ -1071,6 +1071,22 @@ function exerciseHtml(): string {
   return `<section class="exercise" id="sec-exercise"><h2>${icon("target", 18)}${ui.exercise}${done}</h2>${body}<p class="dim">${ex?.testbench ? ui.exerciseHintTb : ui.exerciseHint}</p>${exerciseHelpHtml()}${btn}</section>`;
 }
 
+// the last checker result, for "Show on board"
+let lastResult: CheckItem[] = [];
+
+// reproduces a failing case on the board: the switches, a button press, and the design running
+function showScene(scene: { sw?: number; btn?: string }) {
+  if (!runner.running) act("run");
+  if (scene.sw !== undefined)
+    for (let i = 0; i < 16; i++) board.setSwitch?.(i, ((scene.sw >> i) & 1) === 1, true);
+  if (scene.btn && board.press) {
+    const b = scene.btn;
+    board.press(b, true);
+    setTimeout(() => board.press?.(b, false), 300);
+  }
+  if (phone.matches) setMobile("board");
+}
+
 function checkExercise() {
   if (!EXERCISES[lesson.id]) return;
   const ui = LESSON_UI[uiLang];
@@ -1096,7 +1112,7 @@ function checkExercise() {
       boardDef,
     );
     for (const i of r.items)
-      log(`${i.ok ? "  ✓" : "  ✗"} ${i[uiLang]}`, i.ok ? "ok" : "error");
+      log(`${i.ok ? "  ✓" : "  ✗"} ${i[uiLang]}${i.detail && !i.ok ? ` (${LEARN_UI[uiLang].cols[1]}: ${i.detail.expected} · ${LEARN_UI[uiLang].cols[2]}: ${i.detail.actual})` : ""}`, i.ok ? "ok" : "error");
     showBottom("console", true);
     log(
       r.passed ? ui.passed : ui.failed.replace(/:$/, ""),
@@ -1126,7 +1142,8 @@ function checkExercise() {
     const el = document.getElementById("ex-result");
     if (!el) return;
     el.className = "ex-result " + (r.passed ? "pass" : "fail");
-    el.innerHTML = `<b>${r.passed ? ui.passed : ui.failed}</b><ul>${r.items.map((i) => `<li dir="auto" class="${i.ok ? "ok" : "bad"}">${i.ok ? "✓" : "✗"} ${esc(i[uiLang])}</li>`).join("")}</ul>`;
+    lastResult = r.items;
+    el.innerHTML = `<b>${r.passed ? ui.passed : ui.failed}</b>${resultHtml(r.items, uiLang)}`;
   }, 30);
 }
 
@@ -1249,6 +1266,9 @@ $("#lesson").addEventListener("click", (ev) => {
         behavior: "smooth",
       });
   }
+  const sc = t.closest("[data-scene]") as HTMLElement | null;
+  const scene = sc && lastResult[Number(sc.dataset.scene)]?.detail?.scene;
+  if (scene) showScene(scene);
   const codeBtn = t.closest("[data-code]") as HTMLElement | null;
   if (codeBtn) {
     const lg = codeBtn.dataset.code as Lang;
