@@ -16,6 +16,7 @@ export interface Lesson {
   exercise?: string; // HTML
   la?: LaConfig; // logic-analyzer setup for this lesson
   tb?: { verilog: string; vhdl: string }; // testbench (otherwise one is generated from the ports)
+  time?: { read: number; practice: number }; // minutes, when the estimate in time.ts is off for this lesson
 }
 
 export const VHDL_HEADER = `library ieee;

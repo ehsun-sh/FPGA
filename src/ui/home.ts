@@ -6,6 +6,7 @@ import { HOME, num, UI, type UiLang } from './strings';
 import { versionLabel } from '../version';
 import { toolIcons } from './tools';
 import { helpMenu } from './help';
+import { formatMinutes } from '../lessons/time';
 
 export interface HomeData {
   lang: UiLang;
@@ -16,6 +17,7 @@ export interface HomeData {
   done: (l: Lesson) => boolean;
   resume: Lesson | null; // the lesson to continue, or null for a first visit
   live: boolean; // a design is running on the hero board
+  minutes: (l: Lesson) => number; // reading + practice time of a lesson
 }
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -162,6 +164,7 @@ export function renderHome(d: HomeData): string {
       return `<article class="ch-card">
   <header><span class="ch-no">${h.chapter(n(ci + 1))}</span><span class="ch-count" title="${pct}%">${n(done)}/${n(c.lessons.length)}</span></header>
   <h3>${esc(c.title[d.lang])}</h3>
+  <p class="ch-time">${formatMinutes(c.lessons.reduce((t, l) => t + d.minutes(l), 0), d.lang)}</p>
   <div class="bar"><i style="width:${pct}%"></i></div>
   <ol>${items}</ol>
 </article>`;

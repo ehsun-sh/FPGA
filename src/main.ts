@@ -46,6 +46,7 @@ import { ISSUES_URL, limitsDialog, shortcutsDialog } from "./ui/help";
 import { versionLabel } from "./version";
 import { toolIcons, toolsBox } from "./ui/tools";
 import { lessonTools, type Tool } from "./lessons/tools";
+import { lessonTime } from "./lessons/time";
 
 // ---------------------------------------------------------------- storage
 const store = {
@@ -1106,6 +1107,10 @@ function codeBlock(code: string, lg: "verilog" | "vhdl") {
   return `<pre class="code" dir="ltr"><code>${highlight(code, lg)}</code></pre>`;
 }
 
+// reading and practice minutes of a lesson, in the site language
+const timeOf = (l: Lesson) =>
+  lessonTime({ ...text(l), time: l.time }, !!(EXERCISES[l.id] || text(l).exercise), chapterOf(l) + 1);
+
 function renderLesson() {
   const idx = ALL_LESSONS.indexOf(lesson);
   const prev = ALL_LESSONS[idx - 1];
@@ -1122,15 +1127,11 @@ function renderLesson() {
       ? ""
       : `<span class="of">${u.lessonOf(num(pos + 1, uiLang), num(course.length, uiLang))}</span>`;
   const hasEx = !!(EXERCISES[lesson.id] || tx.exercise);
-  // reading time of the prose (about 180 words a minute), so a learner can plan a sitting
-  const words = `${tx.body} ${tx.tryIt} ${tx.exercise ?? ""}`
-    .replace(/<pre[\s\S]*?<\/pre>|<[^>]+>/g, " ")
-    .split(/\s+/)
-    .filter(Boolean).length;
+  const tm = timeOf(lesson);
   const read =
     pos < 0
       ? ""
-      : `<span class="read">${icon("clock", 13)}${ui.readTime(num(Math.max(2, Math.round(words / 180)), uiLang))}</span>`;
+      : `<span class="read">${icon("clock", 13)}${ui.time(num(tm.read, uiLang), num(tm.practice, uiLang))}</span>`;
   const toc = [
     ["sec-overview", "book", u.overview],
     ["sec-code", "code", u.code],
@@ -2039,6 +2040,10 @@ function renderHomePage() {
     summary: (l) => text(l).summary,
     done: isDone,
     resume: seen.size ? lesson : null,
+    minutes: (l) => {
+      const t = timeOf(l);
+      return t.read + t.practice;
+    },
     live: runner.running && lesson === ALL_LESSONS[0],
   });
   $("#hero-stage").appendChild(boardEl);

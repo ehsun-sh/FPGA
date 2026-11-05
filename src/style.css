@@ -3877,3 +3877,10 @@ body.mode-learn:not(.in-playground) .toolbar .lang-sep {
   color: var(--muted);
   text-decoration: none;
 }
+
+/* ---------------------------------------------------------------- time estimates (Phase 1.6) */
+.ch-card .ch-time {
+  margin: -4px 0 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
