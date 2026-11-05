@@ -3884,3 +3884,44 @@ body.mode-learn:not(.in-playground) .toolbar .lang-sep {
   font-size: 13px;
   color: var(--muted);
 }
+
+/* ---------------------------------------------------------------- instrument legend (Phase 1.7) */
+.legend-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin: 12px 0 4px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.legend-h {
+  font-weight: 600;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.legend b {
+  font-weight: 600;
+  color: var(--text);
+}
+.legend-wrap.compact {
+  margin: 8px 10px 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 11.5px;
+  gap: 4px 10px;
+}
+.legend-wrap.compact .legend {
+  gap: 4px 10px;
+}

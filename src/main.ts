@@ -44,7 +44,7 @@ import { num, TOUR, UI, type UiLang } from "./ui/strings";
 import { startTour, type TourStep } from "./ui/tour";
 import { ISSUES_URL, limitsDialog, shortcutsDialog } from "./ui/help";
 import { versionLabel } from "./version";
-import { toolIcons, toolsBox } from "./ui/tools";
+import { toolIcons, toolLegend, toolsBox } from "./ui/tools";
 import { lessonTools, type Tool } from "./lessons/tools";
 import { lessonTime } from "./lessons/time";
 
@@ -995,7 +995,7 @@ function renderLessonList() {
       ? ""
       : `<span class="ch-prog${done === c.lessons.length ? " full" : ""}" title="${ui.chapterDone(num(done, uiLang), num(c.lessons.length, uiLang))}">${num(done, uiLang)}/${num(c.lessons.length, uiLang)}</span>`;
     return `<div class="chap${open ? " open" : ""}"><button class="chapter-h" dir="${dir}" data-chapter="${ci}" aria-expanded="${open}" aria-controls="chap-${ci}">${icon("chevron", 12)}<span class="ct">${lab ? "" : `<span class="cno">${num(ci + 1, uiLang)}</span>`}${esc(c.title[uiLang])}</span>${count}</button><div class="chap-body" id="chap-${ci}"${open ? "" : " hidden"}>${items.join("")}${soon.join("")}</div></div>`;
-  }).join("");
+  }).join("") + toolLegend(ALL_LESSONS, uiLang, true);
   el.querySelector<HTMLElement>(".lesson-item.active")?.scrollIntoView({ block: "nearest" });
 }
 

@@ -4,7 +4,7 @@ import type { Lesson } from '../lessons/lessons';
 import { icon, type IconName } from './icons';
 import { HOME, num, UI, type UiLang } from './strings';
 import { versionLabel } from '../version';
-import { toolIcons } from './tools';
+import { toolIcons, toolLegend } from './tools';
 import { helpMenu } from './help';
 import { formatMinutes } from '../lessons/time';
 
@@ -211,6 +211,7 @@ export function renderHome(d: HomeData): string {
 <section class="course" id="home-lessons">
   <div class="course-h"><h2>${h.lessonsTitle}</h2><span class="dim">${h.lessonsSub(n(doneAll), n(all.length))}</span></div>
   <div class="bar big"><i style="width:${Math.round((100 * doneAll) / all.length)}%"></i></div>
+  ${toolLegend(all, d.lang)}
   <div class="ch-grid">${cards}
     <article class="ch-card lab-card">
       <header><span class="ch-no">${h.lab}</span></header>
