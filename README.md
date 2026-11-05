@@ -79,6 +79,11 @@ npm test         # simulator + every lesson in both languages
 npm run build    # static site in dist/
 ```
 
+`node scripts/screenshots.cjs` (after `npm run build`) is an optional smoke test: it serves `dist/`, opens the landing
+page and the `intro` and `counter` lessons at 1440×900 and 390×844, in Persian and English and in both workbench modes,
+and saves screenshots to `screenshots/` (git-ignored). It needs Playwright (`npm i -D playwright && npx playwright
+install chromium`); without it the script says so and exits.
+
 ## Layout
 
 | Path | What |
