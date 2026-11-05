@@ -30,7 +30,7 @@ import { formatTime, TbSim } from "./sim/tbsim";
 import { WaveView } from "./wave/view";
 import { VgaScreen } from "./vga/screen";
 import { ModulePanel, type SavedModule } from "./modules/panel";
-import { EXERCISES } from "./grade/exercises";
+import { EXERCISES, type CheckItem } from "./grade/exercises";
 import { gradeExercise } from "./grade/grade";
 import { buildNetlist, type Netlist } from "./synth/netlist";
 import { SchematicPanel } from "./synth/panel";
@@ -47,6 +47,8 @@ import { versionLabel } from "./version";
 import { toolIcons, toolLegend, toolsBox } from "./ui/tools";
 import { lessonTools, type Tool } from "./lessons/tools";
 import { lessonTime } from "./lessons/time";
+import { ref } from "./lessons/helpers";
+import { helpHtml, predictHtml, progressMarks, quizHtml, resultHtml, LEARN_UI, levelDot, objectivesHtml, takeawaysHtml, type HelpState, type PredictState, type QuizState } from "./ui/learn";
 
 // ---------------------------------------------------------------- storage
 const store = {
@@ -494,16 +496,37 @@ function renderMessages() {
     messages
       .map(
         (m, i) =>
-          `<div class="msg ${m.level}" data-i="${i}"><span class="mi">${m.level === "error" ? "⛔" : m.level === "warning" ? "⚠️" : "ℹ️"}</span><span>[${esc(m.code)}] ${esc(m.text)}${
+          `<div class="msg ${m.level}" data-i="${i}"><span class="mi">${m.level === "error" ? "⛔" : m.level === "warning" ? "⚠️" : "ℹ️"}</span><span>${limLine(m.code)}[${esc(m.code)}] ${esc(m.text)}${
             m.line
               ? ` <a href="#" class="loc">${fileLabel(m.file)}:${m.line}</a>`
               : ""
-          }</span></div>`,
+          }${m.code.startsWith("lim-") ? ` <a href="#${esc(m.code)}" class="why-lim" data-lim="${esc(m.code)}">${LEARN_UI[uiLang].why}</a>` : ""}</span></div>`,
       )
       .join("");
 }
 
+// a simulator limit gets a plain-language first line and a link into the limits dialog
+function limLine(code: string) {
+  if (!code.startsWith("lim-")) return "";
+  const u = LEARN_UI[uiLang];
+  return `<b class="lim-line" dir="auto">${esc(u.lim(u.limWhat[code] ?? code))}</b><br>`;
+}
+function openLimit(code: string) {
+  const dlg = $("#limits") as HTMLDialogElement;
+  dlg.showModal();
+  const li = dlg.querySelector<HTMLElement>(`#${CSS.escape(code)}`);
+  dlg.querySelectorAll(".limits li.hit").forEach((x) => x.classList.remove("hit"));
+  li?.classList.add("hit");
+  li?.scrollIntoView({ block: "center" });
+}
+
 $("#messages").addEventListener("click", (ev) => {
+  const why = (ev.target as HTMLElement).closest(".why-lim") as HTMLElement | null;
+  if (why) {
+    ev.preventDefault();
+    openLimit(why.dataset.lim!);
+    return;
+  }
   const t = (ev.target as HTMLElement).closest(".msg") as HTMLElement | null;
   if (!t) return;
   ev.preventDefault();
@@ -877,6 +900,8 @@ function setRunState() {
       ? `● Running ${runner.design?.top ?? ""}`
       : u.ready;
   el.className = "run-state " + st;
+  // predict-first: the Reveal button appears once the design runs
+  if (predictPending.has(lesson.id) && runner.running && !document.querySelector('#predict [data-act="predict-reveal"]')) renderPredict();
   // the status chip in the lesson's "try it" section
   const chip = document.getElementById("try-state");
   if (chip) {
@@ -980,10 +1005,8 @@ function renderLessonList() {
     const items = c.lessons.map((l) => {
       const no = l === PLAYGROUND ? "★" : num(++n, uiLang);
       const cur = l.id === lesson.id;
-      const done = solved.has(l.id)
-        ? `<span class="done" title="${ui.solved}">${icon("check", 13)}<span class="sr-only">${ui.solved}</span></span>`
-        : "";
-      return `<button class="flow-item lesson-item ${cur ? "active" : ""}" data-lesson="${l.id}" dir="${dir}"${cur ? ' aria-current="page"' : ""}><span class="num">${no}</span><span class="lt">${esc(text(l).title)}</span>${toolIcons(l)}${done}</button>`;
+      const done = doneMark(l);
+      return `<button class="flow-item lesson-item ${cur ? "active" : ""}" data-lesson="${l.id}" dir="${dir}"${cur ? ' aria-current="page"' : ""}><span class="num">${no}</span><span class="lt">${esc(text(l).title)}</span>${levelDot(l, uiLang)}${toolIcons(l)}${done}</button>`;
     });
     const soon = (c.soon ?? []).map(
       (s) =>
@@ -1032,18 +1055,104 @@ const solved = new Set<string>(
 );
 const exerciseCount = () => ALL_LESSONS.filter((l) => EXERCISES[l.id]).length;
 
+// lessons solved after the solution was shown: they count as done, with a hollow check
+const solvedHelp = new Set<string>((store.get("solved-help") ?? "").split(",").filter((x) => EXERCISES[x]));
+const doneMark = (l: Lesson, cls = "done") => {
+  const id = l.id;
+  if (l === PLAYGROUND || !isDone(l)) return "";
+  const help = solvedHelp.has(id);
+  const t = help ? LEARN_UI[uiLang].solvedHelp : LESSON_UI[uiLang].solved;
+  return `<span class="${cls}${help ? " help" : ""}" title="${t}">${icon("check", 13)}<span class="sr-only">${t}</span></span>`;
+};
+
+// hint and solution state of an exercise, kept per lesson in localStorage
+const helpState = (id: string): HelpState => ({
+  attempts: Number(store.get(`attempts:${id}`) ?? 0),
+  hints: Number(store.get(`hints:${id}`) ?? 0),
+  solution: store.get(`solution:${id}`) === "1",
+});
+function renderHelp() {
+  const box = document.getElementById("ex-help");
+  if (box) box.outerHTML = exerciseHelpHtml();
+}
+function exerciseHelpHtml(): string {
+  const ex = EXERCISES[lesson.id];
+  if (!ex) return "";
+  return helpHtml(ex.hints, ex.solution?.[lang], helpState(lesson.id), uiLang, (n) => num(n, uiLang), (c) => codeBlock(c, lang));
+}
+
 function exerciseHtml(): string {
   const ui = LESSON_UI[uiLang];
   const ex = EXERCISES[lesson.id];
   const body = ex ? ex[uiLang] : text(lesson).exercise;
   if (!body) return "";
   const done = solved.has(lesson.id)
-    ? ` <span class="ex-done">✓ ${ui.solved}</span>`
+    ? ` <span class="ex-done${solvedHelp.has(lesson.id) ? " help" : ""}">✓ ${solvedHelp.has(lesson.id) ? LEARN_UI[uiLang].solvedHelp : ui.solved}</span>`
     : "";
   const btn = ex
     ? `<button class="big-run check" data-act="check">${icon("check", 15)}${ui.check}</button><div id="ex-result"></div>`
     : "";
-  return `<section class="exercise" id="sec-exercise"><h2>${icon("target", 18)}${ui.exercise}${done}</h2>${body}<p class="dim">${ex?.testbench ? ui.exerciseHintTb : ui.exerciseHint}</p>${btn}</section>`;
+  return `<section class="exercise" id="sec-exercise"><h2>${icon("target", 18)}${ui.exercise}${done}</h2>${body}<p class="dim">${ex?.testbench ? ui.exerciseHintTb : ui.exerciseHint}</p>${exerciseHelpHtml()}${btn}</section>`;
+}
+
+// ---------------------------------------------------------------- predict first
+// picks are stored in predict:<id> as soon as they are locked in; until the design runs and the learner presses
+// Reveal (this visit only), the answer stays hidden. A return visit shows the stored guess answered.
+const predictPending = new Set<string>();
+const predictPicks = new Map<string, number[]>();
+function predictState(): PredictState {
+  const id = lesson.id;
+  const stored = store.get(`predict:${id}`);
+  const picks = predictPicks.get(id) ?? (stored ? stored.split(",").map(Number) : []);
+  return { picks, locked: stored !== null, revealed: stored !== null && !predictPending.has(id), running: runner.running };
+}
+const predictBox = () => predictHtml(text(lesson).predict, predictState(), uiLang);
+function renderPredict() {
+  const el = document.getElementById("predict");
+  if (el) el.outerHTML = predictBox();
+}
+
+// ---------------------------------------------------------------- quick-check quiz
+// passed once all questions are currently right; stored in quiz:<id>. Picks live for the visit only.
+const quizPicks = new Map<string, { picks: number[]; checked: number[] }>();
+const quizPassed = (l: Lesson) => store.get(`quiz:${l.id}`) === "1";
+function quizState(): QuizState {
+  const m = quizPicks.get(lesson.id) ?? { picks: [], checked: [] };
+  return { ...m, passed: quizPassed(lesson) };
+}
+const quizBox = () => quizHtml(text(lesson).quiz, quizState(), uiLang);
+function renderQuiz() {
+  const el = document.getElementById("sec-quiz");
+  if (el) el.outerHTML = quizBox();
+}
+function checkQuiz(i: number) {
+  const qs = text(lesson).quiz ?? [];
+  const m = quizPicks.get(lesson.id) ?? { picks: [], checked: [] };
+  m.checked[i] = m.picks[i] ?? -1;
+  quizPicks.set(lesson.id, m);
+  if (!quizPassed(lesson) && qs.every((q, k) => m.checked[k] === q.answer)) {
+    store.set(`quiz:${lesson.id}`, "1");
+    renderLessonList();
+    applyUiLang();
+  }
+  renderQuiz();
+  document.querySelector<HTMLElement>(`#sec-quiz [data-q="${i}"] .q-why`)?.focus?.();
+}
+
+// the last checker result, for "Show on board"
+let lastResult: CheckItem[] = [];
+
+// reproduces a failing case on the board: the switches, a button press, and the design running
+function showScene(scene: { sw?: number; btn?: string }) {
+  if (!runner.running) act("run");
+  if (scene.sw !== undefined)
+    for (let i = 0; i < 16; i++) board.setSwitch?.(i, ((scene.sw >> i) & 1) === 1, true);
+  if (scene.btn && board.press) {
+    const b = scene.btn;
+    board.press(b, true);
+    setTimeout(() => board.press?.(b, false), 300);
+  }
+  if (phone.matches) setMobile("board");
 }
 
 function checkExercise() {
@@ -1071,15 +1180,23 @@ function checkExercise() {
       boardDef,
     );
     for (const i of r.items)
-      log(`${i.ok ? "  ✓" : "  ✗"} ${i[uiLang]}`, i.ok ? "ok" : "error");
+      log(`${i.ok ? "  ✓" : "  ✗"} ${i[uiLang]}${i.detail && !i.ok ? ` (${LEARN_UI[uiLang].cols[1]}: ${i.detail.expected} · ${LEARN_UI[uiLang].cols[2]}: ${i.detail.actual})` : ""}`, i.ok ? "ok" : "error");
     showBottom("console", true);
     log(
       r.passed ? ui.passed : ui.failed.replace(/:$/, ""),
       r.passed ? "ok" : "warning",
     );
+    if (!r.passed && !solved.has(l.id)) {
+      store.set(`attempts:${l.id}`, String(helpState(l.id).attempts + 1));
+      if (l === lesson) renderHelp();
+    }
     if (r.passed && !solved.has(l.id)) {
       solved.add(l.id);
       store.set("solved", [...solved].join(","));
+      if (helpState(l.id).solution) {
+        solvedHelp.add(l.id);
+        store.set("solved-help", [...solvedHelp].join(","));
+      }
       renderLessonList();
       applyUiLang();
     }
@@ -1093,7 +1210,8 @@ function checkExercise() {
     const el = document.getElementById("ex-result");
     if (!el) return;
     el.className = "ex-result " + (r.passed ? "pass" : "fail");
-    el.innerHTML = `<b>${r.passed ? ui.passed : ui.failed}</b><ul>${r.items.map((i) => `<li dir="auto" class="${i.ok ? "ok" : "bad"}">${i.ok ? "✓" : "✗"} ${esc(i[uiLang])}</li>`).join("")}</ul>`;
+    lastResult = r.items;
+    el.innerHTML = `<b>${r.passed ? ui.passed : ui.failed}</b>${resultHtml(r.items, uiLang)}`;
   }, 30);
 }
 
@@ -1111,6 +1229,23 @@ function codeBlock(code: string, lg: "verilog" | "vhdl") {
 // reading and practice minutes of a lesson, in the site language
 const timeOf = (l: Lesson) =>
   lessonTime({ ...text(l), time: l.time }, !!(EXERCISES[l.id] || text(l).exercise), chapterOf(l) + 1);
+
+// fills the cross-reference links (ref() in lessons/helpers.ts): "lesson 5: Seven-segment display", numbered by
+// the course order, with data-lesson so the click delegation opens the lesson
+function fillRefs(root: HTMLElement) {
+  const course = ALL_LESSONS.filter((l) => l !== PLAYGROUND);
+  for (const a of root.querySelectorAll<HTMLAnchorElement>("a.xref[data-ref]")) {
+    const id = a.dataset.ref!;
+    const i = course.findIndex((l) => l.id === id);
+    if (i < 0) {
+      if (import.meta.env.DEV) throw new Error(`unknown lesson in ref(): ${id}`);
+      a.textContent = id;
+      continue;
+    }
+    a.textContent = LEARN_UI[uiLang].xref(num(i + 1, uiLang), text(course[i]).title);
+    a.dataset.lesson = id;
+  }
+}
 
 function renderLesson() {
   const idx = ALL_LESSONS.indexOf(lesson);
@@ -1134,9 +1269,12 @@ function renderLesson() {
       ? ""
       : `<span class="read">${icon("clock", 13)}${ui.time(num(tm.read, uiLang), num(tm.practice, uiLang))}</span>`;
   const toc = [
+    ...(tx.objectives?.length ? [["sec-goals", "target", LEARN_UI[uiLang].goalsToc]] : []),
     ["sec-overview", "book", u.overview],
     ["sec-code", "code", u.code],
     ["sec-try", "zap", u.tryIt],
+    ...(tx.takeaways?.length ? [["sec-takeaways", "list", LEARN_UI[uiLang].takeaways]] : []),
+    ...(tx.quiz?.length ? [["sec-quiz", "list", LEARN_UI[uiLang].quiz]] : []),
     ...(hasEx ? [["sec-exercise", "target", u.exercise]] : []),
   ] as [string, Parameters<typeof icon>[0], string][];
   const navCard = (l: Lesson | undefined, label: string, cls: string) =>
@@ -1151,6 +1289,7 @@ function renderLesson() {
   ${pos < 0 ? "" : `<div class="bar"><i style="width:${Math.round((100 * (pos + 1)) / course.length)}%"></i></div>`}
   <h1>${esc(tx.title)}</h1><p class="summary">${esc(tx.summary)}</p>
 </div>
+${objectivesHtml(lesson, tx, uiLang, ref)}
 ${toolsBox(lesson, uiLang)}
 <nav class="lesson-toc" aria-label="${u.onPage}">${toc.map(([id, ic, label], i) => `<button data-jump="${id}" class="${i ? "" : "active"}">${icon(ic, 14)}${label}</button>`).join("")}</nav>
 <section id="sec-overview"><h2>${icon("book", 18)}${ui.explain}</h2>${tx.body}</section>
@@ -1167,16 +1306,20 @@ ${toolsBox(lesson, uiLang)}
   <button class="link-btn learn-link" data-act="reset-code">${icon("reset", 13)}${u.resetCode}</button>
 </section>
 <section class="try" id="sec-try"><h2>${icon("zap", 18)}${ui.tryIt}<span class="state-chip" id="try-state"></span></h2>${tx.tryIt}
+  ${predictBox()}
   <div class="try-actions">
     <button class="big-run" data-act="run">${icon("play", 15)}${ui.runOn(esc(boardDef.name))}</button>
     <button class="big-run sim" data-act="sim">${icon("wave", 15)}${ui.simulate}</button>
   </div>
 </section>
+${takeawaysHtml(tx, uiLang)}
+${quizBox()}
 ${exerciseHtml()}
 <nav class="lesson-nav" aria-label="${u.prevNext}">
   ${navCard(prev, `${rtl ? "→" : "←"} ${u.prev}`, "prev")}
   ${navCard(next, `${u.next} ${rtl ? "←" : "→"}`, "next")}
 </nav>`;
+  fillRefs(el);
   el.scrollTop = 0;
   setRunState();
 }
@@ -1194,10 +1337,37 @@ $("#lesson").addEventListener("click", (ev) => {
         behavior: "smooth",
       });
   }
+  const qc = t.closest('[data-act="quiz-check"]') as HTMLElement | null;
+  if (qc) checkQuiz(Number(qc.dataset.qi));
+  const sc = t.closest("[data-scene]") as HTMLElement | null;
+  const scene = sc && lastResult[Number(sc.dataset.scene)]?.detail?.scene;
+  if (scene) showScene(scene);
   const codeBtn = t.closest("[data-code]") as HTMLElement | null;
   if (codeBtn) {
     const lg = codeBtn.dataset.code as Lang;
     setLang(lg);
+  }
+});
+
+// a radio pick in predict-first or the quiz
+$("#lesson").addEventListener("change", (ev) => {
+  const inp = ev.target as HTMLInputElement;
+  if (inp.type !== "radio") return;
+  const q = Number(inp.closest<HTMLElement>("[data-q]")?.dataset.q);
+  if (inp.name.startsWith("pred-")) {
+    const picks = [...(predictPicks.get(lesson.id) ?? [])];
+    picks[q] = Number(inp.value);
+    predictPicks.set(lesson.id, picks);
+    const lock = document.querySelector<HTMLButtonElement>('#predict [data-act="predict-lock"]');
+    const n = text(lesson).predict?.length ?? 0;
+    if (lock) lock.disabled = !Array.from({ length: n }, (_, i) => picks[i] ?? -1).every((p) => p >= 0);
+  }
+  if (inp.name.startsWith("quiz-")) {
+    const m = quizPicks.get(lesson.id) ?? { picks: [], checked: [] };
+    m.picks[q] = Number(inp.value);
+    quizPicks.set(lesson.id, m);
+    const btn = document.querySelector<HTMLButtonElement>(`#sec-quiz [data-act="quiz-check"][data-qi="${q}"]`);
+    if (btn) btn.disabled = false;
   }
 });
 
@@ -1300,6 +1470,7 @@ function setLang(lg: Lang) {
   document
     .querySelectorAll<HTMLElement>(".code-panel")
     .forEach((p) => (p.hidden = p.dataset.panel !== lang));
+  renderHelp(); // a revealed solution follows the HDL language
   log(
     `# set_property TARGET_LANGUAGE ${lang === "verilog" ? "Verilog" : "VHDL"} [current_project]`,
     "cmd",
@@ -1613,6 +1784,51 @@ function act(name: string) {
     case "lesson-intro":
       openLesson(LESSONS[0]);
       break;
+    case "predict-lock": {
+      const qs = text(lesson).predict ?? [];
+      const picks = predictPicks.get(lesson.id) ?? [];
+      if (qs.some((_, i) => (picks[i] ?? -1) < 0)) break;
+      store.set(`predict:${lesson.id}`, picks.join(","));
+      predictPending.add(lesson.id);
+      renderPredict();
+      // nudge towards Run, once
+      const run = document.querySelector<HTMLElement>('#sec-try .big-run[data-act="run"]');
+      run?.classList.remove("pulse");
+      void run?.offsetWidth;
+      run?.classList.add("pulse");
+      break;
+    }
+    case "quiz-check":
+      break; // handled by the lesson click listener, which knows the question
+    case "predict-reveal":
+      predictPending.delete(lesson.id);
+      renderPredict();
+      break;
+    case "hint": {
+      const n = helpState(lesson.id).hints;
+      store.set(`hints:${lesson.id}`, String(Math.min(2, n + 1)));
+      renderHelp();
+      break;
+    }
+    case "show-solution": {
+      const st = helpState(lesson.id);
+      if (!(st.attempts >= 2 || st.hints >= 2)) break;
+      store.set(`solution:${lesson.id}`, "1");
+      renderHelp();
+      break;
+    }
+    case "copy-solution": {
+      const sol = EXERCISES[lesson.id]?.solution?.[lang];
+      if (!sol || !confirm(LEARN_UI[uiLang].copyConfirm)) break;
+      if (EXERCISES[lesson.id].testbench) {
+        tbEditor.setText(sol, lang);
+        showTab("tb");
+      } else {
+        srcEditor.setText(sol, lang);
+        showTab("source");
+      }
+      break;
+    }
     case "reset-code":
       if (
         confirm(
@@ -1622,6 +1838,9 @@ function act(name: string) {
         store.del(srcKey(lesson, lang));
         store.del(xdcKey(lesson));
         store.del(tbKey(lesson, lang));
+        store.del(`attempts:${lesson.id}`);
+        store.del(`hints:${lesson.id}`);
+        renderHelp();
         srcEditor.setText(sourceFor(lesson, lang), lang);
         xdcEditor.setText(xdcFor(lesson), "xdc");
         loadTb();
@@ -1727,6 +1946,7 @@ document.addEventListener("click", (ev) => {
   if (sec) toggleFlowSection((sec.parentElement as HTMLElement).dataset.sec!);
   const l = t.closest("[data-lesson]") as HTMLElement | null;
   if (l) {
+    if (l.tagName === "A") ev.preventDefault(); // cross-reference links: open in place, no hash jump
     const found = ALL_LESSONS.find((x) => x.id === l.dataset.lesson);
     // from the landing page, the lesson already on the board keeps running
     if (found && !(homeOpen && found === lesson)) openLesson(found);
@@ -2027,8 +2247,14 @@ function markSeen(l: Lesson) {
   seen.add(l.id);
   store.set("seen", [...seen].join(","));
 }
-const isDone = (l: Lesson) =>
-  EXERCISES[l.id] ? solved.has(l.id) : seen.has(l.id);
+// a lesson is done when its exercise is solved (if it has one) and its quiz is passed (if it has one); a lesson
+// with neither is done once opened
+const isDone = (l: Lesson) => {
+  const ex = !!EXERCISES[l.id];
+  const qz = !!l.quiz?.length;
+  if (!ex && !qz) return seen.has(l.id);
+  return (!ex || solved.has(l.id)) && (!qz || quizPassed(l));
+};
 
 const homeEl = $("#home");
 const boardEl = $("#board");
@@ -2048,6 +2274,8 @@ function renderHomePage() {
     title: (l) => text(l).title,
     summary: (l) => text(l).summary,
     done: isDone,
+    help: (l) => solvedHelp.has(l.id),
+    marks: (l) => progressMarks(!!l.quiz?.length, quizPassed(l), !!EXERCISES[l.id], solved.has(l.id), uiLang),
     resume: seen.size ? lesson : null,
     minutes: (l) => {
       const t = timeOf(l);

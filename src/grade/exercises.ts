@@ -4,11 +4,21 @@
 import type { Lang } from '../hdl';
 import { decodeI2c, decodeSpi } from '../la/decode';
 import { BoardHarness, HEX7 } from './harness';
+import { ref } from '../lessons/helpers';
+import { HINTS } from './hints';
+import { solutionOf } from './solutions';
 
 export interface CheckItem {
   ok: boolean;
   fa: string;
   en: string;
+  // evidence: what the checker wanted, what the design did, and the inputs that reproduce it on the board
+  detail?: Detail;
+}
+export interface Detail {
+  expected: string;
+  actual: string;
+  scene?: { sw?: number; btn?: string };
 }
 
 class Stop extends Error {}
@@ -16,13 +26,13 @@ class Stop extends Error {}
 export class Tester {
   items: CheckItem[] = [];
   // records one check; returns whether it passed
-  ok(cond: boolean, fa: string, en: string): boolean {
-    this.items.push({ ok: cond, fa, en });
+  ok(cond: boolean, fa: string, en: string, detail?: Detail): boolean {
+    this.items.push(detail ? { ok: cond, fa, en, detail } : { ok: cond, fa, en });
     return cond;
   }
   // a check that the rest depends on: stops at the first failure
-  need(cond: boolean, fa: string, en: string) {
-    if (!this.ok(cond, fa, en)) throw new Stop();
+  need(cond: boolean, fa: string, en: string, detail?: Detail) {
+    if (!this.ok(cond, fa, en, detail)) throw new Stop();
   }
   static isStop(e: unknown) {
     return e instanceof Stop;
@@ -37,6 +47,8 @@ export interface Exercise {
   // the exercise is about the testbench, not the design
   testbench?: { mutate: Record<Lang, [RegExp, string]> };
   check?(h: BoardHarness, t: Tester): void;
+  hints?: { fa: string; en: string }[]; // exactly 2: [concept hint, code-skeleton hint]; HTML
+  solution?: { verilog: string; vhdl: string }; // a complete design (testbench exercise: the testbench) that passes
 }
 
 const hex = (v: number, n = 4) => '0x' + (v >>> 0).toString(16).toUpperCase().padStart(n, '0');
@@ -48,6 +60,17 @@ const bits = (v: number) => {
   }
   return n;
 };
+// runs cases until the first one that fails; returns its evidence (or the last case's, when all pass)
+function firstFail<T>(cases: T[], run: (c: T) => { ok: boolean; detail: Detail }): { ok: boolean; detail: Detail } {
+  let last = { ok: true, detail: { expected: '-', actual: '-' } as Detail };
+  for (const c of cases) {
+    last = run(c);
+    if (!last.ok) return last;
+  }
+  return last;
+}
+const bin = (v: number, n: number) => (v >>> 0).toString(2).padStart(n, '0');
+
 const rev16 = (v: number) => {
   let r = 0;
   for (let i = 0; i < 16; i++) if ((v >> i) & 1) r |= 1 << (15 - i);
@@ -89,7 +112,7 @@ export const EXERCISES: Record<string, Exercise> = {
     check(h, t) {
       for (const v of [0x0001, 0x8000, 0x00ff, 0xa5c3]) {
         h.sw(v);
-        t.ok(h.led() === rev16(v), `SW=${hex(v)} → LED=${hex(rev16(v))} (شما: ${hex(h.led())})`, `SW=${hex(v)} → LED=${hex(rev16(v))} (yours: ${hex(h.led())})`);
+        t.ok(h.led() === rev16(v), `SW=${hex(v)} → LED=${hex(rev16(v))}`, `SW=${hex(v)} → LED=${hex(rev16(v))}`, { expected: hex(rev16(v)), actual: hex(h.led()), scene: { sw: v } });
       }
     },
   },
@@ -97,52 +120,65 @@ export const EXERCISES: Record<string, Exercise> = {
     fa: `<p>یک گیت AND سه‌ورودی اضافه کنید: <b>LD7 = SW0 AND SW1 AND SW2</b>. برای این کار SW را ۳ بیتی و LED را ۸ بیتی کنید. بقیهٔ گیت‌ها (LD0 تا LD6) باید مثل قبل کار کنند.</p>`,
     en: `<p>Add a three-input AND gate: <b>LD7 = SW0 AND SW1 AND SW2</b>. Make SW 3 bits and LED 8 bits wide for it. The other gates (LD0 to LD6) must keep working as before.</p>`,
     check(h, t) {
-      let and3 = true;
-      let others = true;
-      for (let v = 0; v < 8; v++) {
+      const vs = [0, 1, 2, 3, 4, 5, 6, 7];
+      const and3 = firstFail(vs, (v) => {
         h.sw(v);
-        const [a, b, c] = [v & 1, (v >> 1) & 1, (v >> 2) & 1];
-        if (((h.led() >> 7) & 1) !== (a & b & c)) and3 = false;
+        const want = v === 7 ? 1 : 0;
+        const got = (h.led() >> 7) & 1;
+        return { ok: got === want, detail: { expected: `LD7=${want}`, actual: `LD7=${got}`, scene: { sw: v } } };
+      });
+      const others = firstFail(vs, (v) => {
+        h.sw(v);
+        const [a, b] = [v & 1, (v >> 1) & 1];
         const outs = [a & b, a | b, a ^ 1, (a & b) ^ 1, (a | b) ^ 1, a ^ b, a ^ b ^ 1];
-        if ((h.led() & 0x7f) !== outs.reduce((r, o, i) => r | (o << i), 0)) others = false;
-      }
-      t.ok(and3, 'LD7 برای هر ۸ حالت SW2..SW0 برابر AND سه ورودی است', 'LD7 is the 3-input AND for all 8 combinations of SW2..SW0');
-      t.ok(others, 'LD0 تا LD6 هنوز همان گیت‌های درس هستند', 'LD0 to LD6 are still the gates of the lesson');
+        const want = outs.reduce((r, o, i) => r | (o << i), 0);
+        const got = h.led() & 0x7f;
+        return { ok: got === want, detail: { expected: `LD6..0=${bin(want, 7)}`, actual: `LD6..0=${bin(got, 7)}`, scene: { sw: v } } };
+      });
+      t.ok(and3.ok, 'LD7 برای هر ۸ حالت SW2..SW0 برابر AND سه ورودی است', 'LD7 is the 3-input AND for all 8 combinations of SW2..SW0', and3.detail);
+      t.ok(others.ok, 'LD0 تا LD6 هنوز همان گیت‌های درس هستند', 'LD0 to LD6 are still the gates of the lesson', others.detail);
     },
   },
   mux: {
     fa: `<p>یک مالتی‌پلکسر ۸ به ۱ بسازید: ورودی‌های داده <b>SW7..SW0</b>، انتخاب <b>SW15..SW13</b> (SW13 کم‌ارزش‌ترین بیت انتخاب است) و خروجی <b>LD2</b>.</p>`,
     en: `<p>Build an 8-to-1 multiplexer: data inputs <b>SW7..SW0</b>, select <b>SW15..SW13</b> (SW13 is the lowest select bit), output <b>LD2</b>.</p>`,
     check(h, t) {
-      let good = true;
-      for (const data of [0xa5, 0x5a, 0x01, 0x80])
-        for (let sel = 0; sel < 8; sel++) {
-          h.sw(data | (sel << 13));
-          if (((h.led() >> 2) & 1) !== ((data >> sel) & 1)) good = false;
-        }
-      t.ok(good, 'LD2 برای هر ۸ مقدار انتخاب، همان بیت SW انتخاب‌شده است', 'LD2 equals the selected switch for all 8 select values');
+      const cases = [0xa5, 0x5a, 0x01, 0x80].flatMap((data) => [0, 1, 2, 3, 4, 5, 6, 7].map((sel) => data | (sel << 13)));
+      const r = firstFail(cases, (v) => {
+        h.sw(v);
+        const want = (v >> ((v >> 13) & 7)) & 1;
+        const got = (h.led() >> 2) & 1;
+        return { ok: got === want, detail: { expected: `LD2=${want}`, actual: `LD2=${got}`, scene: { sw: v } } };
+      });
+      t.ok(r.ok, 'LD2 برای هر ۸ مقدار انتخاب، همان بیت SW انتخاب‌شده است', 'LD2 equals the selected switch for all 8 select values', r.detail);
     },
   },
   adder: {
     fa: `<p>جمع‌کننده را به جمع/تفریق‌کننده تبدیل کنید. A = SW3..SW0 و B = SW7..SW4، و <b>SW8</b> عمل را انتخاب می‌کند: 0 یعنی جمع (LED3..LED0 = A + B و LD4 = رقم نقلی)، 1 یعنی تفریق (LED3..LED0 = A − B که به صورت A + ~B + 1 حساب می‌شود).</p>`,
     en: `<p>Turn the adder into an adder/subtractor. A = SW3..SW0 and B = SW7..SW4, and <b>SW8</b> selects the operation: 0 adds (LED3..LED0 = A + B, LD4 = carry out), 1 subtracts (LED3..LED0 = A − B, computed as A + ~B + 1).</p>`,
     check(h, t) {
-      let add = true;
-      let sub = true;
-      for (const [a, b] of [
+      const pairs = [
         [5, 3],
         [15, 15],
         [9, 8],
         [2, 7],
         [0, 1],
-      ]) {
-        h.sw(a | (b << 4));
-        if ((h.led() & 0x1f) !== a + b) add = false;
-        h.sw(a | (b << 4) | 0x100);
-        if ((h.led() & 0xf) !== ((a - b) & 0xf)) sub = false;
-      }
-      t.ok(add, 'SW8=0: جمع و رقم نقلی درست است', 'SW8=0: the sum and carry are right');
-      t.ok(sub, 'SW8=1: تفریق درست است (مثلاً 2 − 7 = 0xB)', 'SW8=1: the difference is right (for example 2 − 7 = 0xB)');
+      ];
+      const add = firstFail(pairs, ([a, b]) => {
+        const v = a | (b << 4);
+        h.sw(v);
+        const got = h.led() & 0x1f;
+        return { ok: got === a + b, detail: { expected: `${a}+${b} → LD4..0=${bin(a + b, 5)}`, actual: `LD4..0=${bin(got, 5)}`, scene: { sw: v } } };
+      });
+      const sub = firstFail(pairs, ([a, b]) => {
+        const v = a | (b << 4) | 0x100;
+        h.sw(v);
+        const got = h.led() & 0xf;
+        const want = (a - b) & 0xf;
+        return { ok: got === want, detail: { expected: `${a}−${b} → LD3..0=${bin(want, 4)}`, actual: `LD3..0=${bin(got, 4)}`, scene: { sw: v } } };
+      });
+      t.ok(add.ok, 'SW8=0: جمع و رقم نقلی درست است', 'SW8=0: the sum and carry are right', add.detail);
+      t.ok(sub.ok, 'SW8=1: تفریق درست است (مثلاً 2 − 7 = 0xB)', 'SW8=1: the difference is right (for example 2 − 7 = 0xB)', sub.detail);
     },
   },
   seg7: {
@@ -150,17 +186,19 @@ export const EXERCISES: Record<string, Exercise> = {
     en: `<p>Make all eight digits show the same value, SW3..SW0, and let <b>SW15</b> light the decimal point (SW15 = 1 → DP on). Remember that AN and DP are active-low and SW must become 16 bits wide.</p>`,
     check(h, t) {
       needDevice(h, t, 'an', XDC_SEG.fa, XDC_SEG.en);
-      let digits = true;
-      for (const v of [0x0, 0x7, 0xa, 0xf]) {
+      const digits = firstFail([0x0, 0x7, 0xa, 0xf], (v) => {
         h.sw(v);
-        if (h.an() !== 0 || h.seg() !== HEX7[v]) digits = false;
-      }
-      t.ok(digits, 'هر ۸ رقم روشن‌اند و مقدار SW3..SW0 را نشان می‌دهند', 'all 8 digits are on and show SW3..SW0');
-      h.sw(0x8003);
-      const on = h.dp() === 0;
-      h.sw(0x0003);
-      const off = h.dp() === 1;
-      t.ok(on && off, 'SW15 نقطهٔ اعشار را روشن و خاموش می‌کند', 'SW15 turns the decimal point on and off');
+        const want = `AN=${bin(0, 8)} seg=${bin(HEX7[v], 7)}`;
+        const got = `AN=${bin(h.an(), 8)} seg=${bin(h.seg(), 7)}`;
+        return { ok: want === got, detail: { expected: want, actual: got, scene: { sw: v } } };
+      });
+      t.ok(digits.ok, 'هر ۸ رقم روشن‌اند و مقدار SW3..SW0 را نشان می‌دهند', 'all 8 digits are on and show SW3..SW0', digits.detail);
+      const dp = firstFail([0x8003, 0x0003], (v) => {
+        h.sw(v);
+        const want = v & 0x8000 ? 0 : 1;
+        return { ok: h.dp() === want, detail: { expected: `DP=${want}`, actual: `DP=${h.dp()}`, scene: { sw: v } } };
+      });
+      t.ok(dp.ok, 'SW15 نقطهٔ اعشار را روشن و خاموش می‌کند', 'SW15 turns the decimal point on and off', dp.detail);
     },
   },
   decoder: {
@@ -168,12 +206,12 @@ export const EXERCISES: Record<string, Exercise> = {
     en: `<p>Build a 2-to-4 decoder that selects the display digits: <b>SW1..SW0</b> choose which one of AN3..AN0 is on (active-low, 0 = on), and AN7..AN4 stay off. Add AN as an 8-bit output and uncomment the AN lines in the XDC.</p>`,
     check(h, t) {
       needDevice(h, t, 'an', 'AN به پایه‌ها وصل است (خطوط AN را در XDC فعال کنید)', 'AN is connected to pins (uncomment the AN lines in the XDC)');
-      let good = true;
-      for (let s = 0; s < 4; s++) {
-        h.sw(s);
-        if (h.an() !== (0xff & ~(1 << s))) good = false;
-      }
-      t.ok(good, 'برای SW1..SW0 = 0..3 فقط AN مربوطه صفر است', 'for SW1..SW0 = 0..3 only the matching AN is 0');
+      const r = firstFail([0, 1, 2, 3], (v) => {
+        h.sw(v);
+        const want = 0xff & ~(1 << v);
+        return { ok: h.an() === want, detail: { expected: `AN=${bin(want, 8)}`, actual: `AN=${bin(h.an(), 8)}`, scene: { sw: v } } };
+      });
+      t.ok(r.ok, 'برای SW1..SW0 = 0..3 فقط AN مربوطه صفر است', 'for SW1..SW0 = 0..3 only the matching AN is 0', r.detail);
     },
   },
   shifter: {
@@ -181,26 +219,26 @@ export const EXERCISES: Record<string, Exercise> = {
     en: `<p>Add a third control input: <b>SW14 = 0</b> rotates as it does now, and <b>SW14 = 1</b> does a logical shift that fills the empty bits with zeros. SW15 still chooses the direction.</p>`,
     check(h, t) {
       const a = 0xb1;
-      let rot = true;
-      let shl = true;
-      for (let k = 0; k < 8; k++) {
-        for (const left of [0, 1]) {
-          const base = a | (k << 8) | (left << 15);
-          h.sw(base);
-          const r = left ? ((a << k) | (a >> (8 - k))) & 0xff : ((a >> k) | (a << (8 - k))) & 0xff;
-          if ((h.led() & 0xff) !== r) rot = false;
-          h.sw(base | 0x4000);
-          const s = left ? (a << k) & 0xff : a >> k;
-          if ((h.led() & 0xff) !== s) shl = false;
-        }
-      }
-      t.ok(rot, 'SW14 = 0: چرخش به چپ و راست درست است', 'SW14 = 0: rotating left and right is right');
-      t.ok(shl, 'SW14 = 1: شیفت منطقی با صفر درست است', 'SW14 = 1: the logical shift with zeros is right');
+      const cases = [0, 1, 2, 3, 4, 5, 6, 7].flatMap((k) => [0, 1].map((left) => ({ k, left, v: a | (k << 8) | (left << 15) })));
+      const rot = firstFail(cases, ({ k, left, v }) => {
+        h.sw(v);
+        const want = left ? ((a << k) | (a >> (8 - k))) & 0xff : ((a >> k) | (a << (8 - k))) & 0xff;
+        const got = h.led() & 0xff;
+        return { ok: got === want, detail: { expected: `LD7..0=${bin(want, 8)}`, actual: `LD7..0=${bin(got, 8)}`, scene: { sw: v } } };
+      });
+      const shl = firstFail(cases, ({ k, left, v }) => {
+        h.sw(v | 0x4000);
+        const want = left ? (a << k) & 0xff : a >> k;
+        const got = h.led() & 0xff;
+        return { ok: got === want, detail: { expected: `LD7..0=${bin(want, 8)}`, actual: `LD7..0=${bin(got, 8)}`, scene: { sw: v | 0x4000 } } };
+      });
+      t.ok(rot.ok, 'SW14 = 0: چرخش به چپ و راست درست است', 'SW14 = 0: rotating left and right is right', rot.detail);
+      t.ok(shl.ok, 'SW14 = 1: شیفت منطقی با صفر درست است', 'SW14 = 1: the logical shift with zeros is right', shl.detail);
     },
   },
   alu: {
-    fa: `<p>نتیجهٔ ALU یعنی r[3:0] را علاوه بر LEDها به صورت یک رقم هگز روی نمایشگر هفت‌قسمتی نشان دهید (فقط رقم ۰، یعنی AN0). از رمزگشای درس ۵ استفاده کنید و خطوط هفت‌قسمتی را در XDC فعال کنید.</p>`,
-    en: `<p>Show the ALU result r[3:0] as a hex digit on the seven-segment display (digit 0 only, AN0), in addition to the LEDs. Reuse the decoder from lesson 5 and uncomment the seven-segment lines in the XDC.</p>`,
+    fa: `<p>نتیجهٔ ALU یعنی r[3:0] را علاوه بر LEDها به صورت یک رقم هگز روی نمایشگر هفت‌قسمتی نشان دهید (فقط رقم ۰، یعنی AN0). از رمزگشای ${ref('seg7')} استفاده کنید و خطوط هفت‌قسمتی را در XDC فعال کنید.</p>`,
+    en: `<p>Show the ALU result r[3:0] as a hex digit on the seven-segment display (digit 0 only, AN0), in addition to the LEDs. Reuse the decoder from ${ref('seg7')} and uncomment the seven-segment lines in the XDC.</p>`,
     check(h, t) {
       needDevice(h, t, 'seg', XDC_SEG.fa, XDC_SEG.en);
       const cases: [number, number, number, number][] = [
@@ -211,12 +249,15 @@ export const EXERCISES: Record<string, Exercise> = {
         [5, 5, 1, 0],
         [6, 1, 5, 9],
       ];
-      let good = true;
-      for (const [a, b, op, r] of cases) {
-        h.sw(a | (b << 4) | (op << 13));
-        if ((h.an() & 1) !== 0 || h.seg() !== HEX7[r]) good = false;
-      }
-      t.ok(good, 'رقم ۰ نتیجهٔ ALU را درست نشان می‌دهد (جمع، تفریق، AND، OR، NOT)', 'digit 0 shows the ALU result (add, subtract, AND, OR, NOT)');
+      const res = firstFail(cases, ([a, b, op, r]) => {
+        const v = a | (b << 4) | (op << 13);
+        h.sw(v);
+        const want = `AN0=0 seg=${bin(HEX7[r], 7)} (${r.toString(16).toUpperCase()})`;
+        const got = `AN0=${h.an() & 1} seg=${bin(h.seg(), 7)}`;
+        const ok = (h.an() & 1) === 0 && h.seg() === HEX7[r];
+        return { ok, detail: { expected: want, actual: got, scene: { sw: v } } };
+      });
+      t.ok(res.ok, 'رقم ۰ نتیجهٔ ALU را درست نشان می‌دهد (جمع، تفریق، AND، OR، NOT)', 'digit 0 shows the ALU result (add, subtract, AND, OR, NOT)', res.detail);
     },
   },
   ff: {
@@ -225,17 +266,17 @@ export const EXERCISES: Record<string, Exercise> = {
     check(h, t) {
       h.sw(0x0180);
       press(h, 'BTNC', 1, 1);
-      t.need(h.led() === 0x0180, 'BTNC مقدار کلیدها را بار می‌کند', 'BTNC loads the switches');
+      t.need(h.led() === 0x0180, 'BTNC مقدار کلیدها را بار می‌کند', 'BTNC loads the switches', { expected: hex(0x0180), actual: hex(h.led()), scene: { sw: 0x0180, btn: 'BTNC' } });
       h.btn('BTNU', 1);
       h.run(1);
       h.btn('BTNU', 0);
       h.run(1);
-      t.ok(h.led() === 0x0300, `یک کلاک BTNU: 0x0180 → 0x0300 (شما: ${hex(h.led())})`, `one clock of BTNU: 0x0180 → 0x0300 (yours: ${hex(h.led())})`);
+      t.ok(h.led() === 0x0300, 'یک کلاک BTNU: 0x0180 → 0x0300', 'one clock of BTNU: 0x0180 → 0x0300', { expected: hex(0x0300), actual: hex(h.led()), scene: { sw: 0x0180, btn: 'BTNU' } });
       h.btn('BTND', 1);
       h.run(3);
       h.btn('BTND', 0);
       h.run(1);
-      t.ok(h.led() === 0x0060, `سه کلاک BTND: 0x0300 → 0x0060 (شما: ${hex(h.led())})`, `three clocks of BTND: 0x0300 → 0x0060 (yours: ${hex(h.led())})`);
+      t.ok(h.led() === 0x0060, 'سه کلاک BTND: 0x0300 → 0x0060', 'three clocks of BTND: 0x0300 → 0x0060', { expected: hex(0x0060), actual: hex(h.led()), scene: { sw: 0x0180, btn: 'BTND' } });
     },
   },
   counter: {
@@ -252,12 +293,14 @@ export const EXERCISES: Record<string, Exercise> = {
         pos.push(Math.log2(l || 1));
         h.run(64);
       }
-      t.need(single, 'همیشه دقیقاً یک LED روشن است', 'exactly one LED is lit at all times');
+      const many = pos.find((p) => !Number.isInteger(p));
+      t.need(single, 'همیشه دقیقاً یک LED روشن است', 'exactly one LED is lit at all times', { expected: '1 LED', actual: single ? '1 LED' : many === undefined ? '0 LED' : `${bits(h.led())} LED (${hex(h.led())})` });
       let steps = true;
       for (let i = 1; i < pos.length; i++) if (Math.abs(pos[i] - pos[i - 1]) !== 1) steps = false;
-      t.ok(steps, 'نور هر DIV کلاک دقیقاً یک خانه جابه‌جا می‌شود', 'the light moves exactly one position every DIV clocks');
+      const path = pos.slice(0, 18).map((p) => `LD${p}`).join(' ');
+      t.ok(steps, 'نور هر DIV کلاک دقیقاً یک خانه جابه‌جا می‌شود', 'the light moves exactly one position every DIV clocks', { expected: 'LD0 LD1 LD2 …', actual: path });
       const seen = new Set(pos);
-      t.ok(seen.has(0) && seen.has(15) && seen.size === 16, 'نور از LD0 تا LD15 می‌رود و در دو سر برمی‌گردد', 'the light travels from LD0 to LD15 and bounces at both ends');
+      t.ok(seen.has(0) && seen.has(15) && seen.size === 16, 'نور از LD0 تا LD15 می‌رود و در دو سر برمی‌گردد', 'the light travels from LD0 to LD15 and bounces at both ends', { expected: 'LD0 … LD15 … LD0', actual: `LD${Math.min(...pos)} … LD${Math.max(...pos)}` });
     },
   },
   testbench: {
@@ -279,7 +322,7 @@ export const EXERCISES: Record<string, Exercise> = {
       h.run(3);
       h.reset(1);
       h.run(1);
-      t.need(h.led() === 1, 'بعد از ریست LED = 0x0001', 'LED = 0x0001 after reset');
+      t.need(h.led() === 1, 'بعد از ریست LED = 0x0001', 'LED = 0x0001 after reset', { expected: hex(1), actual: hex(h.led()) });
       const vals = [h.led()];
       const times: number[] = [];
       for (let c = 0; c < 40 * 22 && vals.length < 21; c++) {
@@ -297,9 +340,14 @@ export const EXERCISES: Record<string, Exercise> = {
         s = ((s << 1) | fb) & 0xffff;
         want.push(s);
       }
-      t.ok(vals.length === want.length && vals.every((v, i) => v === want[i]), `دنبالهٔ ۲۰ قدم اول درست است (${want.slice(0, 6).map((v) => hex(v)).join(', ')} …)`, `the first 20 steps are right (${want.slice(0, 6).map((v) => hex(v)).join(', ')} …)`);
+      const bad = want.findIndex((v, i) => vals[i] !== v);
+      const at = bad < 0 ? 0 : Math.max(0, bad - 1);
+      t.ok(vals.length === want.length && bad < 0, `دنبالهٔ ۲۰ قدم اول درست است (${want.slice(0, 6).map((v) => hex(v)).join(', ')} …)`, `the first 20 steps are right (${want.slice(0, 6).map((v) => hex(v)).join(', ')} …)`, {
+        expected: want.slice(at, at + 3).map((v) => hex(v)).join(' '),
+        actual: vals.slice(at, at + 3).map((v) => hex(v)).join(' ') || '-',
+      });
       const gaps = times.slice(1).map((x, i) => x - times[i]);
-      t.ok(gaps.length > 0 && gaps.every((g) => g === 40), 'هر DIV کلاک یک قدم برداشته می‌شود', 'one step every DIV clocks');
+      t.ok(gaps.length > 0 && gaps.every((g) => g === 40), 'هر DIV کلاک یک قدم برداشته می‌شود', 'one step every DIV clocks', { expected: '40', actual: [...new Set(gaps)].join('/') || '-' });
     },
   },
   multiplex: {
@@ -310,13 +358,13 @@ export const EXERCISES: Record<string, Exercise> = {
       needDevice(h, t, 'an', XDC_SEG.fa, XDC_SEG.en);
       h.sw(0x3a7f);
       const low = stable(h, 3, 0);
-      t.ok(low === '3A7F', `رقم‌های ۳..۰ مقدار SW را نشان می‌دهند: 3A7F (شما: ${low})`, `digits 3..0 show SW: 3A7F (yours: ${low})`);
+      t.ok(low === '3A7F', 'رقم‌های ۳..۰ مقدار SW را نشان می‌دهند', 'digits 3..0 show SW', { expected: '3A7F', actual: low || '-', scene: { sw: 0x3a7f } });
       const a = stable(h, 7, 4);
-      t.need(/^[0-9A-F]{4}$/.test(a), `رقم‌های ۷..۴ یک عدد هگز نشان می‌دهند (شما: "${a}")`, `digits 7..4 show a hex number (yours: "${a}")`);
+      t.need(/^[0-9A-F]{4}$/.test(a), 'رقم‌های ۷..۴ یک عدد هگز نشان می‌دهند', 'digits 7..4 show a hex number', { expected: '0000–FFFF', actual: a || '-', scene: { sw: 0x3a7f } });
       h.run(8_000_000);
       const b = stable(h, 7, 4);
       const d = (parseInt(b, 16) - parseInt(a, 16)) & 0xffff;
-      t.ok(d === 1 || d === 2, `بعد از DIV کلاک شمارنده یکی زیاد شده است (${a} → ${b})`, `the counter went up by one after DIV clocks (${a} → ${b})`);
+      t.ok(d === 1 || d === 2, 'بعد از DIV کلاک شمارنده یکی زیاد شده است', 'the counter went up by one after DIV clocks', { expected: `${a} → ${((parseInt(a, 16) + 1) & 0xffff).toString(16).toUpperCase().padStart(4, '0')}`, actual: `${a} → ${b}` });
     },
   },
   stopwatch: {
@@ -339,16 +387,16 @@ export const EXERCISES: Record<string, Exercise> = {
       press(h, 'BTNU');
       runFor(595);
       const a = read();
-      t.need(a.n >= 0, `نمایشگر یک زمان معتبر m:ss.t نشان می‌دهد (شما: ${a.s})`, `the display shows a valid time m:ss.t (yours: ${a.s})`);
-      t.ok(a.n >= 590 && a.n <= 600, `بعد از ۵۹٫۵ ثانیه حدود 0:59.5 دیده می‌شود (شما: ${a.s})`, `after 59.5 s it shows about 0:59.5 (yours: ${a.s})`);
+      t.need(a.n >= 0, 'نمایشگر یک زمان معتبر m:ss.t نشان می‌دهد', 'the display shows a valid time m:ss.t', { expected: 'm:ss.t', actual: a.s || '-', scene: { sw: 1 } });
+      t.ok(a.n >= 590 && a.n <= 600, 'بعد از ۵۹٫۵ ثانیه حدود 0:59.5 دیده می‌شود', 'after 59.5 s it shows about 0:59.5', { expected: '0595', actual: a.s, scene: { sw: 1 } });
       runFor(10);
       const b = read();
-      t.ok(b.n === a.n + 10, `عبور از ۵۹ ثانیه به ۱ دقیقه درست است (${a.s} → ${b.s})`, `going past 59 s into one minute is right (${a.s} → ${b.s})`);
+      t.ok(b.n === a.n + 10, 'عبور از ۵۹ ثانیه به ۱ دقیقه درست است', 'going past 59 s into one minute is right', { expected: 'm:ss.t +1 s', actual: `${a.s} → ${b.s}`, scene: { sw: 1 } });
       runFor(5990 - b.n);
       const c = read();
       runFor(20);
       const d = read();
-      t.ok(c.n === 5990 && d.n === 10, `بعد از 9:59.9 به 0:00.0 برمی‌گردد (${c.s} → ${d.s})`, `after 9:59.9 it returns to 0:00.0 (${c.s} → ${d.s})`);
+      t.ok(c.n === 5990 && d.n === 10, 'بعد از 9:59.9 به 0:00.0 برمی‌گردد', 'after 9:59.9 it returns to 0:00.0', { expected: '9599 → 0010', actual: `${c.s} → ${d.s}`, scene: { sw: 1 } });
     },
   },
   fsm: {
@@ -699,3 +747,10 @@ function uartEcho(h: BoardHarness, text: string, baud: number): { text: string; 
   return { text: out, errors };
 }
 
+
+// hints and reference solutions live in their own files; attach them once, at load
+for (const [id, ex] of Object.entries(EXERCISES)) {
+  if (HINTS[id]) ex.hints = HINTS[id];
+  const sol = solutionOf(id);
+  if (sol) ex.solution = sol;
+}

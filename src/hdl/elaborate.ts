@@ -1,5 +1,5 @@
 // Elaboration: resolves names, evaluates parameters, flattens the module hierarchy into one Design.
-import { splitTristate } from './tristate';
+import { findXZ, splitTristate } from './tristate';
 import { HdlError, type ADecl, type AExpr, type AModule, type APart, type AStmt, type AType, type Lang, type Loc } from './ast';
 import { bitsFor, mask, type Design, type Expr, type LVal, type Part, type Sig, type Stmt } from './ir';
 
@@ -118,6 +118,8 @@ export class Elaborator {
         throw new HdlError((e as Error).message, top.loc, 'Synth 8-3352');
       }
     }
+    const xz = findXZ(this.design);
+    if (xz) throw new HdlError(`'x' and 'z' values are only supported on a top-level inout port, as in SDA = low ? 1'b0 : 1'bz`, xz.loc, 'lim-xz');
     return this.design;
   }
 
@@ -248,7 +250,7 @@ export class Elaborator {
       const l = this.constEval(t.left, ctx).value;
       const r = this.constEval(t.right, ctx).value;
       const w = Math.abs(l - r) + 1;
-      if (w > 32) throw new HdlError(`vectors wider than 32 bits are not supported in this simulator (${w} bits)`, loc, 'Synth 8-9999');
+      if (w > 32) throw new HdlError(`vectors wider than 32 bits are not supported in this simulator (${w} bits)`, loc, 'lim-width');
       return { width: w, left: l, right: r, signed: t.signed };
     }
     return { width: 1, left: 0, right: 0, signed: false };
@@ -727,7 +729,7 @@ export class Elaborator {
         if (RESIZE_FUNCS.has(n)) {
           if (e.args.length !== 2) throw new HdlError(`${n}() takes two arguments`, e.loc);
           const w = this.constEval(e.args[1], ctx).value;
-          if (w > 32) throw new HdlError(`vectors wider than 32 bits are not supported`, e.loc, 'Synth 8-9999');
+          if (w > 32) throw new HdlError(`vectors wider than 32 bits are not supported`, e.loc, 'lim-width');
           const a = this.expr(e.args[0], ctx, clocked);
           const signed = n === 'to_signed' || n === 'conv_signed' || (n === 'resize' && this.exprSigned(a));
           return { k: 'resize', a, width: w, signed };

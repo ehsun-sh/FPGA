@@ -2,7 +2,7 @@
 // design drives (`<port>.o`) and whether it drives it (`<port>.oe`, per bit). Reading the port gives the level on the
 // wire, which the board (and the modules attached to it) computes. Assigning 'z' releases the wire:
 //   assign SDA = sda_low ? 1'b0 : 1'bz;        SDA <= '0' when sda_low = '1' else 'Z';
-import type { Design, Expr, LVal, Sig, Stmt } from './ir';
+import type { Design, Expr, LVal, Proc, Sig, Stmt } from './ir';
 import { mask } from './ir';
 
 export interface TriPort {
@@ -89,4 +89,75 @@ function rewrite(body: Stmt[], p: Sig, t: TriPort): Stmt[] | null {
     });
   const out = walk(body);
   return changed ? out : null;
+}
+
+// After the tri-state split, an 'x' or 'z' literal has no meaning in this 2-state simulator anywhere but a case label
+// (a don't-care) or the `inout` release form above. Returns the location of the first one, or null.
+// A testbench run is skipped: there the design's inout ports are internal wires and 'z' simply reads as 0.
+export function findXZ(d: Design): { loc?: Proc['loc'] } | null {
+  if (d.procs.some((p) => p.kind === 'tb')) return null;
+  const inExpr = (e: Expr): boolean => {
+    switch (e.k) {
+      case 'const':
+        return !!e.dc;
+      case 'sel':
+        return inExpr(e.a) || inExpr(e.lo);
+      case 'mem':
+        return inExpr(e.addr);
+      case 'un':
+      case 'resize':
+      case 'cast':
+        return inExpr(e.a);
+      case 'bin':
+        return inExpr(e.a) || inExpr(e.b);
+      case 'cond':
+        return inExpr(e.c) || inExpr(e.t) || inExpr(e.f);
+      case 'concat':
+        return e.parts.some(inExpr);
+      case 'others':
+        return inExpr(e.bit);
+      default:
+        return false;
+    }
+  };
+  const inStmts = (ss: Stmt[]): Stmt | null => {
+    for (const st of ss) {
+      switch (st.k) {
+        case 'assign':
+          if (inExpr(st.rhs)) return st;
+          break;
+        case 'if':
+          if (inExpr(st.c)) return st;
+          {
+            const r = inStmts(st.t) ?? inStmts(st.f);
+            if (r) return r;
+          }
+          break;
+        case 'case': {
+          if (inExpr(st.sel)) return st;
+          // labels may hold don't-cares; bodies may not
+          for (const it of st.items) {
+            const r = inStmts(it.body);
+            if (r) return r;
+          }
+          const r = st.def ? inStmts(st.def) : null;
+          if (r) return r;
+          break;
+        }
+        case 'for':
+        case 'block': {
+          const r = inStmts(st.body);
+          if (r) return r;
+          break;
+        }
+      }
+    }
+    return null;
+  };
+  for (const pr of d.procs) {
+    if (pr.kind === 'tb' || pr.kind === 'init') continue;
+    const st = inStmts(pr.body);
+    if (st) return { loc: (st.k === 'assign' && st.loc) || pr.loc };
+  }
+  return null;
 }

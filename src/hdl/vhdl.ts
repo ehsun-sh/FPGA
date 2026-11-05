@@ -38,7 +38,7 @@ function parseBits(v: string, loc: Loc): AExpr {
       value += d;
     }
   }
-  if (width > 32) throw new HdlError('vectors wider than 32 bits are not supported', loc, 'Synth 8-9999');
+  if (width > 32) throw new HdlError('vectors wider than 32 bits are not supported', loc, 'lim-width');
   return { k: 'num', value, width: Math.max(width, 1), dc: dc || undefined, loc };
 }
 
@@ -54,14 +54,19 @@ class VhdlParser {
     while (this.s.peek().t !== 'eof') {
       if (this.s.accept('library')) {
         this.skipTo(';');
-      } else if (this.s.accept('use')) {
+      } else if (this.s.is('use')) {
+        // only the ieee library (std_logic_1164, numeric_std ...) and work.* exist here
+        const u = this.s.next();
+        const lib = this.s.peek();
+        if (lib.t === 'id' && !['ieee', 'work', 'std'].includes(lib.v.toLowerCase()))
+          throw new HdlError(`package '${lib.v}' is not available in this simulator; only ieee packages are`, u.loc, 'lim-package');
         this.skipTo(';');
       } else if (this.s.is('entity')) {
         this.entity();
       } else if (this.s.is('architecture')) {
         this.architecture();
       } else if (this.s.is('package')) {
-        throw new HdlError('packages are not supported yet in this simulator', this.s.peek().loc, 'Synth 8-9999');
+        throw new HdlError('packages are not supported yet in this simulator', this.s.peek().loc, 'lim-package');
       } else {
         const t = this.s.peek();
         throw new HdlError(`syntax error near '${t.v}': expected entity or architecture`, t.loc);
@@ -228,6 +233,8 @@ class VhdlParser {
           mod.arrayTypes[n] = { ...el, arr: { left, right } };
         } else throw new HdlError(`unsupported type declaration`, t.loc);
         this.s.expect(';');
+      } else if (this.s.is('function') || this.s.is('procedure')) {
+        throw new HdlError(`'${t.v}' is not supported yet in this simulator`, t.loc, 'lim-function');
       } else if (this.s.accept('component')) {
         // component declarations just repeat the entity; skip them
         while (!(this.s.is('end') && this.s.is('component', 1))) {
@@ -284,6 +291,7 @@ class VhdlParser {
         const d = this.s.peek();
         if (this.s.accept('variable')) decls.push(...this.objDecl(mod, 'reg'));
         else if (this.s.accept('constant')) decls.push(...this.objDecl(mod, 'const'));
+        else if (d.v === 'function' || d.v === 'procedure') throw new HdlError(`'${d.v}' is not supported yet in this simulator`, d.loc, 'lim-function');
         else throw new HdlError(`syntax error near '${d.v}' in process declarations`, d.loc);
       }
       const body = this.seqList(['end']);

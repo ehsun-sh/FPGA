@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compileDesign, synthesize } from '../src/hdl';
+import { compileDesign, HdlError, synthesize } from '../src/hdl';
 
 function build(src: string, lang: 'verilog' | 'vhdl', clockName?: string) {
   const d = synthesize(src, lang);
@@ -181,5 +181,41 @@ describe('vhdl', () => {
     );
     t.set('sw', 0b10110111);
     expect(t.get('led')).toBe(6);
+  });
+});
+
+describe('simulator limits throw stable codes', () => {
+  const code = (src: string, lang: 'verilog' | 'vhdl') => {
+    try {
+      synthesize(src, lang);
+    } catch (e) {
+      expect(e).toBeInstanceOf(HdlError);
+      return (e as HdlError).code;
+    }
+    return 'no error';
+  };
+  const V = (body: string, ports = 'input wire [3:0] SW, output wire [3:0] LED') => `module top (${ports});\n${body}\nendmodule`;
+  const VH = (decl: string, body: string, head = 'library ieee;\nuse ieee.std_logic_1164.all;\n') =>
+    `${head}entity top is port (SW : in std_logic_vector(3 downto 0); LED : out std_logic_vector(3 downto 0)); end top;\narchitecture rtl of top is\n${decl}\nbegin\n${body}\nend rtl;`;
+
+  it('generate', () => expect(code(V('genvar i;\ngenerate for (i = 0; i < 4; i = i + 1) begin end endgenerate'), 'verilog')).toBe('lim-generate'));
+  it('function / task', () => {
+    expect(code(V('function f; input a; f = a; endfunction\nassign LED = SW;'), 'verilog')).toBe('lim-function');
+    expect(code(V('task t; begin end endtask\nassign LED = SW;'), 'verilog')).toBe('lim-function');
+    expect(code(VH('function f(a : std_logic) return std_logic is begin return a; end function;', 'LED <= SW;'), 'vhdl')).toBe('lim-function');
+  });
+  it('package', () => {
+    expect(code(VH('', 'LED <= SW;', 'library ieee;\nuse ieee.std_logic_1164.all;\nuse mylib.util.all;\n'), 'vhdl')).toBe('lim-package');
+    expect(code('package p is end package;\n' + VH('', 'LED <= SW;'), 'vhdl')).toBe('lim-package');
+  });
+  it('width', () => {
+    expect(code(V('wire [39:0] w = 0;\nassign LED = SW;'), 'verilog')).toBe('lim-width');
+    expect(code(VH('signal w : std_logic_vector(39 downto 0);', 'LED <= SW;'), 'vhdl')).toBe('lim-width');
+  });
+  it('x / z', () => {
+    expect(code(V("assign LED = SW[0] ? 4'b0 : 4'bz;"), 'verilog')).toBe('lim-xz');
+    expect(code(VH('', "LED <= \"0000\" when SW(0) = '1' else \"ZZZZ\";"), 'vhdl')).toBe('lim-xz');
+    // the allowed form: releasing a top-level inout port
+    expect(code(V("assign IO = SW[0] ? 1'b0 : 1'bz;\nassign LED = {3'b0, IO};", 'input wire [3:0] SW, inout wire IO, output wire [3:0] LED'), 'verilog')).toBe('no error');
   });
 });

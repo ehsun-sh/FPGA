@@ -45,6 +45,9 @@ export interface BoardView {
   onFrame: (dt: number) => void;
   setOutputs(o: BoardOutputs): void;
   isPressed(name: string): boolean;
+  // set a switch or press a button from code (notify: tell the runner, as a click would)
+  setSwitch?(i: number, on: boolean, notify?: boolean): void;
+  press?(name: string, down: boolean): void;
   resetView(): void;
   topView(): void;
   // the current view (perspective or top) re-framed on the board

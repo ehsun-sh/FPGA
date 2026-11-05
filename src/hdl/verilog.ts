@@ -28,7 +28,7 @@ export function parseVerilogNumber(text: string, loc: Loc): AExpr {
       else value += parseInt(ch, 16);
     }
   }
-  if (width !== null && width > 32) throw new HdlError(`vectors wider than 32 bits are not supported ('${text}')`, loc, 'Synth 8-9999');
+  if (width !== null && width > 32) throw new HdlError(`vectors wider than 32 bits are not supported ('${text}')`, loc, 'lim-width');
   if (width !== null && width < 32) {
     value = value % 2 ** width;
     dc = dc % 2 ** width;
@@ -442,10 +442,10 @@ class VerilogParser {
         return;
       case 'generate':
       case 'endgenerate':
-        throw new HdlError(`'generate' blocks are not supported yet in this simulator`, loc, 'Synth 8-9999');
+        throw new HdlError(`'generate' blocks are not supported yet in this simulator`, loc, 'lim-generate');
       case 'function':
       case 'task':
-        throw new HdlError(`'${t.v}' is not supported yet in this simulator`, loc, 'Synth 8-9999');
+        throw new HdlError(`'${t.v}' is not supported yet in this simulator`, loc, 'lim-function');
     }
     if (t.t === 'id' && (this.s.peek(1).t === 'id' || this.s.peek(1).v === '#')) {
       mod.items.push(this.instance());

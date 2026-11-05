@@ -1,6 +1,6 @@
 // Lessons for chapters 2-7. Persian text lives here next to the code; English text is in en.ts.
 import { HEX_CASE_V, HEX_CASE_VHDL, VHDL_NUMERIC, type Lesson } from './lessons';
-import { truth } from './helpers';
+import { ref, truth } from './helpers';
 
 export const HEX7SEG_V = `module hex7seg (
     input  wire [3:0] x,
@@ -404,7 +404,7 @@ end rtl;
 `,
     xdc: { sw: true, led: true },
     tryIt: `<p>A را با SW3..SW0 و B را با SW7..SW4 بسازید. با SW15..SW13 عمل را عوض کنید. مثلاً A=B و عمل SUB را انتخاب کنید: نتیجه صفر است و LD15 روشن می‌شود.</p>`,
-    exercise: `<p>نتیجه را به‌جای LEDها روی نمایشگر ۷ قسمتی نشان دهید (از دیکودر درس ۵ استفاده کنید).</p>`,
+    exercise: `<p>نتیجه را به‌جای LEDها روی نمایشگر ۷ قسمتی نشان دهید (از دیکودر ${ref('seg7')} استفاده کنید).</p>`,
   },
 
   // ------------------------------------------------------------ chapter 3: regular sequential

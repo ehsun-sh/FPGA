@@ -1,5 +1,6 @@
 // English text for the lessons. Code and constraints are shared with the Persian version (lessons.ts).
-import { truth } from './helpers';
+import { ref, truth } from './helpers';
+import type { Question } from './predict';
 import { TINY8_ISA } from './softcore';
 
 export interface LessonText {
@@ -8,6 +9,10 @@ export interface LessonText {
   body: string;
   tryIt: string;
   exercise?: string;
+  objectives?: string[];
+  takeaways?: string[];
+  predict?: Question[];
+  quiz?: Question[];
 }
 
 export const EN: Record<string, LessonText> = {
@@ -213,7 +218,7 @@ ${truth(
 <ul>
   <li>An 18-bit <code>refresh</code> counter runs on the 100 MHz clock.</li>
   <li>Its top two bits (<code>refresh[17:16]</code>) choose the active digit; each digit is on for about 0.65 ms, so the whole display refreshes about 380 times per second.</li>
-  <li>A MUX picks the nibble (4 bits) for the active digit and the decoder from lesson 5 turns it into segments.</li>
+  <li>A MUX picks the nibble (4 bits) for the active digit and the decoder from ${ref('seg7')} turns it into segments.</li>
 </ul>
 <p>This lesson combines everything so far: <b>counter</b> + <b>MUX</b> + <b>decoder</b> + <b>hierarchy</b>.</p>`,
     tryIt: `<p>Change the switches; the four right-most digits show SW15..SW0 in hex. Set the <b>Clock</b> menu to <b>10 Hz</b> to watch the digits light up one by one!</p>`,
@@ -468,7 +473,7 @@ ${truth(
 </ul>
 <p class="note">💡 In Verilog an expression takes its width from the left side of the assignment: because <code>r</code> is 5 bits, <code>a + b</code> is computed in 5 bits and the carry is kept. In VHDL we widen the operands ourselves with <code>resize</code>.</p>`,
     tryIt: `<p>Set A with SW3..SW0 and B with SW7..SW4, and pick the operation with SW15..SW13. For example make A equal B and choose SUB: the result is zero and LD15 lights.</p>`,
-    exercise: `<p>Show the result on the seven-segment display instead of the LEDs (reuse the decoder from lesson 5).</p>`,
+    exercise: `<p>Show the result on the seven-segment display instead of the LEDs (reuse the decoder from ${ref('seg7')}).</p>`,
   },
   shiftreg: {
     title: 'Shift register and LFSR',
