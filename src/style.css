@@ -4277,3 +4277,152 @@ fieldset.q legend {
   direction: ltr;
   unicode-bidi: isolate;
 }
+
+/* ---------------------------------------------------------------- lesson figures (Phase 3.3) */
+.fig {
+  margin: var(--space-5) 0;
+  padding: var(--space-4);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+}
+.fig svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-inline: auto;
+  color: var(--text);
+  overflow: visible;
+}
+.fig figcaption {
+  color: var(--muted);
+  font-size: 0.9em;
+  line-height: 1.7;
+  margin-top: var(--space-2);
+}
+.fig text {
+  fill: currentColor;
+  font-size: 12px;
+}
+.fig .sm {
+  font-size: 10.5px;
+}
+.fig .b {
+  font-weight: 700;
+}
+.fig .mono {
+  font-family: var(--mono);
+}
+.fig .tm {
+  fill: var(--muted);
+}
+.fig .ta {
+  fill: var(--accent);
+}
+.fig .tb {
+  fill: var(--brand);
+}
+.fig .halo {
+  paint-order: stroke;
+  stroke: var(--panel);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+.fig .ln,
+.fig .lm,
+.fig .la,
+.fig .lb {
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+.fig .ln {
+  stroke: currentColor;
+}
+.fig .lm {
+  stroke: var(--muted);
+  stroke-width: 1.1;
+}
+.fig .la {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.fig .lb {
+  stroke: var(--brand);
+  stroke-width: 2;
+}
+.fig .ld {
+  stroke-dasharray: 4 3;
+}
+.fig .bx,
+.fig .bxa,
+.fig .bxb,
+.fig .bus {
+  stroke-width: 1.6;
+}
+.fig .bx {
+  fill: var(--panel-2);
+  stroke: currentColor;
+}
+.fig .bxa {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+}
+.fig .bxb {
+  fill: var(--brand-soft);
+  stroke: var(--brand);
+}
+.fig .bus {
+  fill: var(--panel-2);
+  stroke: var(--accent);
+}
+.fig .bus.none {
+  fill: var(--line-soft);
+  stroke: var(--muted);
+}
+.fig .hl {
+  fill: none;
+  stroke: var(--brand);
+  stroke-width: 2;
+}
+.fig .ft {
+  fill: currentColor;
+}
+.fig .fa {
+  fill: var(--accent);
+}
+/* the interactive seven-segment digit */
+.fig .seg {
+  fill: var(--line);
+  cursor: pointer;
+  transition: fill 0.12s;
+}
+.fig .seg.on {
+  fill: var(--brand);
+}
+.fig .seg:hover {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.fig .seg:focus-visible {
+  outline: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+.fig .seg-code {
+  font-size: 14px;
+  font-weight: 600;
+}
+.fig .fb {
+  fill: var(--brand);
+}
+/* on a phone a figure keeps a readable size and scrolls sideways inside its frame */
+@media (max-width: 560px) {
+  .fig {
+    padding: var(--space-3);
+    overflow-x: auto;
+  }
+  .fig svg {
+    min-width: 460px;
+  }
+}

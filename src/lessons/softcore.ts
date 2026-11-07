@@ -2,6 +2,7 @@
 // 16 bytes of data memory, 16 instructions, and its program in a ROM inside the FPGA.
 import { HEX7SEG_V, HEX7SEG_VHDL } from './advanced';
 import { VHDL_NUMERIC, type Lesson } from './lessons';
+import { figFsm, figTiny8, figure } from './figures';
 
 const CPU_V = `// Tiny8: an 8-bit soft-core processor. Every instruction is 12 bits: {opcode[3:0], k[7:0]}
 module tiny8 #(parameter PERIOD = 25_000_000) (   // WAIT waits for the next tick: 0.25 s
@@ -401,8 +402,10 @@ export const SOFTCORE_LESSON: Lesson = {
   <li><b>RAM داده</b>: ۱۶ بایت، برای متغیرها.</li>
   <li><b>ورودی/خروجی</b>: دستور <code>IN</code> کلیدها را می‌خواند و <code>OUT</code> روی LEDها یا نمایشگر می‌نویسد.</li>
 </ul>
+${figure(figTiny8({ title: 'نمودار بلوکی Tiny8', rom: 'ROM برنامه 64×12', ctl: 'کنترل (واکشی/اجرا)', inp: 'IN: کلیدها', out: 'OUT: LEDها، نمایشگر' }), 'مسیر داده‌ی Tiny8. خط‌چین‌ها سیگنال‌های کنترلی هستند که از روی دستور ساخته می‌شوند؛ عدد k داخل دستور مستقیم به ALU می‌رود.')}
 <h3>واکشی و اجرا</h3>
 <p>پردازنده یک FSM دو حالته است. در حالت <b>fetch</b> دستور <code>rom[pc]</code> در رجیستر دستور (<code>ir</code>) ذخیره می‌شود و PC یکی جلو می‌رود. در حالت <b>execute</b> دستور اجرا می‌شود. دستور پرش فقط مقدار PC را عوض می‌کند. پس هر دستور دو کلاک طول می‌کشد، یعنی Tiny8 با کلاک ۱۰۰ مگاهرتز ۵۰ میلیون دستور در ثانیه اجرا می‌کند.</p>
+${figure(figFsm(['fetch', 'execute'], [[0, 1, 'ir ← rom[pc]'], [1, 0, '']], { title: 'دو حالت پردازنده: واکشی و اجرا', w: 420, h: 200, r: 110 }), 'دو حالت پردازنده: در fetch دستور از ROM خوانده می‌شود و PC جلو می‌رود؛ در execute همان دستور اجرا می‌شود.')}
 <h3>مجموعه‌ی دستورها</h3>
 ${ISA('fa')}
 <h3>برنامه</h3>

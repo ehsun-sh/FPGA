@@ -2,6 +2,7 @@
 import { ref, truth } from './helpers';
 import type { Question } from './predict';
 import { TINY8_ISA } from './softcore';
+import { figAdder, figDivider, figFlipFlop, figFsm, figGates, figI2c, figLut, figMultiplex, figMux, figSeg7, figShiftReg, figSpi, figTiny8, figUartFrame, figVga, figure } from './figures';
 
 export interface LessonText {
   title: string;
@@ -28,6 +29,7 @@ export const EN: Record<string, LessonText> = {
   <li><b>Routing</b>: programmable wiring between the blocks.</li>
   <li>Dedicated blocks such as <b>BRAM</b> (memory), <b>DSP</b> (multipliers) and clock management.</li>
 </ul>
+${figure(figLut(), 'A 4-input LUT is really a 16-bit memory: inputs A to D pick one of the stored bits through a multiplexer (here the bits make a parity function). Next to each LUT sits a flip-flop that holds the result on the clock edge. Artix-7 LUTs have six inputs; the idea is the same.')}
 <p>Our board carries a <b>Xilinx Artix-7 XC7A100T</b>: about 63 thousand LUTs and 126 thousand flip-flops.</p>
 <h3>The Vivado design flow</h3>
 <ol class="flow-steps">
@@ -60,6 +62,7 @@ export const EN: Record<string, LessonText> = {
     summary: 'AND, OR, NOT, NAND, NOR, XOR and XNOR with two switches.',
     body: `
 <p>Gates are the building blocks of every digital circuit. Each one computes a simple function of its input bits. In this lesson <b>A = SW0</b> and <b>B = SW1</b>, and every gate's output drives one LED.</p>
+${figure(figGates(), 'The standard symbols of the seven gates in this lesson. A = SW0 and B = SW1; each gate drives the LED with its number. The small circle on an output means the result is inverted (NOT).')}
 ${truth(
   ['A', 'B', 'AND<br>LD0', 'OR<br>LD1', 'NOT A<br>LD2', 'NAND<br>LD3', 'NOR<br>LD4', 'XOR<br>LD5', 'XNOR<br>LD6'],
   [
@@ -91,6 +94,7 @@ ${truth(
     summary: 'Pick one of several inputs with a select signal.',
     body: `
 <p>A <b>multiplexer</b> works like a rotary switch: the <b>select</b> signal decides which input reaches the output. It is one of the most common blocks in digital design.</p>
+${figure(figMux(), 'Left: a 2-to-1 MUX; SW15 decides whether SW0 or SW1 reaches LD0. Right: a 4-to-1 MUX; the 2-bit number SW5 SW4 routes one of SW0 to SW3 to LD1.')}
 <h3>2-to-1 MUX</h3>
 <p>If <code>sel = 0</code> the output is <code>d0</code>, and if <code>sel = 1</code> it is <code>d1</code>: <code>y = sel ? d1 : d0</code>. Here <b>d0 = SW0</b>, <b>d1 = SW1</b>, <b>sel = SW15</b> and the output is <b>LD0</b>.</p>
 <h3>4-to-1 MUX</h3>
@@ -121,6 +125,7 @@ ${truth(
 <p>A <b>full adder</b> adds three bits, <code>a</code>, <code>b</code> and the carry-in <code>cin</code>, and produces the sum <code>s</code> and the carry-out <code>cout</code>:</p>
 <pre class="formula">s    = a ⊕ b ⊕ cin
 cout = a·b + cin·(a ⊕ b)</pre>
+${figure(figAdder(), 'Top: one full adder (FA). Bottom: four FAs in a row; each stage passes its carry to the next (c1 to c3) and the last one is cout. In Verilog or VHDL that is four instances of one module.')}
 ${truth(
   ['a', 'b', 'cin', 'cout', 's'],
   [
@@ -150,11 +155,7 @@ ${truth(
     summary: 'Hex decoder: the 4-bit switch value on one digit.',
     body: `
 <p>Each digit of a seven-segment display has seven LED segments, <b>a</b> to <b>g</b>, plus a decimal point <b>dp</b>.</p>
-<pre class="formula">   ─a─
-  f   b
-   ─g─
-  e   c
-   ─d─  .dp</pre>
+${figure(figSeg7(0), 'Click the segments to switch them on and off. The 7-bit pattern <code>gfedcba</code> is what you drive on CG..CA (active-low).')}
 <p>On the Nexys A7 the displays are <b>common anode</b> and both kinds of signal are <b>active-low</b>:</p>
 <ul>
   <li><code>CA..CG</code> and <code>DP</code>: segment cathodes; <b>0 means on</b>.</li>
@@ -183,6 +184,7 @@ ${truth(
 <p>So far every circuit was <b>combinational</b>: outputs depended only on the current inputs. <b>Sequential</b> circuits have memory and update on the <b>rising edge of the clock</b>.</p>
 <h3>D flip-flop</h3>
 <p>On every rising clock edge the value on <code>D</code> is stored in <code>Q</code> and held until the next edge. The board clock is <b>100 MHz</b>: one edge every 10 nanoseconds.</p>
+${figure(figFlipFlop(), 'Q copies D only at the rising edges of clk (dashed lines). A change of D between two edges does not reach Q until the next edge.')}
 <ul>
   <li>Verilog: <code>always @(posedge CLK100MHZ)</code> with <b>non-blocking</b> assignments, <code>&lt;=</code></li>
   <li>VHDL: <code>process(CLK100MHZ)</code> with <code>if rising_edge(CLK100MHZ) then</code></li>
@@ -199,6 +201,7 @@ ${truth(
     body: `
 <p>A 100 MHz clock is far too fast for our eyes. To create slow events we build a <b>counter</b> that counts clock cycles and does something when it reaches a given value. This is called <b>clock division</b>.</p>
 <pre class="formula">half a second = 0.5 s × 100,000,000 Hz = 50,000,000 cycles</pre>
+${figure(figDivider(), 'The counter adds one every clock and wraps to zero after N−1. On that last clock the <code>tick</code> pulse is high and <code>blink</code> toggles, so blink runs at clk ÷ 2N.')}
 <p>Counting to 50 million needs <b>26 bits</b> (2<sup>26</sup> ≈ 67 million).</p>
 <ul>
   <li><code>div</code>: the divider counter; it wraps to zero every half second.</li>
@@ -220,6 +223,7 @@ ${truth(
   <li>Its top two bits (<code>refresh[17:16]</code>) choose the active digit; each digit is on for about 0.65 ms, so the whole display refreshes about 380 times per second.</li>
   <li>A MUX picks the nibble (4 bits) for the active digit and the decoder from ${ref('seg7')} turns it into segments.</li>
 </ul>
+${figure(figMultiplex(), 'The AN lines are active-low and take turns; at the same time CA..CG carry that digit\'s pattern. Each digit is on for about 0.65 ms, fast enough for the eye to see all four at once.')}
 <p>This lesson combines everything so far: <b>counter</b> + <b>MUX</b> + <b>decoder</b> + <b>hierarchy</b>.</p>`,
     tryIt: `<p>Change the switches; the four right-most digits show SW15..SW0 in hex. Set the <b>Clock</b> menu to <b>10 Hz</b> to watch the digits light up one by one!</p>`,
     exercise: `<p>Extend the display to 8 digits: the four left digits show a counter that increments every second.</p>`,
@@ -230,9 +234,7 @@ ${truth(
     body: `
 <p>A <b>finite state machine (FSM)</b> is a circuit that is always in one of a few <b>states</b> and moves to the next state based on inputs and time. Almost every controller (protocols, menus, games) is built from FSMs.</p>
 <h3>Traffic light</h3>
-<pre class="formula">RED (2s) ──► GREEN (2s) ──► YELLOW (1s) ──► RED ...
-                  │
-     BTNC (pedestrian) ──► YELLOW early</pre>
+${figure(figFsm(['RED', 'GREEN', 'YELLOW'], [[0, 1, '2 s'], [1, 2, '2 s or BTNC'], [2, 0, '1 s']], { title: 'Traffic-light state diagram', sub: ['LD16 red', 'LD16 green', 'LD16 yellow'], angle: 210, h: 280 }), 'Each circle is a state and each arrow a transition with its condition. The dot marks the state after reset. The output (the colour of LD16) depends only on the state, so this is a Moore machine.')}
 <ul>
   <li>States are an enumeration: <code>localparam</code> in Verilog, <code>type state_t is (...)</code> in VHDL.</li>
   <li>A <b>timer</b> counts how long we stay in each state.</li>
@@ -257,6 +259,7 @@ ${truth(
   <li><b>Stop bit</b>: one 1 bit</li>
 </ul>
 <pre class="formula">115200 baud → one bit = 100,000,000 / 115200 ≈ 868 clocks ≈ 8.68 µs</pre>
+${figure(figUartFrame(), 'Sending <code>H</code> (0x48): the line idles high, the start bit is low, then eight data bits from the least significant (D0), and finally a high stop bit.')}
 <h3>The design</h3>
 <p>The <code>uart_tx</code> module is an FSMD with four states, IDLE, START, DATA and STOP: a counter times each bit and a shift register sends the bits out one by one. The top module holds a small ROM with the message and sends the next character whenever the transmitter is free (<code>busy=0</code>).</p>
 <h3>The logic analyzer</h3>
@@ -275,6 +278,7 @@ ${truth(
     summary: 'Receive the characters you type in the serial console and send them back in upper case.',
     body: `
 <p>In the previous lesson the FPGA only transmitted. Now we build the other direction: the PC sends bytes to the FPGA on the <code>UART_TXD_IN</code> pin (C4). For that we use a <b>serial console</b>, the kind of program that connects to the board's COM port on a PC (PuTTY or Tera Term, for example).</p>
+${figure(figUartFrame({ title: 'A UART frame (8N1)', bit: '1 bit = 868 clocks; sample the middle of each bit' }), 'The receiver reads this same frame: after the falling edge of the start bit it samples the middle of each bit.')}
 <h3>The receiver</h3>
 <ol>
   <li><b>Synchronise</b>: the input comes from outside and is not aligned with our clock, so it first passes through two flip-flops in a row (a synchronizer).</li>
@@ -307,6 +311,7 @@ ${truth(
 )}
 <h3>Mode 0</h3>
 <p>In mode 0 (CPOL=0, CPHA=0) the clock idles low. Both sides sample on the <b>rising edge</b> of SCLK and put out the next bit on the falling edge. The most significant bit goes first.</p>
+${figure(figSpi(), 'In mode 0 SCLK idles low. Both sides read a bit on the rising edge (dashed) and put the next bit out on the falling edge, MSB first. The numbers are bit positions.')}
 <p>A neat property of SPI is that every transfer is <b>two-way</b>: each clock sends one bit and brings one back. In this lesson the device is an 8-bit shift register, so each transfer returns the byte of the previous transfer (it starts out holding A5).</p>
 <ul>
   <li>SW7..SW0: the byte to send; BTNC: send once; SW15: send continuously (every 100 µs)</li>
@@ -328,6 +333,7 @@ ${truth(
   <li>First byte: the 7-bit address plus an R/W bit (0 = write, 1 = read)</li>
   <li>After every byte the receiver sends an <b>ACK</b> bit (0). If nobody answers, the line stays 1: a <b>NAK</b>.</li>
 </ul>
+${figure(figI2c(), 'After START come the 7-bit address and the R/W bit (W here, a write); the receiver answers with ACK (low). Then a data byte, another ACK, and STOP.')}
 <h3>This lesson</h3>
 <p>The master runs a small program: <code>S, 0x48+W, 0x01, data, P, S, 0x48+R, read, P</code>. It writes the switch value into the device's register and then reads it back. SCL runs at the standard 100 kHz.</p>
 <ul>
@@ -485,6 +491,7 @@ ${truth(
 <h3>LFSR</h3>
 <p>A <b>Linear Feedback Shift Register</b> is a shift register whose input bit is the XOR of some of its own bits. With the right taps an 8-bit LFSR walks through all 255 non-zero states before repeating. Uses include pseudo-random numbers, test patterns and scramblers.</p>
 <pre class="formula">feedback = q7 ⊕ q5 ⊕ q4 ⊕ q3   (x⁸ + x⁶ + x⁵ + x⁴ + 1)</pre>
+${figure(figShiftReg(), 'Each box is a flip-flop, all on one clock. The orange boxes are the taps: their XOR is the new bit that enters Q0.')}
 <p>To see the motion, we make a <b>tick</b> four times a second (every 25 million clocks), as in the counter lesson. The registers only change when <code>tick=1</code>; this is a <b>clock enable</b>, so everything still runs on one clock.</p>
 <p class="note">⚠️ An LFSR must never become zero, because it would stay there. That is why its initial and reset value is 01.</p>`,
     tryIt: `<p>LD7..LD0 show the LFSR's pseudo-random pattern. Toggle SW0 a few times and watch the bits march left on LD15..LD8. The red button returns everything to the start.</p>`,
@@ -529,6 +536,7 @@ ${truth(
   ],
 )}
 <pre class="formula">10 ms × 100 MHz = 1,000,000 clocks  (a 20-bit counter)</pre>
+${figure(figFsm(['ZERO', 'WAIT1', 'ONE', 'WAIT0'], [[0, 0, 'in=0'], [0, 1, 'in=1'], [1, 0, 'in=0'], [1, 2, '10 ms'], [2, 2, 'in=1'], [2, 3, 'in=0'], [3, 2, 'in=1'], [3, 0, '10 ms']], { title: 'Debounce state diagram', sub: ['db=0', 'db=0', 'db=1', 'db=1'], w: 520, h: 360 }), 'The input is accepted only after it has stayed the same for 10 ms: in WAIT1 and WAIT0 a timer counts, and any bounce sends the machine back.')}
 <h3>Edge detector</h3>
 <p>To count presses we need the <b>moment</b> the button goes down, not how long it is held. We keep last clock's value in a flip-flop: <code>tick = level &amp; ~prev</code>. The output is 1 for exactly one clock.</p>
 <h3>The experiment</h3>
@@ -558,6 +566,7 @@ ${truth(
     ['DONE', 'store the result in the output register, back to IDLE'],
   ],
 )}
+${figure(figFsm(['IDLE', 'OP', 'DONE'], [[0, 1, 'start'], [1, 1, 'n ≠ 0'], [1, 2, 'n = 0'], [2, 0, '']], { title: 'Binary-to-BCD FSMD state diagram' }), 'The FSMD waits in IDLE for start, repeats the add-3-and-shift step 13 times in OP (until the counter n reaches zero), and stores the result in DONE.')}
 <p>The <code>start</code> input is tied to 1, so the conversion repeats continuously (once every 15 clocks) and the result is always fresh.</p>`,
     tryIt: `<p>Build a binary number with SW12..SW0 (the LEDs show it). The display shows its decimal value; for example all 13 switches on gives <b>8191</b>.</p>`,
     exercise: `<p>Change the controller so a conversion starts only when BTNC is pressed, and LD15 is lit while <code>ready=1</code>.</p>`,
@@ -619,6 +628,7 @@ TMP_SDA <= '0' when sda_low = '1' else 'Z';  -- VHDL</pre>
 <p>When the design <b>reads</b> <code>TMP_SDA</code> it sees the real level on the wire. If the sensor pulls it low (for an ACK, say), it reads 0 even though the FPGA itself let go.</p>
 <h3>Reading the temperature</h3>
 <p>The sensor's address is <code>0x4B</code>. After power-up its register pointer is 0x00, so a plain read is enough: <b>START</b>, the address with the read bit (<code>0x97</code>), the first byte with ACK, the second with NACK, and <b>STOP</b>. Together the two bytes form a 16-bit number whose bits 15 to 3 hold the temperature as a signed number in 1/16 degree steps. For example 24.5 degrees is <code>392 = 0x188</code>, i.e. the register <code>0x0C40</code>.</p>
+${figure(figI2c({ title: 'Reading the sensor over I2C', rw: 'R', note: 'S = START · P = STOP' }), 'Reading the sensor has the same shape with R/W = 1 (R): after the address <code>0x4B</code> the sensor sends the bytes; the master ACKs the first byte and NACKs the last.')}
 <p>This lesson's design reads the temperature every 0.25 s and shows it on the display (for example <b>24.5</b>). The raw value is on the LEDs, and LD15 lights up if the sensor does not answer.</p>`,
     tryIt: `<p>Press <span class="kbd">▶ Run</span>, then open <span class="kbd">🧩 Modules</span> in the corner of the board. Move the ADT7420 temperature slider; a moment later the display follows. Try below zero too.</p>
 <p>In the logic analyzer, look at <code>TMP_SCL</code> (C14) and <code>TMP_SDA</code> (C15) with the I²C decoder: <b>S 0x4B R A 0x0C A 0x40 N P</b>.</p>`,
@@ -633,6 +643,7 @@ TMP_SDA <= '0' when sda_low = '1' else 'Z';  -- VHDL</pre>
 <table class="truth"><tr><th></th><th>Visible</th><th>Front porch</th><th>Sync pulse</th><th>Back porch</th><th>Total</th></tr>
 <tr><td>Horizontal (pixels)</td><td>640</td><td>16</td><td>96</td><td>48</td><td>800</td></tr>
 <tr><td>Vertical (lines)</td><td>480</td><td>10</td><td>2</td><td>33</td><td>525</td></tr></table>
+${figure(figVga(), 'The horizontal counter runs 0 to 799 and the vertical one 0 to 524. Only the blue part is visible; during the porches and the sync pulses (orange) the colour must be black. HSYNC and VSYNC are active-low. FP is the front porch, BP the back porch.')}
 <p>So a line takes 32 µs and a frame 16.8 ms (60 frames per second). In this mode the sync pulses are <b>active-low</b>. During the porches and the sync pulses the colour must be black (zero), because the monitor measures the black level then.</p>
 <h3>Two counters</h3>
 <ul>
@@ -682,8 +693,10 @@ TMP_SDA <= '0' when sda_low = '1' else 'Z';  -- VHDL</pre>
   <li><b>Data RAM</b>: 16 bytes for variables.</li>
   <li><b>Input/output</b>: <code>IN</code> reads the switches and <code>OUT</code> writes to the LEDs or the display.</li>
 </ul>
+${figure(figTiny8(), 'The Tiny8 datapath. Dashed lines are the control signals decoded from the instruction; the number k inside the instruction goes straight to the ALU.')}
 <h3>Fetch and execute</h3>
 <p>The processor is a two-state FSM. In the <b>fetch</b> state the instruction <code>rom[pc]</code> is stored in the instruction register (<code>ir</code>) and the PC moves one step on. In the <b>execute</b> state the instruction runs; a jump only changes the PC. So every instruction takes two clocks, and at 100 MHz Tiny8 runs 50 million instructions per second.</p>
+${figure(figFsm(['fetch', 'execute'], [[0, 1, 'ir ← rom[pc]'], [1, 0, '']], { title: 'The two states of the CPU: fetch and execute', w: 420, h: 200, r: 110 }), 'The two states of the CPU: fetch reads the instruction from ROM and advances PC; execute carries it out.')}
 <h3>The instruction set</h3>
 ${TINY8_ISA('en')}
 <h3>The program</h3>

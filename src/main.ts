@@ -55,6 +55,7 @@ import { toolIcons, toolLegend, toolsBox } from "./ui/tools";
 import { lessonTools, type Tool } from "./lessons/tools";
 import { lessonTime } from "./lessons/time";
 import { ref } from "./lessons/helpers";
+import { segPattern } from "./lessons/figures";
 import { helpHtml, predictHtml, progressMarks, quizHtml, resultHtml, LEARN_UI, levelDot, objectivesHtml, takeawaysHtml, type HelpState, type PredictState, type QuizState } from "./ui/learn";
 
 // ---------------------------------------------------------------- storage
@@ -1965,6 +1966,8 @@ document.addEventListener("click", (ev) => {
     if (found && !(homeOpen && found === lesson)) openLesson(found);
     if (found && homeOpen) goLab();
   }
+  const seg = t.closest?.("[data-seg]");
+  if (seg) toggleSeg(seg);
   const ui = t.closest("[data-ui]") as HTMLElement | null;
   if (ui) setUiLang(ui.dataset.ui as UiLang);
   const lg = t.closest("[data-lang]") as HTMLElement | null;
@@ -1977,6 +1980,26 @@ document.addEventListener("click", (ev) => {
   if (rt) showRight(rt.dataset.rtab as "hw");
   const m = t.closest("[data-m]") as HTMLElement | null;
   if (m) setMobile(m.dataset.m as MobileView);
+});
+
+// the interactive seven-segment figure: a segment toggles on click (or Enter/Space) and the pattern line follows
+function toggleSeg(seg: Element) {
+  const on = !seg.classList.contains("on");
+  seg.classList.toggle("on", on);
+  seg.setAttribute("aria-pressed", String(on));
+  const svg = seg.closest("svg");
+  if (!svg) return;
+  const state: Record<string, boolean> = {};
+  svg.querySelectorAll("[data-seg]").forEach((x) => (state[x.getAttribute("data-seg")!] = x.classList.contains("on")));
+  const out = svg.querySelector(".seg-code");
+  if (out) out.textContent = (out.getAttribute("data-prefix") ?? "") + segPattern(state);
+}
+document.addEventListener("keydown", (ev) => {
+  const seg = (ev.target as Element).closest?.("[data-seg]");
+  if (seg && (ev.key === "Enter" || ev.key === " ")) {
+    ev.preventDefault();
+    toggleSeg(seg);
+  }
 });
 
 // menu bar: opens on hover or click; arrow keys move through an open menu and Escape closes it
