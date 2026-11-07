@@ -83,6 +83,20 @@ and watch it run on an interactive 3D Digilent Nexys A7-100T on the right.
   workbench the Flow Navigator folds like Vivado's: each chapter folds to its title and progress (the current one is
   open), and the PROJECT MANAGER, SIMULATION, SYNTHESIS… sections fold too. Each lesson shows its place in the
   course and an estimated reading time.
+- **Light and dark themes**: every colour comes from one set of design tokens (`src/theme.css`), with a dark theme
+  for the whole site, the editor, the instruments and the 3D board's surroundings. The theme button in the title bar
+  cycles System, Light and Dark, remembers the choice and applies it before the first paint.
+- **Persian typography**: Persian pages are set in Vazirmatn (with its Latin glyphs for mixed text), with heading sizes,
+  line height and spacing tuned for Persian; code and part names stay left-to-right inside Persian sentences.
+- **Diagrams in the lessons**: 19 lessons carry an inline SVG diagram in both languages (a LUT, gates, a MUX, the adder
+  chain, flip-flop timing, the clock divider, display multiplexing, state diagrams, the UART frame, SPI and I²C timing,
+  VGA timing, Tiny8, the LFSR). They follow the theme, and the seven-segment diagram is interactive: click segments
+  and read the pattern to put in your code.
+- **The board answers the text**: switches, LEDs, buttons, display digits and CPU RESET named in a lesson's “try it”,
+  its exercise and the board tour are chips; hovering or focusing one frames that part on the 3D board. The first
+  Run on Board in a lesson lights every part its “try it” names.
+- **Logo and link previews**: a LUT logo (title bar, footer, favicon) and a 1200×630 `og.png`, so a shared link shows
+  a large card.
 - **Accessibility**: a skip link, a visible keyboard focus, keyboard-operable menus (arrows and Escape), tabs and
   toggles announced to screen readers, text contrast of at least 4.5:1 and reduced motion when the system asks for it.
 
@@ -120,7 +134,9 @@ install chromium`); without it the script says so and exits.
 | `src/la/` | logic analyzer: `capture.ts` (recording, trigger), `decode.ts` (protocol decoders), `window.ts` (UI) |
 | `src/serial/` | serial console: live UART decoder and terminal window |
 | `src/lessons/` | course content: `course.ts` (chapters), `lessons.ts` and `advanced.ts` (Persian text + code), `en.ts` (English) |
-| `src/main.ts`, `src/ui/` | Vivado-style workbench, landing page (`home.ts`), site text in both languages (`strings.ts`), line icons (`icons.ts`) |
+| `src/main.ts`, `src/ui/` | Vivado-style workbench, landing page (`home.ts`), site text in both languages (`strings.ts`), line icons (`icons.ts`), theme switch (`theme.ts`), logo (`logo.ts`) |
+| `src/theme.css`, `src/style.css` | design tokens for the light and dark themes, and the styles that use them |
+| `src/lessons/figures.ts` | the lesson diagrams (inline SVG) |
 
 ## Adding a board
 
