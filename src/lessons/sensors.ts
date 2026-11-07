@@ -1,5 +1,6 @@
 // Lesson: reading the on-board ADT7420 temperature sensor over I²C, with open-drain (tri-state) pins.
 import { VHDL_NUMERIC, type Lesson } from './lessons';
+import { figI2c, figure } from './figures';
 
 const SENSOR_V = `// Reads the on-board ADT7420 temperature sensor over I2C and shows the temperature on the display
 module adt7420_reader #(parameter DIV = 25_000_000, parameter Q = 250) (   // a reading every 0.25 s, SCL = 100 kHz
@@ -373,6 +374,7 @@ TMP_SDA <= '0' when sda_low = '1' else 'Z';  -- VHDL</pre>
 <p>وقتی طرح <code>TMP_SDA</code> را <b>می‌خواند</b>، سطح واقعی سیم را می‌بیند. اگر سنسور سیم را پایین کشیده باشد (مثلاً برای ACK)، صفر خوانده می‌شود، حتی اگر خود FPGA آن را رها کرده باشد.</p>
 <h3>خواندن دما</h3>
 <p>آدرس سنسور <code>0x4B</code> است. بعد از روشن شدن، اشاره‌گر ثبات‌ها روی 0x00 است، پس کافی است بخوانیم: <b>START</b>، آدرس با بیت خواندن (<code>0x97</code>)، بایت اول با ACK، بایت دوم با NACK و <b>STOP</b>. دو بایت با هم یک عدد ۱۶ بیتی می‌سازند. بیت‌های 15 تا 3 دما را به صورت عدد علامت‌دار با واحد 1/16 درجه نگه می‌دارند. مثلاً 24.5 درجه یعنی <code>392 = 0x188</code> و ثبات <code>0x0C40</code>.</p>
+${figure(figI2c({ title: 'خواندن از سنسور روی I²C', addr: 'آدرس', data: 'داده', rw: 'R', note: 'S = START · P = STOP' }), 'خواندن از سنسور همین شکل را دارد با R/W = 1 (R): بعد از آدرس <code>0x4B</code> سنسور بایت‌ها را می‌فرستد و master برای بایت اول ACK و برای بایت آخر NACK می‌دهد.')}
 <p>طرح این درس هر ۰٫۲۵ ثانیه دما را می‌خواند و روی نمایشگر نشان می‌دهد (مثلاً <b>24.5</b>). عدد خام هم روی LEDها دیده می‌شود. اگر سنسور جواب ندهد، LD15 روشن می‌شود.</p>`,
   verilog: SENSOR_V,
   vhdl: SENSOR_VHDL,

@@ -1,5 +1,6 @@
 // Lesson: behavioral simulation with a testbench and the waveform viewer.
 import { VHDL_NUMERIC, type Lesson } from './lessons';
+import { part } from './helpers';
 
 const DESIGN_V = `// 8-bit counter that steps every DIV clocks while SW0 is on.
 // DIV is a parameter, so the testbench can make it small.
@@ -182,6 +183,6 @@ export const TESTBENCH_LESSON: Lesson = {
   tb: { verilog: TB_V, vhdl: TB_VHDL },
   xdc: { clk: true, sw: true, led: true, reset: true },
   tryIt: `<p>دکمهٔ <span class="kbd">∿ Simulate</span> را بزنید. در Tcl Console پیام <code>PASS</code> ظاهر می‌شود و در سمت راست نمودار شکل موج باز می‌شود: کلاک، ریست، SW و LED. روی <b>Fit</b> بزنید و ببینید LED هر ۴ کلاک یک واحد زیاد می‌شود. بعد در تب Testbench عدد <code>10</code> را به <code>11</code> تغییر دهید و دوباره شبیه‌سازی کنید تا پیام خطا را ببینید.</p>
-<p>روی برد هم کار می‌کند: <span class="kbd">▶ Run</span> را بزنید و SW0 را روشن کنید. LEDها هر نیم ثانیه یک واحد می‌شمارند.</p>`,
-  exercise: `<p>در وسط Testbench ریست را دوباره فعال کنید (<code>CPU_RESETN = 0</code>) و بررسی کنید که شمارنده صفر شود. بعد یک بررسی اضافه کنید که نشان دهد وقتی SW0 خاموش است شمارنده حتی بعد از ۱۰۰ کلاک هم ثابت می‌ماند.</p>`,
+<p>روی برد هم کار می‌کند: <span class="kbd">▶ Run</span> را بزنید و ${part('SW0')} را روشن کنید. LEDها هر نیم ثانیه یک واحد می‌شمارند.</p>`,
+  exercise: `<p>در وسط Testbench ریست را دوباره فعال کنید (<code>CPU_RESETN = 0</code>) و بررسی کنید که شمارنده صفر شود. بعد یک بررسی اضافه کنید که نشان دهد وقتی ${part('SW0')} خاموش است شمارنده حتی بعد از ۱۰۰ کلاک هم ثابت می‌ماند.</p>`,
 };

@@ -549,3 +549,22 @@ describe('translations', () => {
     }
   });
 });
+
+describe('figures in lessons', () => {
+  // Phase 3.3: these lessons carry a diagram in both languages
+  const WITH_FIGURE = ['intro', 'gates', 'mux', 'adder', 'seg7', 'ff', 'counter', 'multiplex', 'fsm', 'debounce', 'bin2bcd', 'softcore', 'uart', 'uart_rx', 'spi', 'i2c', 'sensors', 'vga', 'shiftreg'];
+  it('every listed lesson has a figure in Persian and in English', async () => {
+    const { EN } = await import('../src/lessons/en');
+    for (const id of WITH_FIGURE) {
+      const l = ALL_LESSONS.find((x) => x.id === id);
+      expect(l, id).toBeTruthy();
+      expect(l!.body, `${id} fa`).toContain('<figure class="fig"');
+      expect(EN[id].body, `${id} en`).toContain('<figure class="fig"');
+    }
+  });
+  it('the seven-segment lesson has the interactive digit', async () => {
+    const { EN } = await import('../src/lessons/en');
+    const l = ALL_LESSONS.find((x) => x.id === 'seg7')!;
+    for (const b of [l.body, EN.seg7.body]) expect(b).toContain('data-seg="a"');
+  });
+});

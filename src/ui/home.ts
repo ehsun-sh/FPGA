@@ -8,6 +8,8 @@ import { toolIcons, toolLegend } from './tools';
 import { levelDot } from './learn';
 import { helpMenu } from './help';
 import { formatMinutes } from '../lessons/time';
+import { themeButton } from './theme';
+import { logo } from './logo';
 
 export interface HomeData {
   lang: UiLang;
@@ -32,7 +34,7 @@ export function homeNav(lang: UiLang, extra = '', current: NavPage = 'home'): st
   const u = UI[lang];
   const item = (act: string, ic: IconName, label: string) =>
     `<button data-act="${act}" aria-label="${label}"${act === current ? ' aria-current="page"' : ''}>${icon(ic)}<span>${label}</span></button>`;
-  return `<button class="brand" data-act="home" aria-label="FPGA Lab · ${u.home}"><span class="logo"></span><b>FPGA Lab</b><span class="dim brand-sep">|</span><span class="dim">${u.tagline}</span></button>
+  return `<button class="brand" data-act="home" aria-label="FPGA Lab · ${u.home}"><span class="logo">${logo()}</span><b>FPGA Lab</b><span class="dim brand-sep">|</span><span class="dim">${u.tagline}</span></button>
   <nav class="nav-links" aria-label="${u.mainNav}">
     ${item('home', 'home', u.home)}
     ${item('go-lessons', 'book', u.lessons)}
@@ -41,6 +43,7 @@ export function homeNav(lang: UiLang, extra = '', current: NavPage = 'home'): st
   </nav>
   <span class="grow"></span>${extra}
   ${helpMenu(lang, current === 'home' ? 'home' : 'lab')}
+  ${themeButton(lang)}
   ${langMenu(lang, u.language, current === 'home' ? 'home' : 'lab')}`;
 }
 
@@ -226,5 +229,5 @@ export function renderHome(d: HomeData): string {
   </div>
 </section>
 </main>
-<footer class="home-foot">${h.footer} <span class="home-ver" dir="ltr">${versionLabel}</span></footer>`;
+<footer class="home-foot"><span class="logo">${logo(16, true)}</span>${h.footer} <span class="home-ver" dir="ltr">${versionLabel}</span></footer>`;
 }

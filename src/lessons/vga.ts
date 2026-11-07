@@ -1,5 +1,7 @@
 // Lesson: VGA video output (640×480 @ 60 Hz) on the virtual monitor.
 import { VHDL_NUMERIC, type Lesson } from './lessons';
+import { part } from './helpers';
+import { figVga, figure } from './figures';
 
 const VGA_V = `// VGA 640x480 @ 60 Hz: a sync generator and eight colour bars
 module vga_sync (
@@ -177,6 +179,7 @@ export const VGA_LESSON: Lesson = {
 <table class="truth"><tr><th></th><th>قابل دیدن</th><th>Front porch</th><th>پالس Sync</th><th>Back porch</th><th>کل</th></tr>
 <tr><td>افقی (پیکسل)</td><td>640</td><td>16</td><td>96</td><td>48</td><td>800</td></tr>
 <tr><td>عمودی (خط)</td><td>480</td><td>10</td><td>2</td><td>33</td><td>525</td></tr></table>
+${figure(figVga({ title: 'زمان‌بندی VGA 640×480', visible: 'قابل دیدن 640 × 480', line: 'هر خط = 800 پیکسل = 32 µs', frame: 'هر تصویر = 525 خط ≈ 16.8 ms (60 Hz)', lines: 'خط', scale: 'بدون مقیاس' }), 'شمارنده‌ی افقی از ۰ تا ۷۹۹ و شمارنده‌ی عمودی از ۰ تا ۵۲۴ می‌شمارد. فقط بخش آبی دیده می‌شود؛ در porchها و پالس‌های sync (نارنجی) رنگ باید صفر باشد. HSYNC و VSYNC فعال با صفر هستند. FP یعنی front porch و BP یعنی back porch.')}
 <p>پس یک خط ۳۲ میکروثانیه و یک تصویر ۱۶٫۸ میلی‌ثانیه طول می‌کشد (۶۰ تصویر در ثانیه). در این حالت پالس‌های Sync <b>فعال‌پایین</b> هستند. در زمان‌های porch و sync رنگ باید سیاه (صفر) باشد، چون مانیتور در این زمان سطح سیاه را اندازه می‌گیرد.</p>
 <h3>دو شمارنده</h3>
 <ul>
@@ -190,7 +193,7 @@ export const VGA_LESSON: Lesson = {
   verilog: VGA_V,
   vhdl: VGA_VHDL,
   xdc: { clk: true, sw: true, vga: true },
-  tryIt: `<p><span class="kbd">▶ Run</span> را بزنید. کنار برد یک مانیتور با کابل VGA ظاهر می‌شود و نوارهای رنگی را نشان می‌دهد. برای دیدن تصویر بزرگ‌تر روی دکمهٔ <span class="kbd">🖥 VGA Monitor</span> در نوار ابزار بزنید. SW0 را روشن کنید تا صفحهٔ شطرنجی را ببینید. شبیه‌سازی یک تصویر کامل حدود ۱٫۷ میلیون کلاک است، پس اگر مرورگر کند باشد تصویر را در حال کشیده شدن، خط به خط، می‌بینید.</p>
+  tryIt: `<p><span class="kbd">▶ Run</span> را بزنید. کنار برد یک مانیتور با کابل VGA ظاهر می‌شود و نوارهای رنگی را نشان می‌دهد. برای دیدن تصویر بزرگ‌تر روی دکمهٔ <span class="kbd">🖥 VGA Monitor</span> در نوار ابزار بزنید. ${part('SW0')} را روشن کنید تا صفحهٔ شطرنجی را ببینید. شبیه‌سازی یک تصویر کامل حدود ۱٫۷ میلیون کلاک است، پس اگر مرورگر کند باشد تصویر را در حال کشیده شدن، خط به خط، می‌بینید.</p>
 <p>در Logic Analyzer هم می‌توانید پالس‌های HS را ببینید و فاصلهٔ آن‌ها را اندازه بگیرید (باید ۳۲ میکروثانیه باشد).</p>`,
   la: {
     chans: [

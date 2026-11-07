@@ -70,6 +70,10 @@ export interface BoardView {
   refreshMonitor?(): void;
   // the monitor's power LED: green with a signal, amber without
   updateMonitor?(signal: boolean): void;
+  // the scene's backdrop colour (follows the site theme)
+  setBackground?(hex: string): void;
+  // light up parts the lesson text names (SW3, LD7, BTNC, AN2, CPU_RESETN, SW7..SW0); [] clears
+  highlight?(parts: string[]): void;
 }
 
 export type XdcGroup = 'clk' | 'sw' | 'led' | 'rgb' | 'seg' | 'btn' | 'reset' | 'pmod' | 'uart' | 'vga' | 'tmp' | 'acl' | 'ps2';

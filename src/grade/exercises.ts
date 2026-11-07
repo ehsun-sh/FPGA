@@ -4,7 +4,7 @@
 import type { Lang } from '../hdl';
 import { decodeI2c, decodeSpi } from '../la/decode';
 import { BoardHarness, HEX7 } from './harness';
-import { ref } from '../lessons/helpers';
+import { ref, part } from '../lessons/helpers';
 import { HINTS } from './hints';
 import { solutionOf } from './solutions';
 
@@ -107,8 +107,8 @@ const XDC_SEG = {
 
 export const EXERCISES: Record<string, Exercise> = {
   intro: {
-    fa: `<p>ترتیب LEDها را برعکس کنید: SW0 باید LD15 را روشن کند، SW1 باید LD14 را، و همین‌طور تا SW15 که LD0 را روشن می‌کند. راهنمایی: در Verilog از <code>{SW[0], SW[1], ...}</code> یا یک حلقه <code>for</code> استفاده کنید.</p>`,
-    en: `<p>Reverse the LED order: SW0 must light LD15, SW1 lights LD14, and so on until SW15 lights LD0. Hint: in Verilog use <code>{SW[0], SW[1], ...}</code> or a <code>for</code> loop.</p>`,
+    fa: `<p>ترتیب LEDها را برعکس کنید: ${part('SW0')} باید ${part('LD15')} را روشن کند، ${part('SW1')} باید ${part('LD14')} را، و همین‌طور تا ${part('SW15')} که ${part('LD0')} را روشن می‌کند. راهنمایی: در Verilog از <code>{SW[0], SW[1], ...}</code> یا یک حلقه <code>for</code> استفاده کنید.</p>`,
+    en: `<p>Reverse the LED order: ${part('SW0')} must light ${part('LD15')}, ${part('SW1')} lights ${part('LD14')}, and so on until ${part('SW15')} lights ${part('LD0')}. Hint: in Verilog use <code>{SW[0], SW[1], ...}</code> or a <code>for</code> loop.</p>`,
     check(h, t) {
       for (const v of [0x0001, 0x8000, 0x00ff, 0xa5c3]) {
         h.sw(v);
@@ -117,8 +117,8 @@ export const EXERCISES: Record<string, Exercise> = {
     },
   },
   gates: {
-    fa: `<p>یک گیت AND سه‌ورودی اضافه کنید: <b>LD7 = SW0 AND SW1 AND SW2</b>. برای این کار SW را ۳ بیتی و LED را ۸ بیتی کنید. بقیهٔ گیت‌ها (LD0 تا LD6) باید مثل قبل کار کنند.</p>`,
-    en: `<p>Add a three-input AND gate: <b>LD7 = SW0 AND SW1 AND SW2</b>. Make SW 3 bits and LED 8 bits wide for it. The other gates (LD0 to LD6) must keep working as before.</p>`,
+    fa: `<p>یک گیت AND سه‌ورودی اضافه کنید: <b>${part('LD7')} = ${part('SW0')} AND ${part('SW1')} AND ${part('SW2')}</b>. برای این کار SW را ۳ بیتی و LED را ۸ بیتی کنید. بقیهٔ گیت‌ها (${part('LD0..LD6', 'LD0 تا LD6')}) باید مثل قبل کار کنند.</p>`,
+    en: `<p>Add a three-input AND gate: <b>${part('LD7')} = ${part('SW0')} AND ${part('SW1')} AND ${part('SW2')}</b>. Make SW 3 bits and LED 8 bits wide for it. The other gates (${part('LD0..LD6', 'LD0 to LD6')}) must keep working as before.</p>`,
     check(h, t) {
       const vs = [0, 1, 2, 3, 4, 5, 6, 7];
       const and3 = firstFail(vs, (v) => {
@@ -140,8 +140,8 @@ export const EXERCISES: Record<string, Exercise> = {
     },
   },
   mux: {
-    fa: `<p>یک مالتی‌پلکسر ۸ به ۱ بسازید: ورودی‌های داده <b>SW7..SW0</b>، انتخاب <b>SW15..SW13</b> (SW13 کم‌ارزش‌ترین بیت انتخاب است) و خروجی <b>LD2</b>.</p>`,
-    en: `<p>Build an 8-to-1 multiplexer: data inputs <b>SW7..SW0</b>, select <b>SW15..SW13</b> (SW13 is the lowest select bit), output <b>LD2</b>.</p>`,
+    fa: `<p>یک مالتی‌پلکسر ۸ به ۱ بسازید: ورودی‌های داده ${part('SW7..SW0')}، انتخاب ${part('SW15..SW13')} (${part('SW13')} کم‌ارزش‌ترین بیت انتخاب است) و خروجی ${part('LD2')}.</p>`,
+    en: `<p>Build an 8-to-1 multiplexer: data inputs ${part('SW7..SW0')}, select ${part('SW15..SW13')} (${part('SW13')} is the lowest select bit), output ${part('LD2')}.</p>`,
     check(h, t) {
       const cases = [0xa5, 0x5a, 0x01, 0x80].flatMap((data) => [0, 1, 2, 3, 4, 5, 6, 7].map((sel) => data | (sel << 13)));
       const r = firstFail(cases, (v) => {
@@ -154,8 +154,8 @@ export const EXERCISES: Record<string, Exercise> = {
     },
   },
   adder: {
-    fa: `<p>جمع‌کننده را به جمع/تفریق‌کننده تبدیل کنید. A = SW3..SW0 و B = SW7..SW4، و <b>SW8</b> عمل را انتخاب می‌کند: 0 یعنی جمع (LED3..LED0 = A + B و LD4 = رقم نقلی)، 1 یعنی تفریق (LED3..LED0 = A − B که به صورت A + ~B + 1 حساب می‌شود).</p>`,
-    en: `<p>Turn the adder into an adder/subtractor. A = SW3..SW0 and B = SW7..SW4, and <b>SW8</b> selects the operation: 0 adds (LED3..LED0 = A + B, LD4 = carry out), 1 subtracts (LED3..LED0 = A − B, computed as A + ~B + 1).</p>`,
+    fa: `<p>جمع‌کننده را به جمع/تفریق‌کننده تبدیل کنید. A = ${part('SW3..SW0')} و B = ${part('SW7..SW4')}، و ${part('SW8')} عمل را انتخاب می‌کند: 0 یعنی جمع (LED3..LED0 = A + B و ${part('LD4')} = رقم نقلی)، 1 یعنی تفریق (LED3..LED0 = A − B که به صورت A + ~B + 1 حساب می‌شود).</p>`,
+    en: `<p>Turn the adder into an adder/subtractor. A = ${part('SW3..SW0')} and B = ${part('SW7..SW4')}, and ${part('SW8')} selects the operation: 0 adds (LED3..LED0 = A + B, ${part('LD4')} = carry out), 1 subtracts (LED3..LED0 = A − B, computed as A + ~B + 1).</p>`,
     check(h, t) {
       const pairs = [
         [5, 3],
@@ -182,8 +182,8 @@ export const EXERCISES: Record<string, Exercise> = {
     },
   },
   seg7: {
-    fa: `<p>هر هشت رقم نمایشگر همان مقدار SW3..SW0 را نشان دهند، و <b>SW15</b> نقطهٔ اعشار (DP) را روشن کند (SW15 = 1 یعنی DP روشن). یادتان باشد AN و DP فعال‌پایین هستند و SW باید ۱۶ بیتی شود.</p>`,
-    en: `<p>Make all eight digits show the same value, SW3..SW0, and let <b>SW15</b> light the decimal point (SW15 = 1 → DP on). Remember that AN and DP are active-low and SW must become 16 bits wide.</p>`,
+    fa: `<p>هر هشت رقم نمایشگر همان مقدار ${part('SW3..SW0')} را نشان دهند، و ${part('SW15')} نقطهٔ اعشار (DP) را روشن کند (${part('SW15')} = 1 یعنی DP روشن). یادتان باشد AN و DP فعال‌پایین هستند و SW باید ۱۶ بیتی شود.</p>`,
+    en: `<p>Make all eight digits show the same value, ${part('SW3..SW0')}, and let ${part('SW15')} light the decimal point (${part('SW15')} = 1 → DP on). Remember that AN and DP are active-low and SW must become 16 bits wide.</p>`,
     check(h, t) {
       needDevice(h, t, 'an', XDC_SEG.fa, XDC_SEG.en);
       const digits = firstFail([0x0, 0x7, 0xa, 0xf], (v) => {
@@ -202,8 +202,8 @@ export const EXERCISES: Record<string, Exercise> = {
     },
   },
   decoder: {
-    fa: `<p>یک دیکودر ۲ به ۴ بسازید که فعال‌سازی رقم‌های نمایشگر را انتخاب کند: <b>SW1..SW0</b> مشخص می‌کند کدام یک از AN3..AN0 روشن باشد (فعال‌پایین، 0 یعنی روشن) و AN7..AN4 خاموش بمانند. AN را به صورت خروجی ۸ بیتی اضافه کنید و خطوط AN را در XDC از حالت توضیح خارج کنید.</p>`,
-    en: `<p>Build a 2-to-4 decoder that selects the display digits: <b>SW1..SW0</b> choose which one of AN3..AN0 is on (active-low, 0 = on), and AN7..AN4 stay off. Add AN as an 8-bit output and uncomment the AN lines in the XDC.</p>`,
+    fa: `<p>یک دیکودر ۲ به ۴ بسازید که فعال‌سازی رقم‌های نمایشگر را انتخاب کند: ${part('SW1..SW0')} مشخص می‌کند کدام یک از ${part('AN3..AN0')} روشن باشد (فعال‌پایین، 0 یعنی روشن) و ${part('AN7..AN4')} خاموش بمانند. AN را به صورت خروجی ۸ بیتی اضافه کنید و خطوط AN را در XDC از حالت توضیح خارج کنید.</p>`,
+    en: `<p>Build a 2-to-4 decoder that selects the display digits: ${part('SW1..SW0')} choose which one of ${part('AN3..AN0')} is on (active-low, 0 = on), and ${part('AN7..AN4')} stay off. Add AN as an 8-bit output and uncomment the AN lines in the XDC.</p>`,
     check(h, t) {
       needDevice(h, t, 'an', 'AN به پایه‌ها وصل است (خطوط AN را در XDC فعال کنید)', 'AN is connected to pins (uncomment the AN lines in the XDC)');
       const r = firstFail([0, 1, 2, 3], (v) => {
@@ -215,8 +215,8 @@ export const EXERCISES: Record<string, Exercise> = {
     },
   },
   shifter: {
-    fa: `<p>یک ورودی کنترلی سوم اضافه کنید: <b>SW14 = 0</b> مثل حالا چرخش (rotate) انجام می‌دهد، و <b>SW14 = 1</b> شیفت منطقی انجام می‌دهد و جای خالی را با صفر پر می‌کند. جهت شیفت را مثل قبل SW15 تعیین می‌کند.</p>`,
-    en: `<p>Add a third control input: <b>SW14 = 0</b> rotates as it does now, and <b>SW14 = 1</b> does a logical shift that fills the empty bits with zeros. SW15 still chooses the direction.</p>`,
+    fa: `<p>یک ورودی کنترلی سوم اضافه کنید: <b>${part('SW14')} = 0</b> مثل حالا چرخش (rotate) انجام می‌دهد، و <b>${part('SW14')} = 1</b> شیفت منطقی انجام می‌دهد و جای خالی را با صفر پر می‌کند. جهت شیفت را مثل قبل ${part('SW15')} تعیین می‌کند.</p>`,
+    en: `<p>Add a third control input: <b>${part('SW14')} = 0</b> rotates as it does now, and <b>${part('SW14')} = 1</b> does a logical shift that fills the empty bits with zeros. ${part('SW15')} still chooses the direction.</p>`,
     check(h, t) {
       const a = 0xb1;
       const cases = [0, 1, 2, 3, 4, 5, 6, 7].flatMap((k) => [0, 1].map((left) => ({ k, left, v: a | (k << 8) | (left << 15) })));
@@ -237,8 +237,8 @@ export const EXERCISES: Record<string, Exercise> = {
     },
   },
   alu: {
-    fa: `<p>نتیجهٔ ALU یعنی r[3:0] را علاوه بر LEDها به صورت یک رقم هگز روی نمایشگر هفت‌قسمتی نشان دهید (فقط رقم ۰، یعنی AN0). از رمزگشای ${ref('seg7')} استفاده کنید و خطوط هفت‌قسمتی را در XDC فعال کنید.</p>`,
-    en: `<p>Show the ALU result r[3:0] as a hex digit on the seven-segment display (digit 0 only, AN0), in addition to the LEDs. Reuse the decoder from ${ref('seg7')} and uncomment the seven-segment lines in the XDC.</p>`,
+    fa: `<p>نتیجهٔ ALU یعنی r[3:0] را علاوه بر LEDها به صورت یک رقم هگز روی نمایشگر هفت‌قسمتی نشان دهید (فقط رقم ۰، یعنی ${part('AN0')}). از رمزگشای ${ref('seg7')} استفاده کنید و خطوط هفت‌قسمتی را در XDC فعال کنید.</p>`,
+    en: `<p>Show the ALU result r[3:0] as a hex digit on the seven-segment display (digit 0 only, ${part('AN0')}), in addition to the LEDs. Reuse the decoder from ${ref('seg7')} and uncomment the seven-segment lines in the XDC.</p>`,
     check(h, t) {
       needDevice(h, t, 'seg', XDC_SEG.fa, XDC_SEG.en);
       const cases: [number, number, number, number][] = [
@@ -261,8 +261,8 @@ export const EXERCISES: Record<string, Exercise> = {
     },
   },
   ff: {
-    fa: `<p>دو دکمهٔ شیفت اضافه کنید: تا وقتی <b>BTNU</b> نگه داشته شده، ثبات در هر کلاک یک بیت به چپ شیفت می‌خورد (از LD0 صفر وارد می‌شود)، و تا وقتی <b>BTND</b> نگه داشته شده، یک بیت به راست (از LD15 صفر وارد می‌شود). BTNC مثل قبل کلیدها را بار می‌کند. سؤال: چرا یک فشار دکمه روی برد ثبات را این‌قدر سریع خالی می‌کند؟ (جواب در درس بعد است!)</p>`,
-    en: `<p>Add two shift buttons: while <b>BTNU</b> is held, the register shifts one bit left every clock (a 0 enters at LD0), and while <b>BTND</b> is held it shifts one bit right (a 0 enters at LD15). BTNC still loads the switches. Question: why does one press on the board empty the register so quickly? (The answer is in the next lesson!)</p>`,
+    fa: `<p>دو دکمهٔ شیفت اضافه کنید: تا وقتی ${part('BTNU')} نگه داشته شده، ثبات در هر کلاک یک بیت به چپ شیفت می‌خورد (از ${part('LD0')} صفر وارد می‌شود)، و تا وقتی ${part('BTND')} نگه داشته شده، یک بیت به راست (از ${part('LD15')} صفر وارد می‌شود). ${part('BTNC')} مثل قبل کلیدها را بار می‌کند. سؤال: چرا یک فشار دکمه روی برد ثبات را این‌قدر سریع خالی می‌کند؟ (جواب در درس بعد است!)</p>`,
+    en: `<p>Add two shift buttons: while ${part('BTNU')} is held, the register shifts one bit left every clock (a 0 enters at ${part('LD0')}), and while ${part('BTND')} is held it shifts one bit right (a 0 enters at ${part('LD15')}). ${part('BTNC')} still loads the switches. Question: why does one press on the board empty the register so quickly? (The answer is in the next lesson!)</p>`,
     check(h, t) {
       h.sw(0x0180);
       press(h, 'BTNC', 1, 1);
@@ -280,8 +280,8 @@ export const EXERCISES: Record<string, Exercise> = {
     },
   },
   counter: {
-    fa: `<p>یک چراغ «Knight Rider» روی LD15..LD0 بسازید: همیشه دقیقاً یک LED روشن است و هر <b>DIV</b> کلاک یک خانه جابه‌جا می‌شود و در LD0 و LD15 برمی‌گردد. DIV را به صورت <code>parameter</code> (در VHDL یک <code>generic</code>) با مقدار پیش‌فرض <code>10_000_000</code> (۱۰۰ میلی‌ثانیه) تعریف کنید. بررسی‌کننده آن را کوچک می‌کند تا سریع‌تر تست شود.</p>`,
-    en: `<p>Build a “Knight Rider” light on LD15..LD0: exactly one LED is lit, and it moves one position every <b>DIV</b> clocks, bouncing back at LD0 and LD15. Declare DIV as a <code>parameter</code> (a <code>generic</code> in VHDL) with the default <code>10_000_000</code> (100 ms). The checker makes it small so the test runs fast.</p>`,
+    fa: `<p>یک چراغ «Knight Rider» روی ${part('LD15..LD0')} بسازید: همیشه دقیقاً یک LED روشن است و هر <b>DIV</b> کلاک یک خانه جابه‌جا می‌شود و در ${part('LD0')} و ${part('LD15')} برمی‌گردد. DIV را به صورت <code>parameter</code> (در VHDL یک <code>generic</code>) با مقدار پیش‌فرض <code>10_000_000</code> (۱۰۰ میلی‌ثانیه) تعریف کنید. بررسی‌کننده آن را کوچک می‌کند تا سریع‌تر تست شود.</p>`,
+    en: `<p>Build a “Knight Rider” light on ${part('LD15..LD0')}: exactly one LED is lit, and it moves one position every <b>DIV</b> clocks, bouncing back at ${part('LD0')} and ${part('LD15')}. Declare DIV as a <code>parameter</code> (a <code>generic</code> in VHDL) with the default <code>10_000_000</code> (100 ms). The checker makes it small so the test runs fast.</p>`,
     params: { DIV: 64 },
     check(h, t) {
       h.run(32);
@@ -368,8 +368,8 @@ export const EXERCISES: Record<string, Exercise> = {
     },
   },
   stopwatch: {
-    fa: `<p>یک رقم دقیقه روی <b>AN3</b> اضافه کنید تا زمان‌سنج تا <b>9:59.9</b> بشمارد: رقم ده‌ثانیه (AN2) حالا از ۵ به ۰ برمی‌گردد و یکی به دقیقه اضافه می‌کند، و بعد از 9:59.9 همه‌چیز به 0:00.0 برمی‌گردد. تقسیم‌کنندهٔ ۰٫۱ ثانیه را یک <code>parameter</code> به نام <b>DIV</b> با مقدار پیش‌فرض <code>10_000_000</code> کنید.</p>`,
-    en: `<p>Add a minutes digit on <b>AN3</b> so the stopwatch counts up to <b>9:59.9</b>: the tens-of-seconds digit (AN2) now wraps from 5 to 0 and carries into the minutes, and after 9:59.9 everything returns to 0:00.0. Make the 0.1 s divider a <code>parameter</code> named <b>DIV</b> with the default <code>10_000_000</code>.</p>`,
+    fa: `<p>یک رقم دقیقه روی ${part('AN3')} اضافه کنید تا زمان‌سنج تا <b>9:59.9</b> بشمارد: رقم ده‌ثانیه (${part('AN2')}) حالا از ۵ به ۰ برمی‌گردد و یکی به دقیقه اضافه می‌کند، و بعد از 9:59.9 همه‌چیز به 0:00.0 برمی‌گردد. تقسیم‌کنندهٔ ۰٫۱ ثانیه را یک <code>parameter</code> به نام <b>DIV</b> با مقدار پیش‌فرض <code>10_000_000</code> کنید.</p>`,
+    en: `<p>Add a minutes digit on ${part('AN3')} so the stopwatch counts up to <b>9:59.9</b>: the tens-of-seconds digit (${part('AN2')}) now wraps from 5 to 0 and carries into the minutes, and after 9:59.9 everything returns to 0:00.0. Make the 0.1 s divider a <code>parameter</code> named <b>DIV</b> with the default <code>10_000_000</code>.</p>`,
     params: { DIV: 16 },
     check(h, t) {
       needDevice(h, t, 'an', XDC_SEG.fa, XDC_SEG.en);
@@ -400,8 +400,8 @@ export const EXERCISES: Record<string, Exercise> = {
     },
   },
   fsm: {
-    fa: `<p>یک «حالت شب» اضافه کنید: تا وقتی <b>SW0</b> روشن است، چراغ زرد چشمک می‌زند (قرمز و سبز با هم روشن، بعد همه خاموش) و هر نیم ثانیه عوض می‌شود. وقتی SW0 خاموش شود، چراغ دوباره چرخهٔ عادی را از قرمز شروع می‌کند. برای این کار SW را به ورودی‌ها اضافه کنید، خطوط SW را در XDC فعال کنید و <code>ONE_SECOND</code> را از <code>localparam</code> به <code>parameter</code> تبدیل کنید.</p>`,
-    en: `<p>Add a “night mode”: while <b>SW0</b> is on, the light flashes yellow (red and green on together, then all off), changing every half second. When SW0 goes off, the light starts its normal cycle again from red. Add SW to the inputs, uncomment the SW lines in the XDC and turn <code>ONE_SECOND</code> from a <code>localparam</code> into a <code>parameter</code>.</p>`,
+    fa: `<p>یک «حالت شب» اضافه کنید: تا وقتی ${part('SW0')} روشن است، چراغ زرد چشمک می‌زند (قرمز و سبز با هم روشن، بعد همه خاموش) و هر نیم ثانیه عوض می‌شود. وقتی ${part('SW0')} خاموش شود، چراغ دوباره چرخهٔ عادی را از قرمز شروع می‌کند. برای این کار SW را به ورودی‌ها اضافه کنید، خطوط SW را در XDC فعال کنید و <code>ONE_SECOND</code> را از <code>localparam</code> به <code>parameter</code> تبدیل کنید.</p>`,
+    en: `<p>Add a “night mode”: while ${part('SW0')} is on, the light flashes yellow (red and green on together, then all off), changing every half second. When ${part('SW0')} goes off, the light starts its normal cycle again from red. Add SW to the inputs, uncomment the SW lines in the XDC and turn <code>ONE_SECOND</code> from a <code>localparam</code> into a <code>parameter</code>.</p>`,
     params: { ONE_SECOND: 1000 },
     check(h, t) {
       needDevice(h, t, 'sw', 'SW به پایه‌ها وصل است (خطوط SW را در XDC فعال کنید)', 'SW is connected to pins (uncomment the SW lines in the XDC)');
@@ -435,8 +435,8 @@ export const EXERCISES: Record<string, Exercise> = {
     },
   },
   debounce: {
-    fa: `<p>LED15..LED0 را یک ثبات کنید که با مقدار <code>0x0001</code> شروع می‌شود و با هر فشار <b>BTNU</b> دقیقاً یک بیت به چپ می‌چرخد (بعد از LD15 به LD0 برمی‌گردد). از debouncer همین درس استفاده کنید. BTNU هم لرزش دارد و بدون debouncer یک فشار چند بار ثبات را جابه‌جا می‌کند.</p>`,
-    en: `<p>Make LED15..LED0 a register that starts at <code>0x0001</code> and rotates left by exactly one bit on every press of <b>BTNU</b> (after LD15 it wraps to LD0). Use this lesson's debouncer. BTNU bounces too, so without the debouncer one press moves the register several times.</p>`,
+    fa: `<p>LED15..LED0 را یک ثبات کنید که با مقدار <code>0x0001</code> شروع می‌شود و با هر فشار ${part('BTNU')} دقیقاً یک بیت به چپ می‌چرخد (بعد از ${part('LD15')} به ${part('LD0')} برمی‌گردد). از debouncer همین درس استفاده کنید. ${part('BTNU')} هم لرزش دارد و بدون debouncer یک فشار چند بار ثبات را جابه‌جا می‌کند.</p>`,
+    en: `<p>Make LED15..LED0 a register that starts at <code>0x0001</code> and rotates left by exactly one bit on every press of ${part('BTNU')} (after ${part('LD15')} it wraps to ${part('LD0')}). Use this lesson's debouncer. ${part('BTNU')} bounces too, so without the debouncer one press moves the register several times.</p>`,
     check(h, t) {
       h.run(100);
       t.need(h.led() === 1, `در شروع LED = 0x0001 (شما: ${hex(h.led())})`, `LED = 0x0001 at the start (yours: ${hex(h.led())})`);
@@ -458,8 +458,8 @@ export const EXERCISES: Record<string, Exercise> = {
     },
   },
   bin2bcd: {
-    fa: `<p>کنترل‌کننده را طوری تغییر دهید که تبدیل فقط با فشار <b>BTNC</b> شروع شود (با مقدار کلیدها در همان لحظه) و نمایشگر تا فشار بعدی نتیجهٔ قبلی را نگه دارد. <b>LD15</b> هم وقتی مبدل آماده است (<code>ready = 1</code>) روشن باشد. BTNC را به ورودی‌ها اضافه کنید و خطوط دکمه‌ها را در XDC فعال کنید.</p>`,
-    en: `<p>Change the controller so a conversion starts only when <b>BTNC</b> is pressed (with the switch value at that moment) and the display keeps the last result until the next press. Also light <b>LD15</b> while the converter is ready (<code>ready = 1</code>). Add BTNC to the inputs and uncomment the button lines in the XDC.</p>`,
+    fa: `<p>کنترل‌کننده را طوری تغییر دهید که تبدیل فقط با فشار ${part('BTNC')} شروع شود (با مقدار کلیدها در همان لحظه) و نمایشگر تا فشار بعدی نتیجهٔ قبلی را نگه دارد. ${part('LD15')} هم وقتی مبدل آماده است (<code>ready = 1</code>) روشن باشد. ${part('BTNC')} را به ورودی‌ها اضافه کنید و خطوط دکمه‌ها را در XDC فعال کنید.</p>`,
+    en: `<p>Change the controller so a conversion starts only when ${part('BTNC')} is pressed (with the switch value at that moment) and the display keeps the last result until the next press. Also light ${part('LD15')} while the converter is ready (<code>ready = 1</code>). Add ${part('BTNC')} to the inputs and uncomment the button lines in the XDC.</p>`,
     check(h, t) {
       needDevice(h, t, 'btn', 'BTNC به پایه وصل است (خطوط دکمه‌ها را در XDC فعال کنید)', 'BTNC is connected to a pin (uncomment the button lines in the XDC)');
       h.sw(1234);
@@ -501,8 +501,8 @@ export const EXERCISES: Record<string, Exercise> = {
     },
   },
   pwm: {
-    fa: `<p>LD0 را «نفس‌کشنده» کنید: روشنایی آن آرام از خاموش تا کامل زیاد و بعد دوباره کم شود و این کار تکرار شود. PWM را ۸ بیتی نگه دارید و هر <b>DIV</b> کلاک duty را یک پله بالا یا پایین ببرید. DIV یک <code>parameter</code> با مقدار پیش‌فرض <code>200_000</code> است.</p>`,
-    en: `<p>Make LD0 “breathe”: its brightness rises slowly from off to full, falls again, and repeats. Keep the 8-bit PWM and move the duty one step up or down every <b>DIV</b> clocks. DIV is a <code>parameter</code> with the default <code>200_000</code>.</p>`,
+    fa: `<p>${part('LD0')} را «نفس‌کشنده» کنید: روشنایی آن آرام از خاموش تا کامل زیاد و بعد دوباره کم شود و این کار تکرار شود. PWM را ۸ بیتی نگه دارید و هر <b>DIV</b> کلاک duty را یک پله بالا یا پایین ببرید. DIV یک <code>parameter</code> با مقدار پیش‌فرض <code>200_000</code> است.</p>`,
+    en: `<p>Make ${part('LD0')} “breathe”: its brightness rises slowly from off to full, falls again, and repeats. Keep the 8-bit PWM and move the duty one step up or down every <b>DIV</b> clocks. DIV is a <code>parameter</code> with the default <code>200_000</code>.</p>`,
     params: { DIV: 256 },
     check(h, t) {
       const W = 4096;
@@ -584,8 +584,8 @@ export const EXERCISES: Record<string, Exercise> = {
     },
   },
   i2c: {
-    fa: `<p>یک دستگاه دوم با آدرس <b>0x49</b> به همان دو سیم وصل کنید (یک نمونهٔ دیگر از <code>i2c_device</code> با <code>ADDR = 7'h49</code>، و <code>sda_low</code> آن هم مثل اولی در باس OR شود). حالا با SW14 روشن، master با 0x49 حرف می‌زند و باید ACK بگیرد و داده را دوباره بخواند.</p>`,
-    en: `<p>Connect a second device with address <b>0x49</b> to the same two wires (another <code>i2c_device</code> instance with <code>ADDR = 7'h49</code>, its <code>sda_low</code> ORed into the bus like the first one). With SW14 on, the master now talks to 0x49, and it must get an ACK and read the data back.</p>`,
+    fa: `<p>یک دستگاه دوم با آدرس <b>0x49</b> به همان دو سیم وصل کنید (یک نمونهٔ دیگر از <code>i2c_device</code> با <code>ADDR = 7'h49</code>، و <code>sda_low</code> آن هم مثل اولی در باس OR شود). حالا با ${part('SW14')} روشن، master با 0x49 حرف می‌زند و باید ACK بگیرد و داده را دوباره بخواند.</p>`,
+    en: `<p>Connect a second device with address <b>0x49</b> to the same two wires (another <code>i2c_device</code> instance with <code>ADDR = 7'h49</code>, its <code>sda_low</code> ORed into the bus like the first one). With ${part('SW14')} on, the master now talks to 0x49, and it must get an ACK and read the data back.</p>`,
     check(h, t) {
       const run = (sw: number) => {
         const tr = h.capture(['G16', 'H14'], 60_000, () => {
@@ -606,8 +606,8 @@ export const EXERCISES: Record<string, Exercise> = {
     },
   },
   sensors: {
-    fa: `<p>یک هشدار دما بسازید: وقتی دما <b>30.0 درجه یا بیشتر</b> است، LED رنگی <b>LD16 قرمز</b> شود و وقتی کمتر است <b>سبز</b>. خروجی‌های <code>LED16_R</code>، <code>LED16_G</code> و <code>LED16_B</code> را اضافه کنید و خطوط RGB را در XDC فعال کنید. بازهٔ بین خواندن‌ها <code>DIV</code> است. بررسی‌کننده آن را کوچک می‌کند و دمای سنسور را عوض می‌کند.</p>`,
-    en: `<p>Build a temperature alarm: when it is <b>30.0 degrees or more</b>, the RGB LED <b>LD16 turns red</b>, and below that it is <b>green</b>. Add the outputs <code>LED16_R</code>, <code>LED16_G</code> and <code>LED16_B</code> and uncomment the RGB lines in the XDC. The time between readings is <code>DIV</code>; the checker makes it small and changes the sensor's temperature.</p>`,
+    fa: `<p>یک هشدار دما بسازید: وقتی دما <b>30.0 درجه یا بیشتر</b> است، LED رنگی <b>${part('LD16')} قرمز</b> شود و وقتی کمتر است <b>سبز</b>. خروجی‌های <code>LED16_R</code>، <code>LED16_G</code> و <code>LED16_B</code> را اضافه کنید و خطوط RGB را در XDC فعال کنید. بازهٔ بین خواندن‌ها <code>DIV</code> است. بررسی‌کننده آن را کوچک می‌کند و دمای سنسور را عوض می‌کند.</p>`,
+    en: `<p>Build a temperature alarm: when it is <b>30.0 degrees or more</b>, the RGB LED <b>${part('LD16')} turns red</b>, and below that it is <b>green</b>. Add the outputs <code>LED16_R</code>, <code>LED16_G</code> and <code>LED16_B</code> and uncomment the RGB lines in the XDC. The time between readings is <code>DIV</code>; the checker makes it small and changes the sensor's temperature.</p>`,
     params: { DIV: 50_000 },
     check(h, t) {
       needDevice(h, t, 'rgb', 'LD16 به پایه‌ها وصل است (خطوط RGB را در XDC فعال کنید)', 'LD16 is connected to pins (uncomment the RGB LED lines in the XDC)');
@@ -632,8 +632,8 @@ export const EXERCISES: Record<string, Exercise> = {
     },
   },
   vga: {
-    fa: `<p>یک مربع ۱۰۰×۱۰۰ پیکسلی وسط صفحه روی نوارهای رنگی بکشید: ستون‌های <b>270 تا 369</b> و خط‌های <b>190 تا 289</b>. رنگ مربع را کلیدها تعیین می‌کنند: R = SW15..SW12، G = SW11..SW8 و B = SW7..SW4. بیرون مربع نوارهای رنگی مثل قبل دیده می‌شوند.</p>`,
-    en: `<p>Draw a 100×100-pixel square in the middle of the screen, over the colour bars: columns <b>270 to 369</b> and lines <b>190 to 289</b>. The switches set its colour: R = SW15..SW12, G = SW11..SW8 and B = SW7..SW4. Outside the square the colour bars stay as they are.</p>`,
+    fa: `<p>یک مربع ۱۰۰×۱۰۰ پیکسلی وسط صفحه روی نوارهای رنگی بکشید: ستون‌های <b>270 تا 369</b> و خط‌های <b>190 تا 289</b>. رنگ مربع را کلیدها تعیین می‌کنند: R = ${part('SW15..SW12')}، G = ${part('SW11..SW8')} و B = ${part('SW7..SW4')}. بیرون مربع نوارهای رنگی مثل قبل دیده می‌شوند.</p>`,
+    en: `<p>Draw a 100×100-pixel square in the middle of the screen, over the colour bars: columns <b>270 to 369</b> and lines <b>190 to 289</b>. The switches set its colour: R = ${part('SW15..SW12')}, G = ${part('SW11..SW8')} and B = ${part('SW7..SW4')}. Outside the square the colour bars stay as they are.</p>`,
     check(h, t) {
       needDevice(h, t, 'vga', 'VGA به پایه‌ها وصل است (خطوط VGA را در XDC فعال کنید)', 'VGA is connected to pins (uncomment the VGA lines in the XDC)');
       h.sw(0xf80 << 4);
@@ -680,8 +680,8 @@ export const EXERCISES: Record<string, Exercise> = {
     },
   },
   softcore: {
-    fa: `<p>فقط برنامه‌ی ROM را عوض کنید: پردازنده اعداد <b>فیبوناچی</b> ‎1، 2، 3، 5، 8، …، 233 را روی <b>LD7..LD0</b> نشان دهد، در هر تیک (<code>WAIT</code>) یک عدد، و بعد از 233 دوباره از 1 شروع کند. راهنمایی: دو عدد آخر را در RAM نگه دارید؛ 233 آخرین عدد فیبوناچی است که در ۸ بیت جا می‌شود. بررسی‌کننده <code>PERIOD</code> را کوچک می‌کند.</p>`,
-    en: `<p>Change only the program in the ROM: the processor shows the <b>Fibonacci</b> numbers 1, 2, 3, 5, 8, …, 233 on <b>LD7..LD0</b>, one number per tick (<code>WAIT</code>), and after 233 it starts again from 1. Hint: keep the last two numbers in RAM; 233 is the last Fibonacci number that fits in 8 bits. The checker makes <code>PERIOD</code> small.</p>`,
+    fa: `<p>فقط برنامه‌ی ROM را عوض کنید: پردازنده اعداد <b>فیبوناچی</b> ‎1، 2، 3، 5، 8، …، 233 را روی ${part('LD7..LD0')} نشان دهد، در هر تیک (<code>WAIT</code>) یک عدد، و بعد از 233 دوباره از 1 شروع کند. راهنمایی: دو عدد آخر را در RAM نگه دارید؛ 233 آخرین عدد فیبوناچی است که در ۸ بیت جا می‌شود. بررسی‌کننده <code>PERIOD</code> را کوچک می‌کند.</p>`,
+    en: `<p>Change only the program in the ROM: the processor shows the <b>Fibonacci</b> numbers 1, 2, 3, 5, 8, …, 233 on ${part('LD7..LD0')}, one number per tick (<code>WAIT</code>), and after 233 it starts again from 1. Hint: keep the last two numbers in RAM; 233 is the last Fibonacci number that fits in 8 bits. The checker makes <code>PERIOD</code> small.</p>`,
     params: { PERIOD: 400 },
     check(h, t) {
       const want = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 1, 2, 3];

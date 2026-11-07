@@ -532,15 +532,15 @@ social preview image.
 
 ### Acceptance checklist — Phase 3
 
-- [ ] Exactly one `:root` token block exists (`grep -c "^:root" src/theme.css src/style.css` → 1 and 0).
-- [ ] Light and dark themes render the landing page, workbench, editor, waveform viewer, LA, serial console,
+- [x] Exactly one `:root` token block exists (`grep -c "^:root" src/theme.css src/style.css` → 1 and 0).
+- [x] Light and dark themes render the landing page, workbench, editor, waveform viewer, LA, serial console,
       modules panel, schematic and the dialogs without unreadable text; `test/theme.test.ts` passes.
-- [ ] Theme cycles System/Light/Dark, persists, no flash of wrong theme on reload.
-- [ ] Persian pages use Vazirmatn for body and headings; hero and lesson titles look right at 1440/1280/390 px.
-- [ ] 15 figures implemented and placed; each lesson listed has its figure in both languages; the 7-segment figure is interactive.
-- [ ] Hovering `SW3` in a lesson pulses switch 3 on the board; first Run pulses the Try-it parts.
-- [ ] New logo and `og.png` in place; sharing the URL shows the image (check with an OG debugger or `curl` the head).
-- [ ] `npm test`, `npm run build` green; README updated.
+- [x] Theme cycles System/Light/Dark, persists, no flash of wrong theme on reload.
+- [x] Persian pages use Vazirmatn for body and headings; hero and lesson titles look right at 1440/1280/390 px.
+- [x] 15 figures implemented and placed; each lesson listed has its figure in both languages; the 7-segment figure is interactive.
+- [x] Hovering `SW3` in a lesson pulses switch 3 on the board; first Run pulses the Try-it parts.
+- [x] New logo and `og.png` in place; sharing the URL shows the image (check with an OG debugger or `curl` the head).
+- [x] `npm test`, `npm run build` green; README updated.
 
 ---
 

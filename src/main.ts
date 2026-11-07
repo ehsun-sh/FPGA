@@ -1,3 +1,4 @@
+import "./theme.css";
 import "@fontsource/inter/latin-400.css";
 import "@fontsource/inter/latin-500.css";
 import "@fontsource/inter/latin-600.css";
@@ -7,6 +8,11 @@ import "@fontsource/vazirmatn/arabic-400.css";
 import "@fontsource/vazirmatn/arabic-500.css";
 import "@fontsource/vazirmatn/arabic-700.css";
 import "@fontsource/vazirmatn/arabic-800.css";
+// Vazirmatn's own Latin glyphs, so Latin words inside Persian text match the Persian letters (Phase 3.2)
+import "@fontsource/vazirmatn/latin-400.css";
+import "@fontsource/vazirmatn/latin-500.css";
+import "@fontsource/vazirmatn/latin-700.css";
+import "@fontsource/vazirmatn/latin-800.css";
 import "@fontsource/jetbrains-mono/latin-400.css";
 import "@fontsource/jetbrains-mono/latin-600.css";
 import "./style.css";
@@ -44,10 +50,12 @@ import { num, TOUR, UI, type UiLang } from "./ui/strings";
 import { startTour, type TourStep } from "./ui/tour";
 import { ISSUES_URL, limitsDialog, shortcutsDialog } from "./ui/help";
 import { versionLabel } from "./version";
+import { BOARD_BG, cycleTheme, initTheme } from "./ui/theme";
 import { toolIcons, toolLegend, toolsBox } from "./ui/tools";
 import { lessonTools, type Tool } from "./lessons/tools";
 import { lessonTime } from "./lessons/time";
-import { ref } from "./lessons/helpers";
+import { partsIn, ref } from "./lessons/helpers";
+import { segPattern } from "./lessons/figures";
 import { helpHtml, predictHtml, progressMarks, quizHtml, resultHtml, LEARN_UI, levelDot, objectivesHtml, takeawaysHtml, type HelpState, type PredictState, type QuizState } from "./ui/learn";
 
 // ---------------------------------------------------------------- storage
@@ -84,6 +92,9 @@ const $ = <T extends HTMLElement = HTMLElement>(
   sel: string,
   root: ParentNode = document,
 ) => root.querySelector(sel) as T;
+
+// part names stay on one line in headings ("Nexys A7" must not wrap between its two words)
+const noBreakParts = (h: string) => h.replace(/\b(Nexys|Artix|Digilent) (A7|7|Nexys)\b/g, "$1&nbsp;$2");
 
 // ---------------------------------------------------------------- board
 const boardDef = getBoard(store.get("board"));
@@ -723,6 +734,7 @@ function doProgram(d: Design, map: Mapping) {
   $("#hw-dev").textContent = `${hwDev} (Programmed)`;
   $("#hw-dev").classList.add("ok");
   setRunState();
+  firstRunHighlight();
 }
 
 function runFlow() {
@@ -1287,7 +1299,7 @@ function renderLesson() {
 <div class="lesson-head">
   <div class="lesson-meta"><span class="chapter">${esc(l10nChapter(chapterOf(lesson)))}</span>${of}${read}</div>
   ${pos < 0 ? "" : `<div class="bar"><i style="width:${Math.round((100 * (pos + 1)) / course.length)}%"></i></div>`}
-  <h1>${esc(tx.title)}</h1><p class="summary">${esc(tx.summary)}</p>
+  <h1>${noBreakParts(esc(tx.title))}</h1><p class="summary">${esc(tx.summary)}</p>
 </div>
 ${objectivesHtml(lesson, tx, uiLang, ref)}
 ${toolsBox(lesson, uiLang)}
@@ -1898,6 +1910,9 @@ function act(name: string) {
     case "report-problem":
       window.open(ISSUES_URL, "_blank", "noopener");
       break;
+    case "theme":
+      cycleTheme();
+      break;
     case "phone-note-close":
       store.set("phone-note", "1");
       document.body.classList.add("phone-note-off");
@@ -1952,6 +1967,8 @@ document.addEventListener("click", (ev) => {
     if (found && !(homeOpen && found === lesson)) openLesson(found);
     if (found && homeOpen) goLab();
   }
+  const seg = t.closest?.("[data-seg]");
+  if (seg) toggleSeg(seg);
   const ui = t.closest("[data-ui]") as HTMLElement | null;
   if (ui) setUiLang(ui.dataset.ui as UiLang);
   const lg = t.closest("[data-lang]") as HTMLElement | null;
@@ -1964,6 +1981,58 @@ document.addEventListener("click", (ev) => {
   if (rt) showRight(rt.dataset.rtab as "hw");
   const m = t.closest("[data-m]") as HTMLElement | null;
   if (m) setMobile(m.dataset.m as MobileView);
+});
+
+// the interactive seven-segment figure: a segment toggles on click (or Enter/Space) and the pattern line follows
+function toggleSeg(seg: Element) {
+  const on = !seg.classList.contains("on");
+  seg.classList.toggle("on", on);
+  seg.setAttribute("aria-pressed", String(on));
+  const svg = seg.closest("svg");
+  if (!svg) return;
+  const state: Record<string, boolean> = {};
+  svg.querySelectorAll("[data-seg]").forEach((x) => (state[x.getAttribute("data-seg")!] = x.classList.contains("on")));
+  const out = svg.querySelector(".seg-code");
+  if (out) out.textContent = (out.getAttribute("data-prefix") ?? "") + segPattern(state);
+}
+// a board part named in the text (part() chips): hovering or focusing it lights that part on the 3D board. Phones
+// (no hover) skip the hover; a focused chip still works.
+const canHover = matchMedia("(hover: hover)");
+const pinOf = (t: EventTarget | null) => (t as Element | null)?.closest?.<HTMLElement>(".pin[data-part]") ?? null;
+for (const [on, off] of [
+  ["mouseover", "mouseout"],
+  ["focusin", "focusout"],
+] as const) {
+  document.addEventListener(on, (ev) => {
+    const pin = pinOf(ev.target);
+    if (!pin || (on === "mouseover" && !canHover.matches)) return;
+    clearTimeout(firstRunTimer);
+    board.highlight?.([pin.dataset.part!]);
+  });
+  document.addEventListener(off, (ev) => {
+    const pin = pinOf(ev.target);
+    if (!pin || pin.contains((ev as MouseEvent | FocusEvent).relatedTarget as Node | null)) return;
+    board.highlight?.([]);
+  });
+}
+// the first successful Run on Board in a lesson lights every part its "Try it on the board" text names, for 2 s
+let firstRunTimer: ReturnType<typeof setTimeout> | undefined;
+function firstRunHighlight() {
+  if (lesson === PLAYGROUND || store.get("ran:" + lesson.id)) return;
+  store.set("ran:" + lesson.id, "1");
+  const parts = partsIn(text(lesson).tryIt);
+  if (!parts.length) return;
+  board.highlight?.(parts);
+  clearTimeout(firstRunTimer);
+  firstRunTimer = setTimeout(() => board.highlight?.([]), 2000);
+}
+
+document.addEventListener("keydown", (ev) => {
+  const seg = (ev.target as Element).closest?.("[data-seg]");
+  if (seg && (ev.key === "Enter" || ev.key === " ")) {
+    ev.preventDefault();
+    toggleSeg(seg);
+  }
 });
 
 // menu bar: opens on hover or click; arrow keys move through an open menu and Escape closes it
@@ -2391,6 +2460,8 @@ document.querySelectorAll<HTMLElement>("[data-lang]").forEach((b) => markLang(b)
 applyFlowSections();
 applyUiLang();
 bindLangMenu();
+// the theme button sits in both top bars; the 3D scene's backdrop follows the theme too
+initTheme({ icon: (n) => icon(n, 16), lang: () => uiLang, onChange: (t) => board.setBackground?.(BOARD_BG[t]) });
 $("#src-name").textContent = fileName();
 renderLessonList();
 loadLa();
