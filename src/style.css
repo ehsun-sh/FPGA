@@ -4457,3 +4457,25 @@ fieldset.q legend {
     transition: none;
   }
 }
+
+/* ---------------------------------------------------------------- logo (3.5): a LUT4 with its output cell lit */
+.logo {
+  display: inline-flex;
+  flex: none;
+  color: var(--text);
+}
+.logo-mark .lg-on {
+  fill: currentColor;
+}
+.logo-mark .lg-off {
+  fill: currentColor;
+  opacity: 0.22;
+}
+.logo-mark .lg-hot {
+  fill: var(--brand);
+}
+.home-foot .logo {
+  color: var(--muted);
+  vertical-align: -3px;
+  margin-inline-end: 8px;
+}
