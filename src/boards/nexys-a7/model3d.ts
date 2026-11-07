@@ -267,6 +267,8 @@ export class NexysA7Model implements BoardView {
   private disposed = false;
   // parts the lesson text points at (highlight()): halo sprites and digit plates, pulsed in tick()
   private hl: Highlight | null = null;
+  // the desk fills most of the view, so the theme's background colour has to reach it too (setBackground)
+  private deskMat!: THREE.MeshStandardMaterial;
 
   constructor(private container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -582,7 +584,8 @@ export class NexysA7Model implements BoardView {
     fill.position.set(8, 6, -6);
     this.scene.add(fill);
     // desk
-    const desk = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.MeshStandardMaterial({ color: '#2b2f36', roughness: 0.95 }));
+    this.deskMat = new THREE.MeshStandardMaterial({ color: '#2b2f36', roughness: 0.95 });
+    const desk = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), this.deskMat);
     desk.rotation.x = -Math.PI / 2;
     desk.position.y = -0.62;
     desk.receiveShadow = true;
@@ -1135,6 +1138,9 @@ export class NexysA7Model implements BoardView {
 
   setBackground(hex: string) {
     (this.scene.background as THREE.Color).set(hex);
+    // the desk sits a little lighter than the horizon (#1d2026 -> #2b2f36, the original light-theme pair)
+    const n = parseInt(hex.slice(1), 16) + 0x0e0f10;
+    this.deskMat.color.set('#' + n.toString(16).padStart(6, '0'));
   }
 
   setSwitch(i: number, on: boolean, notify = false) {
