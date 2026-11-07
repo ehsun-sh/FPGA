@@ -1,5 +1,5 @@
 // English text for the lessons. Code and constraints are shared with the Persian version (lessons.ts).
-import { ref, truth } from './helpers';
+import { ref, truth, part } from './helpers';
 import type { Question } from './predict';
 import { TINY8_ISA } from './softcore';
 import { figAdder, figDivider, figFlipFlop, figFsm, figGates, figI2c, figLut, figMultiplex, figMux, figSeg7, figShiftReg, figSpi, figTiny8, figUartFrame, figVga, figure } from './figures';
@@ -43,11 +43,11 @@ ${figure(figLut(), 'A 4-input LUT is really a 16-bit memory: inputs A to D pick 
 <p>On this site one click on <span class="kbd">▶ Run</span> performs all of these steps and the result appears on the 3D board on the right.</p>
 <h3>A tour of the board</h3>
 <ul>
-  <li><b>SW0 to SW15</b>: 16 slide switches (inputs)</li>
-  <li><b>LD0 to LD15</b>: 16 green LEDs (outputs)</li>
-  <li><b>BTNC/BTNU/BTNL/BTNR/BTND</b>: five push buttons, plus <b>CPU RESET</b> (active-low)</li>
-  <li>Two 4-digit <b>seven-segment</b> displays (AN0 to AN7)</li>
-  <li>Two RGB LEDs, <b>LD16</b> and <b>LD17</b></li>
+  <li>${part('SW0..SW15', 'SW0 to SW15')}: 16 slide switches (inputs)</li>
+  <li>${part('LD0..LD15', 'LD0 to LD15')}: 16 green LEDs (outputs)</li>
+  <li>${part('BTNC')}/${part('BTNU')}/${part('BTNL')}/${part('BTNR')}/${part('BTND')}: five push buttons, plus ${part('CPU RESET')} (active-low)</li>
+  <li>Two 4-digit <b>seven-segment</b> displays (${part('AN0..AN7', 'AN0 to AN7')})</li>
+  <li>Two RGB LEDs, ${part('LD16')} and ${part('LD17')}</li>
   <li>A <b>100 MHz</b> clock on pin E3, named <code>CLK100MHZ</code></li>
 </ul>
 <h3>Your first design</h3>
@@ -55,7 +55,7 @@ ${figure(figLut(), 'A 4-input LUT is really a 16-bit memory: inputs A to D pick 
 <h3>How this course is organised</h3>
 <p>The first chapters follow Pong P. Chu's book <i>FPGA Prototyping by Verilog/VHDL Examples</i>: gates first, then RT-level combinational circuits, regular sequential circuits and state machines (FSM and FSMD). Then serial communication (UART, SPI and I²C), I/O and peripherals, and finally memory and a small soft-core processor that uses it. Every lesson has an explanation, Verilog and VHDL code, a run on the board and an exercise. The text and code here are written for this site; the book is a good companion for going deeper.</p>`,
     tryIt: `<p>Press <span class="kbd">▶ Run</span>, then click the switches at the bottom of the board. Each switch that is up (ON) lights the LED above it.</p>`,
-    exercise: `<p>Change the code so the LED order is reversed (SW0 → LD15). Hint: in Verilog use <code>{SW[0], SW[1], ...}</code> or a loop.</p>`,
+    exercise: `<p>Change the code so the LED order is reversed (${part('SW0')} → ${part('LD15')}). Hint: in Verilog use <code>{SW[0], SW[1], ...}</code> or a loop.</p>`,
   },
   gates: {
     title: 'Logic gates',
@@ -86,8 +86,8 @@ ${truth(
   ],
 )}
 <p>Note: an FPGA does not build separate gates; synthesis packs all these functions into <b>LUTs</b>. See the estimated LUT count in the synthesis report (Reports tab).</p>`,
-    tryIt: `<p>Put <b>SW0</b> and <b>SW1</b> in all four combinations and compare LD0 to LD6 with the truth table. LD2 (NOT) depends only on SW0.</p>`,
-    exercise: `<p>Build a three-input AND gate (SW0, SW1, SW2) and show its output on LD7. Make SW 3 bits and LED 8 bits wide.</p>`,
+    tryIt: `<p>Put ${part('SW0')} and ${part('SW1')} in all four combinations and compare ${part('LD0..LD6', 'LD0 to LD6')} with the truth table. ${part('LD2')} (NOT) depends only on ${part('SW0')}.</p>`,
+    exercise: `<p>Build a three-input AND gate (${part('SW0')}, ${part('SW1')}, ${part('SW2')}) and show its output on ${part('LD7')}. Make SW 3 bits and LED 8 bits wide.</p>`,
   },
   mux: {
     title: 'Multiplexers (MUX)',
@@ -115,8 +115,8 @@ ${truth(
   <li>In VHDL: <code>with ... select</code></li>
 </ul>
 <p class="note">⚠️ In a combinational block, always assign a value in every case (<code>default</code> or <code>when others</code>); otherwise synthesis infers a <b>latch</b>.</p>`,
-    tryIt: `<p>Turn SW0 on and SW1 off. Now flip SW15 to switch between the two inputs and watch LD0. For the 4-to-1 MUX, change SW4 and SW5 and see which switch LD1 follows.</p>`,
-    exercise: `<p>Build an 8-to-1 MUX: inputs SW0 to SW7, select SW15..SW13, output LD2.</p>`,
+    tryIt: `<p>Turn ${part('SW0')} on and ${part('SW1')} off. Now flip ${part('SW15')} to switch between the two inputs and watch ${part('LD0')}. For the 4-to-1 MUX, change ${part('SW4')} and ${part('SW5')} and see which switch ${part('LD1')} follows.</p>`,
+    exercise: `<p>Build an 8-to-1 MUX: inputs ${part('SW0..SW7', 'SW0 to SW7')}, select ${part('SW15..SW13')}, output ${part('LD2')}.</p>`,
   },
   adder: {
     title: 'Adders and hierarchical design',
@@ -147,8 +147,8 @@ ${truth(
   <li>For comparison, the same sum with the <code>+</code> operator on <b>LD12..LD8</b></li>
 </ul>
 <p>In practice we always write <code>+</code>; synthesis maps it onto the chip's fast carry chain (CARRY4).</p>`,
-    tryIt: `<p>For example set A = 0101 (SW0 and SW2 on) and B = 0011 (SW4 and SW5 on). The sum 8, i.e. <b>01000</b>, appears on LD4..LD0 and again on LD12..LD8.</p>`,
-    exercise: `<p>Turn the adder into a <b>subtractor</b>: A − B = A + (~B) + 1. Use SW8 to choose between add and subtract.</p>`,
+    tryIt: `<p>For example set A = 0101 (${part('SW0')} and ${part('SW2')} on) and B = 0011 (${part('SW4')} and ${part('SW5')} on). The sum 8, i.e. <b>01000</b>, appears on ${part('LD4..LD0')} and again on ${part('LD12..LD8')}.</p>`,
+    exercise: `<p>Turn the adder into a <b>subtractor</b>: A − B = A + (~B) + 1. Use ${part('SW8')} to choose between add and subtract.</p>`,
   },
   seg7: {
     title: 'Seven-segment display',
@@ -174,8 +174,8 @@ ${truth(
   ],
 )}
 <p>This circuit is <b>combinational</b>: a look-up table (a small ROM) described with <code>case</code> and implemented in LUTs.</p>`,
-    tryIt: `<p>Use SW0 to SW3 to make the numbers 0 to 15 and watch the right-most digit show 0 to F.</p>`,
-    exercise: `<p>Change AN so all eight digits show the same value. Then use SW15 to switch the decimal point (DP) on and off.</p>`,
+    tryIt: `<p>Use ${part('SW0..SW3', 'SW0 to SW3')} to make the numbers 0 to 15 and watch the right-most digit show 0 to F.</p>`,
+    exercise: `<p>Change AN so all eight digits show the same value. Then use ${part('SW15')} to switch the decimal point (DP) on and off.</p>`,
   },
   ff: {
     title: 'Clocks and flip-flops (sequential logic)',
@@ -192,8 +192,8 @@ ${figure(figFlipFlop(), 'Q copies D only at the rising edges of clk (dashed line
 <h3>Enable and reset</h3>
 <p>This lesson uses 16 flip-flops (a register). While <b>BTNC</b> is held, the switch values are stored; after you release it the LEDs <b>keep</b> the old value even if you change the switches. The red <b>CPU RESET</b> button (active-low) clears the register.</p>
 <p class="note">💡 Always use <code>&lt;=</code> in clocked blocks so all flip-flops update together. The synthesis report should show <b>16 FF</b>.</p>`,
-    tryIt: `<p>Turn on a few switches; the LEDs don't change. Now press the centre button (BTNC): the pattern is stored. Change the switches and see the LEDs keep the old value. The red button clears everything.</p>`,
-    exercise: `<p>Shift the register one bit left with BTNU and one bit right with BTND (hint: <code>{LED[14:0], 1'b0}</code>). Why does one press empty the register so quickly? (The answer is in the next lesson!)</p>`,
+    tryIt: `<p>Turn on a few switches; the LEDs don't change. Now press the centre button (${part('BTNC')}): the pattern is stored. Change the switches and see the LEDs keep the old value. The red button clears everything.</p>`,
+    exercise: `<p>Shift the register one bit left with ${part('BTNU')} and one bit right with ${part('BTND')} (hint: <code>{LED[14:0], 1'b0}</code>). Why does one press empty the register so quickly? (The answer is in the next lesson!)</p>`,
   },
   counter: {
     title: 'Counters and clock division',
@@ -210,7 +210,7 @@ ${figure(figDivider(), 'The counter adds one every clock and wraps to zero after
 </ul>
 <p class="note">⏱️ The simulator tries to run the clock at the real 100 MHz. The achieved speed is shown in the status bar. On a slower computer the blinking is slower too. Use the <b>Clock</b> menu to slow the clock down and see the details.</p>
 <p>In Vivado simulations engineers also shrink <code>HALF_SECOND</code> to test faster. Try it!</p>`,
-    tryIt: `<p>Press Run. LD0 should blink once per second and LD15..LD8 should count in binary. The red button resets the counter.</p>`,
+    tryIt: `<p>Press Run. ${part('LD0')} should blink once per second and ${part('LD15..LD8')} should count in binary. The red button resets the counter.</p>`,
     exercise: `<p>Build a “Knight Rider” light: one lit LED that moves one position every 100 ms and bounces at both ends.</p>`,
   },
   multiplex: {
@@ -225,7 +225,7 @@ ${figure(figDivider(), 'The counter adds one every clock and wraps to zero after
 </ul>
 ${figure(figMultiplex(), 'The AN lines are active-low and take turns; at the same time CA..CG carry that digit\'s pattern. Each digit is on for about 0.65 ms, fast enough for the eye to see all four at once.')}
 <p>This lesson combines everything so far: <b>counter</b> + <b>MUX</b> + <b>decoder</b> + <b>hierarchy</b>.</p>`,
-    tryIt: `<p>Change the switches; the four right-most digits show SW15..SW0 in hex. Set the <b>Clock</b> menu to <b>10 Hz</b> to watch the digits light up one by one!</p>`,
+    tryIt: `<p>Change the switches; the four right-most digits show ${part('SW15..SW0')} in hex. Set the <b>Clock</b> menu to <b>10 Hz</b> to watch the digits light up one by one!</p>`,
     exercise: `<p>Extend the display to 8 digits: the four left digits show a counter that increments every second.</p>`,
   },
   fsm: {
@@ -243,8 +243,8 @@ ${figure(figFsm(['RED', 'GREEN', 'YELLOW'], [[0, 1, '2 s'], [1, 2, '2 s or BTNC'
 </ul>
 <p>Standard FSM structure: one sequential block that <b>registers the state</b> and one combinational block for the <b>outputs</b>.</p>
 <p class="note">💡 The real RGB LED is very bright; real designs dim it with PWM.</p>`,
-    tryIt: `<p>The RGB LED LD16 (next to the displays) cycles red, green and yellow, and LD2..LD0 show the current state. Press BTNC while it is green.</p>`,
-    exercise: `<p>Add a “flashing yellow” state that is active while SW0 is on (like a traffic light at night).</p>`,
+    tryIt: `<p>The RGB LED ${part('LD16')} (next to the displays) cycles red, green and yellow, and ${part('LD2..LD0')} show the current state. Press ${part('BTNC')} while it is green.</p>`,
+    exercise: `<p>Add a “flashing yellow” state that is active while ${part('SW0')} is on (like a traffic light at night).</p>`,
   },
   uart: {
     title: 'UART transmitter and the logic analyzer',
@@ -270,7 +270,7 @@ ${figure(figUartFrame(), 'Sending <code>H</code> (0x48): the line idles high, th
   <li>The <b>UART decoder</b> turns the bits into bytes and characters. SPI and I²C decoders are available too.</li>
 </ul>
 <p class="note">💡 The logic analyzer is already set up for this lesson: channel TX on pin D4, a falling-edge trigger and a UART decoder at 115200 baud.</p>`,
-    tryIt: `<p>Run the design and open the logic analyzer (the <span class="kbd">⎍ Logic Analyzer</span> button or Ctrl+L). Press <b>Run</b> in its window, then press BTNC on the board, or turn on SW0 to send the message over and over. You will see the TX waveform and the decoded bytes <b>H e l l o …</b>. Zoom with the mouse wheel, place two cursors with click and Shift+click, and measure one bit time (about 8.68 µs).</p>`,
+    tryIt: `<p>Run the design and open the logic analyzer (the <span class="kbd">⎍ Logic Analyzer</span> button or Ctrl+L). Press <b>Run</b> in its window, then press ${part('BTNC')} on the board, or turn on ${part('SW0')} to send the message over and over. You will see the TX waveform and the decoded bytes <b>H e l l o …</b>. Zoom with the mouse wheel, place two cursors with click and Shift+click, and measure one bit time (about 8.68 µs).</p>`,
     exercise: `<p>Change the speed to 9600 baud (what is <code>CLKS_PER_BIT</code> now?) and change the baud rate in the decoder settings too. What does the decoder show if you change only one of them?</p>`,
   },
   uart_rx: {
@@ -317,7 +317,7 @@ ${figure(figSpi(), 'In mode 0 SCLK idles low. Both sides read a bit on the risin
   <li>SW7..SW0: the byte to send; BTNC: send once; SW15: send continuously (every 100 µs)</li>
   <li>LD7..LD0: the byte the master received; LD15..LD8: the byte the device received</li>
 </ul>`,
-    tryIt: `<p>Run the design and open the logic analyzer: four channels on JA1 to JA4 and an SPI decoder are already set up, and the probe wires show on the 3D board. Press <b>Run</b> in the analyzer window, set a byte with SW7..SW0 and press BTNC. The MOSI row shows your byte and the MISO row shows the previous one. Measure the SCLK frequency with two cursors.</p>`,
+    tryIt: `<p>Run the design and open the logic analyzer: four channels on JA1 to JA4 and an SPI decoder are already set up, and the probe wires show on the 3D board. Press <b>Run</b> in the analyzer window, set a byte with ${part('SW7..SW0')} and press ${part('BTNC')}. The MOSI row shows your byte and the MISO row shows the previous one. Measure the SCLK frequency with two cursors.</p>`,
     exercise: `<p>Lower <code>DIV</code> so SCLK reaches 10 MHz and look at it in the logic analyzer. Then implement mode 3 (CPOL=1) and change the decoder setting to match.</p>`,
   },
   i2c: {
@@ -340,8 +340,8 @@ ${figure(figI2c(), 'After START come the 7-bit address and the R/W bit (W here, 
   <li>SW7..SW0: data; BTNC: one transaction; SW15: repeat every 1 ms; SW14: wrong address (0x49) to see a NAK</li>
   <li>LD7..LD0: the byte read from the device; LD15: the device did not answer</li>
 </ul>`,
-    tryIt: `<p>Run the design, open the logic analyzer and press <b>Run</b>. Set a number with SW7..SW0 and press BTNC: the I²C decoder shows start and stop, the address, the ACKs and the data, and the same number comes back on LD7..LD0. Now turn on SW14 and press BTNC again: this time no device answers, and you see a <b>NAK</b> and LD15 lights.</p>`,
-    exercise: `<p>Connect a second device with address 0x49 to the same two wires (another <code>i2c_device</code> instance, OR its <code>sda_low</code> into the bus). SW14 should now select the second device.</p>`,
+    tryIt: `<p>Run the design, open the logic analyzer and press <b>Run</b>. Set a number with ${part('SW7..SW0')} and press ${part('BTNC')}: the I²C decoder shows start and stop, the address, the ACKs and the data, and the same number comes back on ${part('LD7..LD0')}. Now turn on ${part('SW14')} and press ${part('BTNC')} again: this time no device answers, and you see a <b>NAK</b> and ${part('LD15')} lights.</p>`,
+    exercise: `<p>Connect a second device with address 0x49 to the same two wires (another <code>i2c_device</code> instance, OR its <code>sda_low</code> into the bus). ${part('SW14')} should now select the second device.</p>`,
   },
   testbench: {
     title: 'Simulation with a testbench and waveforms',
@@ -371,8 +371,8 @@ ${figure(figI2c(), 'After START come the 7-bit address and the R/W bit (W here, 
 </ul>
 <p>Every other lesson also gets a ready-made testbench in the <code>tb.v</code> / <code>tb.vhd</code> tab. It is generated from the design's ports, and you can edit it.</p>`,
     tryIt: `<p>Press <span class="kbd">∿ Simulate</span>. The Tcl Console prints <code>PASS</code> and the waveform opens on the right with the clock, reset, SW and LED. Press <b>Fit</b> and watch LED step once every 4 clocks. Then change <code>10</code> to <code>11</code> in the testbench tab and simulate again to see the error message.</p>
-<p>It works on the board too: press <span class="kbd">▶ Run</span> and turn on SW0. The LEDs count up every half second.</p>`,
-    exercise: `<p>Assert the reset again in the middle of the testbench (<code>CPU_RESETN = 0</code>) and check that the counter returns to zero. Then add a check that the counter stays put for 100 clocks while SW0 is off.</p>`,
+<p>It works on the board too: press <span class="kbd">▶ Run</span> and turn on ${part('SW0')}. The LEDs count up every half second.</p>`,
+    exercise: `<p>Assert the reset again in the middle of the testbench (<code>CPU_RESETN = 0</code>) and check that the counter returns to zero. Then add a check that the counter stays put for 100 clocks while ${part('SW0')} is off.</p>`,
   },
   playground: {
     title: 'Playground',
@@ -428,8 +428,8 @@ ${truth(
   <li>VHDL: the conditional assignment <code>when ... else</code>. Conditions are tested in order, so the first true one wins, which is exactly a priority.</li>
 </ul>
 <p class="note">💡 The <b>valid</b> output is needed because "no request" and "only SW8" both produce code 000.</p>`,
-    tryIt: `<p>Turn on SW3 and set a number with SW2..SW0: exactly one of LD7..LD0 lights. Now turn on a few of SW15..SW8: LD14..LD12 show the number of the highest switch that is on, and LD15 says there is a request.</p>`,
-    exercise: `<p>Build a 2-to-4 decoder that selects the display digits AN3..AN0. Remember that AN is active-low.</p>`,
+    tryIt: `<p>Turn on ${part('SW3')} and set a number with ${part('SW2..SW0')}: exactly one of ${part('LD7..LD0')} lights. Now turn on a few of ${part('SW15..SW8')}: ${part('LD14..LD12')} show the number of the highest switch that is on, and ${part('LD15')} says there is a request.</p>`,
+    exercise: `<p>Build a 2-to-4 decoder that selects the display digits ${part('AN3..AN0')}. Remember that AN is active-low.</p>`,
   },
   shifter: {
     title: 'Barrel shifter',
@@ -451,8 +451,8 @@ ${truth(
   <li>Amount: <code>SW[10:8]</code>, direction: <code>SW15</code> (1 = left)</li>
   <li>Result: <code>LED[7:0]</code></li>
 </ul>`,
-    tryIt: `<p>Turn on only SW0 and change SW10..SW8: the lit LED rotates right and wraps around. Turn on SW15 to change direction.</p>`,
-    exercise: `<p>Add a third control input (for example SW14) that chooses between rotate and logical shift (filling with zeros).</p>`,
+    tryIt: `<p>Turn on only ${part('SW0')} and change ${part('SW10..SW8')}: the lit LED rotates right and wraps around. Turn on ${part('SW15')} to change direction.</p>`,
+    exercise: `<p>Add a third control input (for example ${part('SW14')}) that chooses between rotate and logical shift (filling with zeros).</p>`,
   },
   alu: {
     title: 'A simple 4-bit ALU',
@@ -478,7 +478,7 @@ ${truth(
   <li>The <b>zero flag</b> on <code>LD15</code> lights when the low four result bits are zero. Processors use this flag for conditional branches.</li>
 </ul>
 <p class="note">💡 In Verilog an expression takes its width from the left side of the assignment: because <code>r</code> is 5 bits, <code>a + b</code> is computed in 5 bits and the carry is kept. In VHDL we widen the operands ourselves with <code>resize</code>.</p>`,
-    tryIt: `<p>Set A with SW3..SW0 and B with SW7..SW4, and pick the operation with SW15..SW13. For example make A equal B and choose SUB: the result is zero and LD15 lights.</p>`,
+    tryIt: `<p>Set A with ${part('SW3..SW0')} and B with ${part('SW7..SW4')}, and pick the operation with ${part('SW15..SW13')}. For example make A equal B and choose SUB: the result is zero and ${part('LD15')} lights.</p>`,
     exercise: `<p>Show the result on the seven-segment display instead of the LEDs (reuse the decoder from ${ref('seg7')}).</p>`,
   },
   shiftreg: {
@@ -494,7 +494,7 @@ ${truth(
 ${figure(figShiftReg(), 'Each box is a flip-flop, all on one clock. The orange boxes are the taps: their XOR is the new bit that enters Q0.')}
 <p>To see the motion, we make a <b>tick</b> four times a second (every 25 million clocks), as in the counter lesson. The registers only change when <code>tick=1</code>; this is a <b>clock enable</b>, so everything still runs on one clock.</p>
 <p class="note">⚠️ An LFSR must never become zero, because it would stay there. That is why its initial and reset value is 01.</p>`,
-    tryIt: `<p>LD7..LD0 show the LFSR's pseudo-random pattern. Toggle SW0 a few times and watch the bits march left on LD15..LD8. The red button returns everything to the start.</p>`,
+    tryIt: `<p>${part('LD7..LD0')} show the LFSR's pseudo-random pattern. Toggle ${part('SW0')} a few times and watch the bits march left on ${part('LD15..LD8')}. The red button returns everything to the start.</p>`,
     exercise: `<p>Change the taps (for example only <code>q7 ⊕ q6</code>) and count in simulation after how many steps the pattern repeats. Why is it less than 255?</p>`,
   },
   stopwatch: {
@@ -516,8 +516,8 @@ ${figure(figShiftReg(), 'Each box is a flip-flop, all on one clock. The orange b
   <li><code>SW0</code> = run/stop (go)</li>
   <li><code>BTNU</code> = clear</li>
 </ul>`,
-    tryIt: `<p>Turn SW0 on to start the stopwatch and off to stop it. BTNU clears it. Keep the speed at <b>Real-time</b> so it matches a real clock.</p>`,
-    exercise: `<p>Add a minutes digit (on AN3) so the stopwatch counts to 9:59.9. The tens-of-seconds digit must now wrap at 5.</p>`,
+    tryIt: `<p>Turn ${part('SW0')} on to start the stopwatch and off to stop it. ${part('BTNU')} clears it. Keep the speed at <b>Real-time</b> so it matches a real clock.</p>`,
+    exercise: `<p>Add a minutes digit (on ${part('AN3')}) so the stopwatch counts to 9:59.9. The tens-of-seconds digit must now wrap at 5.</p>`,
   },
   debounce: {
     title: 'Button debouncing',
@@ -542,8 +542,8 @@ ${figure(figFsm(['ZERO', 'WAIT1', 'ONE', 'WAIT0'], [[0, 0, 'in=0'], [0, 1, 'in=1
 <h3>The experiment</h3>
 <p>There are two counters: one counts edges of the <b>raw</b> BTNC input (LD7..LD0), the other counts edges of the <b>debounced</b> signal (LD15..LD8). BTNU clears both.</p>
 <p class="note">💡 The simulator's buttons are clean by default. Turn on <b>Bouncy buttons</b> above the board to make them bounce like a real button.</p>`,
-    tryIt: `<p>First turn on <b>Bouncy buttons</b> above the board. Then press BTNC a few times: LD15..LD8 (debounced) count every press exactly once, but LD7..LD0 (raw) jump by several on each press. BTNU clears both.</p>`,
-    exercise: `<p>Add the debouncer to the register (flip-flop) lesson so that each press of BTNU shifts the register by exactly one bit.</p>`,
+    tryIt: `<p>First turn on <b>Bouncy buttons</b> above the board. Then press ${part('BTNC')} a few times: ${part('LD15..LD8')} (debounced) count every press exactly once, but ${part('LD7..LD0')} (raw) jump by several on each press. ${part('BTNU')} clears both.</p>`,
+    exercise: `<p>Add the debouncer to the register (flip-flop) lesson so that each press of ${part('BTNU')} shifts the register by exactly one bit.</p>`,
   },
   bin2bcd: {
     title: 'FSMD: binary to BCD',
@@ -568,8 +568,8 @@ ${truth(
 )}
 ${figure(figFsm(['IDLE', 'OP', 'DONE'], [[0, 1, 'start'], [1, 1, 'n ≠ 0'], [1, 2, 'n = 0'], [2, 0, '']], { title: 'Binary-to-BCD FSMD state diagram' }), 'The FSMD waits in IDLE for start, repeats the add-3-and-shift step 13 times in OP (until the counter n reaches zero), and stores the result in DONE.')}
 <p>The <code>start</code> input is tied to 1, so the conversion repeats continuously (once every 15 clocks) and the result is always fresh.</p>`,
-    tryIt: `<p>Build a binary number with SW12..SW0 (the LEDs show it). The display shows its decimal value; for example all 13 switches on gives <b>8191</b>.</p>`,
-    exercise: `<p>Change the controller so a conversion starts only when BTNC is pressed, and LD15 is lit while <code>ready=1</code>.</p>`,
+    tryIt: `<p>Build a binary number with ${part('SW12..SW0')} (the LEDs show it). The display shows its decimal value; for example all 13 switches on gives <b>8191</b>.</p>`,
+    exercise: `<p>Change the controller so a conversion starts only when ${part('BTNC')} is pressed, and ${part('LD15')} is lit while <code>ready=1</code>.</p>`,
   },
   ram: {
     title: 'Synchronous RAM',
@@ -594,7 +594,7 @@ ${truth(
   ],
 )}
 <p class="note">💡 Check the Utilization report to see which resource the memory uses. For larger memories (for example 1024 × 8) Vivado uses BRAM.</p>`,
-    tryIt: `<p>Pick an address with SW11..SW8, set data with SW7..SW0 and press BTNC. Change the address and come back: the stored data reappears on LD7..LD0, even if you changed SW7..SW0.</p>`,
+    tryIt: `<p>Pick an address with ${part('SW11..SW8')}, set data with ${part('SW7..SW0')} and press ${part('BTNC')}. Change the address and come back: the stored data reappears on ${part('LD7..LD0')}, even if you changed ${part('SW7..SW0')}.</p>`,
     exercise: `<p>Build a ROM holding the message "HELLO" and use a counter to show the letters one by one on the display.</p>`,
   },
   pwm: {
@@ -613,7 +613,7 @@ ${truth(
   <li><code>SW[15:8]</code> → brightness of LD16's green and of LD1</li>
 </ul>
 <p>Mixing red and green in different ratios makes orange and yellow.</p>`,
-    tryIt: `<p>Turn on SW7 (duty = 128, i.e. 50%) and then try SW0 to SW6: LD0 and LD16's red glow at different strengths. Add green with SW15..SW8 to make orange or yellow.</p>`,
+    tryIt: `<p>Turn on ${part('SW7')} (duty = 128, i.e. 50%) and then try ${part('SW0..SW6', 'SW0 to SW6')}: ${part('LD0')} and ${part('LD16')}'s red glow at different strengths. Add green with ${part('SW15..SW8')} to make orange or yellow.</p>`,
     exercise: `<p>Build a "breathing LED": a slow counter raises the duty value gradually and then lowers it again.</p>`,
   },
   sensors: {
@@ -654,7 +654,7 @@ ${figure(figVga(), 'The horizontal counter runs 0 to 799 and the vertical one 0 
 </ul>
 <p>After that, drawing is only a combinational circuit that turns <code>x</code> and <code>y</code> into a colour. This lesson draws eight 80-pixel colour bars, and SW0 shows a checkerboard (<code>x[5] ^ y[5]</code> changes every 32 pixels).</p>
 <div class="note">The virtual monitor works like a real one: it finds the video mode from the spacing of the HS and VS pulses. If the timing is wrong it shows <b>No signal</b> or <b>Out of range</b>, and wrong porches shift the picture.</div>`,
-    tryIt: `<p>Press <span class="kbd">▶ Run</span>. A monitor with a VGA cable appears next to the board and shows the colour bars. For a bigger picture press <span class="kbd">🖥 VGA Monitor</span> in the toolbar. Turn on SW0 to see the checkerboard. One whole frame is about 1.7 million clocks, so on a slow browser you see the picture being drawn line by line.</p>
+    tryIt: `<p>Press <span class="kbd">▶ Run</span>. A monitor with a VGA cable appears next to the board and shows the colour bars. For a bigger picture press <span class="kbd">🖥 VGA Monitor</span> in the toolbar. Turn on ${part('SW0')} to see the checkerboard. One whole frame is about 1.7 million clocks, so on a slow browser you see the picture being drawn line by line.</p>
 <p>You can also look at the HS pulses in the logic analyzer and measure their spacing (it should be 32 µs).</p>`,
   },
   ps2: {
@@ -715,7 +715,7 @@ ${TINY8_ISA('en')}
 11: JMP 2</pre>
 <p>To give the processor a new job you do not change the circuit, only the program in the ROM. Real processors work the same way: the hardware stays fixed and the software changes.</p>
 <div class="note">In real Vivado, the program for big processors such as MicroBlaze is written in C, compiled and placed in BRAM. The idea is the same as here.</div>`,
-    tryIt: `<p>Press <span class="kbd">▶ Run</span> and turn on SW0: every 0.25 s the number on the LEDs and the display goes up by one. Change the step with SW7..SW0. <span class="kbd">CPU_RESET</span> starts the program again from the top.</p>
+    tryIt: `<p>Press <span class="kbd">▶ Run</span> and turn on ${part('SW0')}: every 0.25 s the number on the LEDs and the display goes up by one. Change the step with ${part('SW7..SW0')}. ${part('CPU_RESET')} starts the program again from the top.</p>
 <p>In the schematic (RTL Analysis → Schematic), choose the <code>cpu</code> instance to see the processor's datapath: the PC register, the instruction register, the accumulator and the RAM.</p>`,
   },
 };

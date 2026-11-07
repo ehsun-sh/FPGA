@@ -4426,3 +4426,34 @@ fieldset.q legend {
     min-width: 460px;
   }
 }
+
+/* ---------------------------------------------------------------- board parts named in the text (3.4) */
+.pin {
+  display: inline-block;
+  padding: 0 0.35em;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  font-weight: 600;
+  line-height: 1.45;
+  white-space: nowrap;
+  direction: ltr;
+  unicode-bidi: isolate;
+  cursor: default;
+  transition: border-color 0.15s, background 0.15s;
+}
+.pin:hover,
+.pin:focus-visible {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+}
+.pin:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pin {
+    transition: none;
+  }
+}

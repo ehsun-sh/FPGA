@@ -1,5 +1,6 @@
 // Lesson: VGA video output (640×480 @ 60 Hz) on the virtual monitor.
 import { VHDL_NUMERIC, type Lesson } from './lessons';
+import { part } from './helpers';
 import { figVga, figure } from './figures';
 
 const VGA_V = `// VGA 640x480 @ 60 Hz: a sync generator and eight colour bars
@@ -192,7 +193,7 @@ ${figure(figVga({ title: 'زمان‌بندی VGA 640×480', visible: 'قابل 
   verilog: VGA_V,
   vhdl: VGA_VHDL,
   xdc: { clk: true, sw: true, vga: true },
-  tryIt: `<p><span class="kbd">▶ Run</span> را بزنید. کنار برد یک مانیتور با کابل VGA ظاهر می‌شود و نوارهای رنگی را نشان می‌دهد. برای دیدن تصویر بزرگ‌تر روی دکمهٔ <span class="kbd">🖥 VGA Monitor</span> در نوار ابزار بزنید. SW0 را روشن کنید تا صفحهٔ شطرنجی را ببینید. شبیه‌سازی یک تصویر کامل حدود ۱٫۷ میلیون کلاک است، پس اگر مرورگر کند باشد تصویر را در حال کشیده شدن، خط به خط، می‌بینید.</p>
+  tryIt: `<p><span class="kbd">▶ Run</span> را بزنید. کنار برد یک مانیتور با کابل VGA ظاهر می‌شود و نوارهای رنگی را نشان می‌دهد. برای دیدن تصویر بزرگ‌تر روی دکمهٔ <span class="kbd">🖥 VGA Monitor</span> در نوار ابزار بزنید. ${part('SW0')} را روشن کنید تا صفحهٔ شطرنجی را ببینید. شبیه‌سازی یک تصویر کامل حدود ۱٫۷ میلیون کلاک است، پس اگر مرورگر کند باشد تصویر را در حال کشیده شدن، خط به خط، می‌بینید.</p>
 <p>در Logic Analyzer هم می‌توانید پالس‌های HS را ببینید و فاصلهٔ آن‌ها را اندازه بگیرید (باید ۳۲ میکروثانیه باشد).</p>`,
   la: {
     chans: [

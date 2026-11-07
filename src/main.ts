@@ -54,7 +54,7 @@ import { BOARD_BG, cycleTheme, initTheme } from "./ui/theme";
 import { toolIcons, toolLegend, toolsBox } from "./ui/tools";
 import { lessonTools, type Tool } from "./lessons/tools";
 import { lessonTime } from "./lessons/time";
-import { ref } from "./lessons/helpers";
+import { partsIn, ref } from "./lessons/helpers";
 import { segPattern } from "./lessons/figures";
 import { helpHtml, predictHtml, progressMarks, quizHtml, resultHtml, LEARN_UI, levelDot, objectivesHtml, takeawaysHtml, type HelpState, type PredictState, type QuizState } from "./ui/learn";
 
@@ -734,6 +734,7 @@ function doProgram(d: Design, map: Mapping) {
   $("#hw-dev").textContent = `${hwDev} (Programmed)`;
   $("#hw-dev").classList.add("ok");
   setRunState();
+  firstRunHighlight();
 }
 
 function runFlow() {
@@ -1994,6 +1995,38 @@ function toggleSeg(seg: Element) {
   const out = svg.querySelector(".seg-code");
   if (out) out.textContent = (out.getAttribute("data-prefix") ?? "") + segPattern(state);
 }
+// a board part named in the text (part() chips): hovering or focusing it lights that part on the 3D board. Phones
+// (no hover) skip the hover; a focused chip still works.
+const canHover = matchMedia("(hover: hover)");
+const pinOf = (t: EventTarget | null) => (t as Element | null)?.closest?.<HTMLElement>(".pin[data-part]") ?? null;
+for (const [on, off] of [
+  ["mouseover", "mouseout"],
+  ["focusin", "focusout"],
+] as const) {
+  document.addEventListener(on, (ev) => {
+    const pin = pinOf(ev.target);
+    if (!pin || (on === "mouseover" && !canHover.matches)) return;
+    clearTimeout(firstRunTimer);
+    board.highlight?.([pin.dataset.part!]);
+  });
+  document.addEventListener(off, (ev) => {
+    const pin = pinOf(ev.target);
+    if (!pin || pin.contains((ev as MouseEvent | FocusEvent).relatedTarget as Node | null)) return;
+    board.highlight?.([]);
+  });
+}
+// the first successful Run on Board in a lesson lights every part its "Try it on the board" text names, for 2 s
+let firstRunTimer: ReturnType<typeof setTimeout> | undefined;
+function firstRunHighlight() {
+  if (lesson === PLAYGROUND || store.get("ran:" + lesson.id)) return;
+  store.set("ran:" + lesson.id, "1");
+  const parts = partsIn(text(lesson).tryIt);
+  if (!parts.length) return;
+  board.highlight?.(parts);
+  clearTimeout(firstRunTimer);
+  firstRunTimer = setTimeout(() => board.highlight?.([]), 2000);
+}
+
 document.addEventListener("keydown", (ev) => {
   const seg = (ev.target as Element).closest?.("[data-seg]");
   if (seg && (ev.key === "Enter" || ev.key === " ")) {

@@ -9,6 +9,7 @@ import type { BoardOutputs, BoardView, ModuleSpec } from '../types';
 import { angleDelta, Detents, screenAngle, wheelPx } from './controls';
 import { moduleModel, roundedSlab, type ModModel, type ModPart, type ModState } from './modules3d';
 import { HEADERS } from './pins';
+import { expandParts } from '../parts';
 
 type ButtonName = 'BTNC' | 'BTNU' | 'BTNL' | 'BTNR' | 'BTND' | 'CPU_RESETN';
 
@@ -20,6 +21,8 @@ const S = 180; // silkscreen texture pixels per unit
 
 const SW_X = (i: number) => -5.9 + (15 - i) * 0.6;
 const SW_Z = 4.7;
+// the highlight colour of parts the lesson text points at (the brand orange, bright enough on the dark board)
+const HL_COLOR = '#f0803a';
 const LED_Z = 3.85;
 const SEG_Z = 2.35;
 const DIGIT_X = (i: number) => -5.55 + (7 - i) * 0.62 + (i < 4 ? 0.25 : 0);
@@ -197,6 +200,18 @@ interface ModEntry {
   state: ModState;
 }
 
+// parts lit by highlight(): everything added lives in one group so clearing is one remove
+interface Highlight {
+  group: THREE.Group;
+  ring: THREE.MeshBasicMaterial;
+  plate: THREE.MeshBasicMaterial;
+  knobs: THREE.Mesh[];
+  caps: THREE.MeshStandardMaterial[];
+  halos: THREE.Sprite[];
+  t: number;
+  still: boolean;
+}
+
 // a module part held by a pointer: buttons stay pressed until it is lifted, knobs and the sonar's target follow it
 interface Grab {
   mod: ModEntry;
@@ -250,6 +265,8 @@ export class NexysA7Model implements BoardView {
   private last = performance.now();
   private glowTex = glowTexture();
   private disposed = false;
+  // parts the lesson text points at (highlight()): halo sprites and digit plates, pulsed in tick()
+  private hl: Highlight | null = null;
 
   constructor(private container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -809,7 +826,10 @@ export class NexysA7Model implements BoardView {
       const base = this.box(0.6, 0.22, 0.6, btnBase, x, TOP, z);
       base.userData.pick = { kind: 'btn', index: 0, name } as Interactive;
       this.pickables.push(base);
-      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.18, 24), mat);
+      // each cap gets its own material so a highlight can make one glow alone
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.18, 24), (mat as THREE.MeshStandardMaterial).clone());
+      (cap.material as THREE.MeshStandardMaterial).emissive.set(HL_COLOR);
+      (cap.material as THREE.MeshStandardMaterial).emissiveIntensity = 0;
       cap.position.set(x, TOP + 0.22 + 0.09, z);
       cap.castShadow = true;
       cap.userData.pick = { kind: 'btn', index: 0, name } as Interactive;
@@ -1018,6 +1038,101 @@ export class NexysA7Model implements BoardView {
     return { x: r.left + ((p.x + 1) / 2) * r.width, y: r.top + ((1 - p.y) / 2) * r.height };
   }
 
+  // light up the named parts (SW3, LD7, BTNC, AN2, CPU_RESETN, ranges such as SW7..SW0); [] clears. Each part gets a
+  // brand-coloured frame on the PCB and a halo; switch knobs grow, button caps glow and digits get a tinted plate.
+  highlight(names: string[]) {
+    this.clearHighlight();
+    const parts = expandParts(names);
+    if (!parts.length) return;
+    const group = new THREE.Group();
+    const h: Highlight = {
+      group,
+      ring: new THREE.MeshBasicMaterial({ color: HL_COLOR, transparent: true, depthWrite: false }),
+      plate: new THREE.MeshBasicMaterial({ color: HL_COLOR, transparent: true, depthWrite: false }),
+      knobs: [],
+      caps: [],
+      halos: [],
+      t: 0,
+      still: matchMedia('(prefers-reduced-motion: reduce)').matches,
+    };
+    // a rectangular frame (outer size w x d) lying flat at height y
+    const frame = (x: number, z: number, w: number, d: number, y = TOP + 0.012) => {
+      const t = 0.07;
+      for (const [fx, fz, fw, fd] of [
+        [x, z - d / 2 + t / 2, w, t],
+        [x, z + d / 2 - t / 2, w, t],
+        [x - w / 2 + t / 2, z, t, d - 2 * t],
+        [x + w / 2 - t / 2, z, t, d - 2 * t],
+      ]) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(fw, 0.012, fd), h.ring);
+        m.position.set(fx, y, fz);
+        group.add(m);
+      }
+    };
+    const halo = (x: number, y: number, z: number, size: number) => {
+      const s = this.glow(HL_COLOR, x, y, z, size);
+      this.scene.remove(s);
+      group.add(s);
+      h.halos.push(s);
+    };
+    for (const p of parts) {
+      const n = +p.replace(/\D/g, '');
+      if (p.startsWith('SW')) {
+        h.knobs.push(this.knobs[n]);
+        frame(SW_X(n), SW_Z, 0.54, 0.86);
+        halo(SW_X(n), TOP + 0.45, SW_Z, 0.8);
+      } else if (p.startsWith('LD')) {
+        const [x, z, w] = n < 16 ? [SW_X(n), LED_Z, 0.42] : [n === 16 ? 2.0 : 2.9, 2.55, 0.56];
+        frame(x, z, w, n < 16 ? 0.34 : 0.56);
+        halo(x, TOP + 0.2, z, n < 16 ? 0.9 : 1.2);
+      } else if (p.startsWith('AN')) {
+        const y = TOP + 0.3 + 0.014;
+        const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 0.98), h.plate);
+        plate.rotation.x = -Math.PI / 2;
+        plate.position.set(DIGIT_X(n), y, SEG_Z - 0.03);
+        group.add(plate);
+        frame(DIGIT_X(n), SEG_Z - 0.03, 0.6, 1.08, y);
+      } else {
+        const cap = this.btnCaps.get(p as ButtonName);
+        if (!cap) continue;
+        h.caps.push(cap.material as THREE.MeshStandardMaterial);
+        frame(cap.position.x, cap.position.z, 0.78, 0.78);
+        halo(cap.position.x, TOP + 0.55, cap.position.z, 1.0);
+      }
+    }
+    this.scene.add(group);
+    this.hl = h;
+    this.pulse(0);
+  }
+
+  private clearHighlight() {
+    const h = this.hl;
+    if (!h) return;
+    for (const k of h.knobs) k.scale.setScalar(1);
+    for (const m of h.caps) m.emissiveIntensity = 0;
+    this.scene.remove(h.group);
+    h.group.traverse((o) => {
+      if (o instanceof THREE.Mesh) o.geometry.dispose();
+    });
+    for (const s of h.halos) s.material.dispose();
+    h.ring.dispose();
+    h.plate.dispose();
+    this.hl = null;
+  }
+
+  // a 1.2 s sine pulse; with reduced motion the highlight stays still at full strength
+  private pulse(dt: number) {
+    const h = this.hl;
+    if (!h) return;
+    h.t += dt;
+    const k = h.still ? 1 : 0.5 + 0.5 * Math.sin((h.t / 1.2) * Math.PI * 2);
+    for (const knob of h.knobs) knob.scale.setScalar(1 + 0.3 * k);
+    for (const m of h.caps) m.emissiveIntensity = 0.3 + 0.9 * k;
+    for (const s of h.halos) s.material.opacity = 0.35 + 0.55 * k;
+    h.ring.opacity = 0.6 + 0.4 * k;
+    h.plate.opacity = 0.2 + 0.25 * k;
+  }
+
   setBackground(hex: string) {
     (this.scene.background as THREE.Color).set(hex);
   }
@@ -1079,6 +1194,7 @@ export class NexysA7Model implements BoardView {
     }
     for (const m of this.mods) m.model.show(m.state, Math.min(1, dt * 25));
     this.onFrame(dt);
+    this.pulse(dt);
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
   }

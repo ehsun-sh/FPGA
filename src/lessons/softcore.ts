@@ -1,6 +1,7 @@
 // Lesson: a soft-core processor. Tiny8 is a small, original 8-bit CPU written for this course: an accumulator,
 // 16 bytes of data memory, 16 instructions, and its program in a ROM inside the FPGA.
 import { HEX7SEG_V, HEX7SEG_VHDL } from './advanced';
+import { part } from './helpers';
 import { VHDL_NUMERIC, type Lesson } from './lessons';
 import { figFsm, figTiny8, figure } from './figures';
 
@@ -427,6 +428,6 @@ ${ISA('fa')}
   verilog: CPU_V,
   vhdl: CPU_VHDL,
   xdc: { clk: true, reset: true, sw: true, led: true, seg: true },
-  tryIt: `<p><span class="kbd">▶ Run</span> را بزنید و SW0 را روشن کنید: هر ۰٫۲۵ ثانیه عدد روی LEDها و نمایشگر یکی زیاد می‌شود. با SW7..SW0 گام شمارش را عوض کنید. <span class="kbd">CPU_RESET</span> برنامه را از اول اجرا می‌کند.</p>
+  tryIt: `<p><span class="kbd">▶ Run</span> را بزنید و ${part('SW0')} را روشن کنید: هر ۰٫۲۵ ثانیه عدد روی LEDها و نمایشگر یکی زیاد می‌شود. با ${part('SW7..SW0')} گام شمارش را عوض کنید. ${part('CPU_RESET')} برنامه را از اول اجرا می‌کند.</p>
 <p>در شماتیک (RTL Analysis ← Schematic) نمونه‌ی <code>cpu</code> را انتخاب کنید تا مسیر داده‌ی پردازنده را ببینید: رجیستر PC، رجیستر دستور، انباره و RAM.</p>`,
 };
