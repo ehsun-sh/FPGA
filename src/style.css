@@ -4244,3 +4244,36 @@ fieldset.q legend {
 [dir='rtl'] .home-nav .theme-btn {
   order: -1;
 }
+
+/* ---------------------------------------------------------------- Persian typography (Phase 3.2)
+   Vazirmatn first (with its own Latin glyphs), so a Persian line never mixes two fonts' metrics. */
+[lang='fa'],
+.lesson[dir='rtl'],
+#home[dir='rtl'] {
+  font-family: var(--fa);
+}
+.lesson[dir='rtl'] {
+  font-size: 1.02rem;
+  line-height: 1.9;
+}
+.lesson[dir='rtl'] :is(h1, h2, h3),
+#home[dir='rtl'] :is(h1, h2, h3) {
+  font-weight: 800;
+  line-height: 1.55;
+  letter-spacing: 0;
+}
+.lesson h1 {
+  text-wrap: balance;
+}
+#home[dir='rtl'] .hero h1 {
+  font-size: clamp(2rem, 4.5vw, 3.4rem);
+  line-height: 1.45;
+}
+.motto i {
+  margin: 0;
+  margin-inline: 0.6em;
+}
+[dir='rtl'] :is(code, .kbd) {
+  direction: ltr;
+  unicode-bidi: isolate;
+}

@@ -92,6 +92,9 @@ const $ = <T extends HTMLElement = HTMLElement>(
   root: ParentNode = document,
 ) => root.querySelector(sel) as T;
 
+// part names stay on one line in headings ("Nexys A7" must not wrap between its two words)
+const noBreakParts = (h: string) => h.replace(/\b(Nexys|Artix|Digilent) (A7|7|Nexys)\b/g, "$1&nbsp;$2");
+
 // ---------------------------------------------------------------- board
 const boardDef = getBoard(store.get("board"));
 const xdcName = `${boardDef.id}.xdc`;
@@ -1294,7 +1297,7 @@ function renderLesson() {
 <div class="lesson-head">
   <div class="lesson-meta"><span class="chapter">${esc(l10nChapter(chapterOf(lesson)))}</span>${of}${read}</div>
   ${pos < 0 ? "" : `<div class="bar"><i style="width:${Math.round((100 * (pos + 1)) / course.length)}%"></i></div>`}
-  <h1>${esc(tx.title)}</h1><p class="summary">${esc(tx.summary)}</p>
+  <h1>${noBreakParts(esc(tx.title))}</h1><p class="summary">${esc(tx.summary)}</p>
 </div>
 ${objectivesHtml(lesson, tx, uiLang, ref)}
 ${toolsBox(lesson, uiLang)}
