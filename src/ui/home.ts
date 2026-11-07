@@ -8,6 +8,7 @@ import { toolIcons, toolLegend } from './tools';
 import { levelDot } from './learn';
 import { helpMenu } from './help';
 import { formatMinutes } from '../lessons/time';
+import { themeButton } from './theme';
 
 export interface HomeData {
   lang: UiLang;
@@ -41,6 +42,7 @@ export function homeNav(lang: UiLang, extra = '', current: NavPage = 'home'): st
   </nav>
   <span class="grow"></span>${extra}
   ${helpMenu(lang, current === 'home' ? 'home' : 'lab')}
+  ${themeButton(lang)}
   ${langMenu(lang, u.language, current === 'home' ? 'home' : 'lab')}`;
 }
 

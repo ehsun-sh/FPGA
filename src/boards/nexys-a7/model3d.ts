@@ -1018,6 +1018,10 @@ export class NexysA7Model implements BoardView {
     return { x: r.left + ((p.x + 1) / 2) * r.width, y: r.top + ((1 - p.y) / 2) * r.height };
   }
 
+  setBackground(hex: string) {
+    (this.scene.background as THREE.Color).set(hex);
+  }
+
   setSwitch(i: number, on: boolean, notify = false) {
     this.switches[i] = on;
     if (notify) this.onSwitch(i, on);

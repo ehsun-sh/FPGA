@@ -1,3 +1,4 @@
+import "./theme.css";
 import "@fontsource/inter/latin-400.css";
 import "@fontsource/inter/latin-500.css";
 import "@fontsource/inter/latin-600.css";
@@ -7,6 +8,11 @@ import "@fontsource/vazirmatn/arabic-400.css";
 import "@fontsource/vazirmatn/arabic-500.css";
 import "@fontsource/vazirmatn/arabic-700.css";
 import "@fontsource/vazirmatn/arabic-800.css";
+// Vazirmatn's own Latin glyphs, so Latin words inside Persian text match the Persian letters (Phase 3.2)
+import "@fontsource/vazirmatn/latin-400.css";
+import "@fontsource/vazirmatn/latin-500.css";
+import "@fontsource/vazirmatn/latin-700.css";
+import "@fontsource/vazirmatn/latin-800.css";
 import "@fontsource/jetbrains-mono/latin-400.css";
 import "@fontsource/jetbrains-mono/latin-600.css";
 import "./style.css";
@@ -44,6 +50,7 @@ import { num, TOUR, UI, type UiLang } from "./ui/strings";
 import { startTour, type TourStep } from "./ui/tour";
 import { ISSUES_URL, limitsDialog, shortcutsDialog } from "./ui/help";
 import { versionLabel } from "./version";
+import { BOARD_BG, cycleTheme, initTheme } from "./ui/theme";
 import { toolIcons, toolLegend, toolsBox } from "./ui/tools";
 import { lessonTools, type Tool } from "./lessons/tools";
 import { lessonTime } from "./lessons/time";
@@ -1898,6 +1905,9 @@ function act(name: string) {
     case "report-problem":
       window.open(ISSUES_URL, "_blank", "noopener");
       break;
+    case "theme":
+      cycleTheme();
+      break;
     case "phone-note-close":
       store.set("phone-note", "1");
       document.body.classList.add("phone-note-off");
@@ -2391,6 +2401,8 @@ document.querySelectorAll<HTMLElement>("[data-lang]").forEach((b) => markLang(b)
 applyFlowSections();
 applyUiLang();
 bindLangMenu();
+// the theme button sits in both top bars; the 3D scene's backdrop follows the theme too
+initTheme({ icon: (n) => icon(n, 16), lang: () => uiLang, onChange: (t) => board.setBackground?.(BOARD_BG[t]) });
 $("#src-name").textContent = fileName();
 renderLessonList();
 loadLa();
