@@ -1,0 +1,8 @@
+// BOOT.bin layout for an SD-card boot of the EBAZ4205 (bootgen -image boot.bif -arch zynq -o BOOT.bin -w)
+// Order matters: the FSBL first, then the bitstream (configures the PL), then the application or U-Boot.
+the_ROM_image:
+{
+    [bootloader] fsbl.elf
+    system_wrapper.bit
+    app.elf
+}
