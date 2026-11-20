@@ -10,6 +10,7 @@ import { helpMenu } from './help';
 import { formatMinutes } from '../lessons/time';
 import { themeButton } from './theme';
 import { logo } from './logo';
+import { urlFor } from './router';
 
 export interface HomeData {
   lang: UiLang;
@@ -42,6 +43,7 @@ export function homeNav(lang: UiLang, extra = '', current: NavPage = 'home'): st
     ${item('playground', 'flask', u.playground)}
   </nav>
   <span class="grow"></span>${extra}
+  <button class="search-btn" data-act="search" aria-label="${u.search}" title="${u.search} (Ctrl+K)">${icon('search', 16)}</button>
   ${helpMenu(lang, current === 'home' ? 'home' : 'lab')}
   ${themeButton(lang)}
   ${langMenu(lang, u.language, current === 'home' ? 'home' : 'lab')}`;
@@ -151,7 +153,8 @@ export function bindLangMenu() {
 export function renderHome(d: HomeData): string {
   const h = HOME[d.lang];
   const n = (x: number) => num(x, d.lang);
-  const course = d.chapters.filter((c) => !c.lessons.includes(d.playground));
+  const course = d.chapters.filter((c) => !c.projects && !c.lessons.includes(d.playground));
+  const projects = d.chapters.find((c) => c.projects);
   const all = course.flatMap((c) => c.lessons);
   const doneAll = all.filter(d.done).length;
   let i = 0;
@@ -205,6 +208,12 @@ export function renderHome(d: HomeData): string {
     <p class="stage-hint">${d.live ? `<span class="live-dot"></span>${h.live}` : h.idle}</p>
   </div>
 </section>
+<section class="why" aria-labelledby="why-h">
+  <h2 id="why-h">${h.whyTitle}</h2>
+  <div class="why-grid">${h.why
+    .map(([ic, t, p]) => `<article class="why-card"><span class="step-ico">${icon(ic as IconName, 20)}</span><h3>${t}</h3><p>${p}</p></article>`)
+    .join('')}</div>
+</section>
 <section class="how">
   <h2>${h.howTitle}</h2>
   <div class="steps">${h.steps
@@ -217,6 +226,12 @@ export function renderHome(d: HomeData): string {
 <section class="course" id="home-lessons">
   <div class="course-h"><h2>${h.lessonsTitle}</h2><span class="dim">${h.lessonsSub(n(doneAll), n(all.length))}</span></div>
   <div class="bar big"><i style="width:${Math.round((100 * doneAll) / all.length)}%"></i></div>
+  <div class="progress-tools">
+    ${doneAll === all.length ? `<button class="btn primary small" data-act="certificate">${icon('award', 15)}<span>${h.certificate}</span></button><span class="cert-ready">${h.certReady}</span>` : ''}
+    <span class="grow"></span>
+    <button class="btn ghost small" data-act="export-progress">${icon('download', 14)}<span>${h.exportProgress}</span></button>
+    <button class="btn ghost small" data-act="import-progress">${icon('upload', 14)}<span>${h.importProgress}</span></button>
+  </div>
   ${toolLegend(all, d.lang)}
   <div class="ch-grid">${cards}
     <article class="ch-card lab-card">
@@ -228,6 +243,34 @@ export function renderHome(d: HomeData): string {
     </article>
   </div>
 </section>
+${projects ? projectsSection(projects, d) : ''}
 </main>
-<footer class="home-foot"><span class="logo">${logo(16, true)}</span>${h.footer} <span class="home-ver" dir="ltr">${versionLabel}</span></footer>`;
+<footer class="home-foot"><span class="logo">${logo(16, true)}</span>${h.footer} <a class="foot-link" href="${urlFor({ page: 'glossary', lang: d.lang })}" data-act="glossary">${h.glossary}</a> <span class="home-ver" dir="ltr">${versionLabel}</span></footer>`;
+}
+
+// the guided projects (Phase 4.4): their own section and progress line, apart from the course
+function projectsSection(c: Chapter, d: HomeData): string {
+  const h = HOME[d.lang];
+  const n = (x: number) => num(x, d.lang);
+  const total = c.lessons.length + (c.soon?.length ?? 0);
+  const done = c.lessons.filter(d.done).length;
+  const cards = c.lessons
+    .map(
+      (l) => `<article class="ch-card proj-card${d.done(l) ? ' done' : ''}">
+  <header><span class="ch-no">${icon('flag', 13)} ${esc(c.title[d.lang])}</span>${d.done(l) ? `<span class="ch-count">${icon('check', 13)}</span>` : ''}</header>
+  <h3>${esc(d.title(l))}</h3>
+  <p class="dim">${esc(d.summary(l))}</p>
+  <p class="ch-time">${formatMinutes(d.minutes(l), d.lang)}</p>
+  <button class="btn primary small" data-lesson="${l.id}">${icon('play', 14)}<span>${d.done(l) ? h.projectAgain : h.projectStart}</span></button>
+</article>`,
+    )
+    .join('');
+  const soon = (c.soon ?? [])
+    .map((t) => `<article class="ch-card proj-card soon" aria-disabled="true"><header><span class="ch-no">${icon('flag', 13)} ${esc(c.title[d.lang])}</span><span class="soon-tag">${h.soon}</span></header><h3>${esc(t[d.lang])}</h3></article>`)
+    .join('');
+  return `<section class="course projects" id="home-projects">
+  <div class="course-h"><h2>${h.projectsTitle}</h2><span class="dim">${h.projectsSub(n(done), n(total))}</span></div>
+  <p class="dim">${h.projectsLead}</p>
+  <div class="ch-grid">${cards}${soon}</div>
+</section>`;
 }
