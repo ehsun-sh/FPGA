@@ -99,6 +99,19 @@ and watch it run on an interactive 3D Digilent Nexys A7-100T on the right.
   a large card.
 - **Accessibility**: a skip link, a visible keyboard focus, keyboard-operable menus (arrows and Escape), tabs and
   toggles announced to screen readers, text contrast of at least 4.5:1 and reduced motion when the system asks for it.
+- **Real URLs and prerendered pages**: every page has its own address in both languages (`/fa/lesson/counter`,
+  `/en/glossary`); old `#lesson/<id>` links still work. `npm run build` prerenders the landing page, the glossary and
+  every lesson with their own title, description, canonical/hreflang and Open Graph tags, plus `sitemap.xml` and
+  `robots.txt` (`SITE_ORIGIN` and `VITE_BASE` set the origin and the base path).
+- **Search and glossary**: Ctrl+K searches lessons and terms, folding Persian letter forms and digits. The glossary
+  page lists 64 terms in both languages, and terms in lesson text show their definition on hover or keyboard focus.
+- **Why FPGA, chapter 8 and projects**: the landing page explains when an FPGA is the right tool. Chapter 8 (*Beyond
+  the basics*) covers timing and Fmax, clocking and clock enables, clock domain crossing, block RAM and moving to a
+  real board. The *Projects* track starts with a guided digital clock built over several milestones.
+- **Progress export and certificate**: progress, quizzes and edited code export to a JSON file and import back with
+  a merge. Finishing the course unlocks a certificate as SVG or PNG (self-attested, with a visual seal).
+- **Optional analytics**: setting `VITE_CF_BEACON` to a Cloudflare Web Analytics token adds its cookieless beacon;
+  without it no script is added.
 
 Real Vivado cannot run in a browser; this project imitates its look and workflow. The lesson code and XDC files are
 standard and also work in real Vivado on a real board.
@@ -159,4 +172,4 @@ are split into the value driven and the level on the wire. Vectors up to 32 bits
 
 The site runs as a Cloudflare Worker at <https://learn.shahmohammadi.dev/fpga/>. `wrangler.toml` builds `dist/`
 into the Worker's static assets and `worker/index.js` serves them under `/fpga`. The `Deploy` GitHub Actions workflow builds and runs
-`npx wrangler deploy` on every push to `main`; it needs the repo secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+`npx wrangler deploy` on every push to `main` with `VITE_BASE=/fpga/` (a Cloudflare Git build needs the same variable); it needs the repo secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.

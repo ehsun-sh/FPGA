@@ -660,14 +660,14 @@ auto-generated animations/GIFs from the simulator, a comments/community feature.
 
 ### Acceptance checklist — Phase 4
 
-- [ ] `/fa/lesson/counter` and `/en/lesson/counter` load directly (deep link) in dev and in the Worker; legacy
+- [x] `/fa/lesson/counter` and `/en/lesson/counter` load directly (deep link) in dev and in the Worker; legacy
       `#lesson/counter` redirects; language switch rewrites the URL; back/forward work.
-- [ ] `dist/` contains prerendered pages for every lesson in both languages, `sitemap.xml`, `robots.txt`; `curl`
+- [x] `dist/` contains prerendered pages for every lesson in both languages, `sitemap.xml`, `robots.txt`; `curl`
       of a lesson page shows its title, description and body without JavaScript.
-- [ ] Ctrl+K search finds «دیباونس» and "debounce" and opens the lesson; glossary page lists ≥ 45 terms; term tooltips work by keyboard.
-- [ ] Chapter 8's five lessons compile in both languages, have quizzes/exercises/hints/solutions, and appear in progress.
-- [ ] Project 1 is playable end to end; projects 2–3 show as coming soon.
-- [ ] Export → clear site data → import restores progress and edited code; certificate downloads as SVG and PNG.
+- [x] Ctrl+K search finds «دیباونس» and "debounce" and opens the lesson; glossary page lists ≥ 45 terms; term tooltips work by keyboard.
+- [x] Chapter 8's five lessons compile in both languages, have quizzes/exercises/hints/solutions, and appear in progress.
+- [x] Project 1 is playable end to end; projects 2–3 show as coming soon.
+- [x] Export → clear site data → import restores progress and edited code; certificate downloads as SVG and PNG.
 - [ ] `npm test`, `npm run build` green; README updated; deploy to Cloudflare verified on a preview.
 
 ---
