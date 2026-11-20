@@ -3,7 +3,9 @@
 // Exercises that depend on long delays ask for a parameter (DIV ...) that the checker sets to a small value.
 import type { Lang } from '../hdl';
 import { decodeI2c, decodeSpi } from '../la/decode';
-import { BoardHarness, HEX7 } from './harness';
+import { BoardHarness, HEX7, segChar } from './harness';
+import { buildNetlist } from '../synth/netlist';
+import { techMap } from '../synth/techmap';
 import { ref, part } from '../lessons/helpers';
 import { HINTS } from './hints';
 import { solutionOf } from './solutions';
@@ -703,6 +705,180 @@ export const EXERCISES: Record<string, Exercise> = {
       t.ok(Math.abs(per - 400) <= 20, `در هر تیک یک عدد می‌آید (هر ${per} کلاک یک عدد، تیک = 400 کلاک)`, `one number comes per tick (one every ${per} clocks, tick = 400 clocks)`);
       t.ok(list(seen.slice(0, 12)) === list(want.slice(0, 12)), `دنباله ${list(want.slice(0, 12))} است (شما: ${list(seen.slice(0, 12))})`, `the sequence is ${list(want.slice(0, 12))} (yours: ${list(seen.slice(0, 12))})`);
       t.ok(list(seen.slice(12)) === list(want.slice(12)), `بعد از 233 دوباره از 1 شروع می‌شود (شما: ${list(seen.slice(11))})`, `after 233 it starts again from 1 (yours: ${list(seen.slice(11))})`);
+    },
+  },
+  // ---------------------------------------------------------------- chapter 8: beyond the basics (Phase 4.3)
+  timing: {
+    fa: `<p>همین محاسبه را <b>Pipeline</b> کنید تا Fmax تخمینی دست‌کم <b>100 MHz</b> شود (WNS در خلاصهٔ زمان‌بندی صفر یا مثبت). یک رجیستر در وسط زنجیره بگذارید و <code>a</code> و <code>b</code> را هم به همان اندازه تأخیر دهید تا نتیجه درست بماند. یک کلاک تأخیر بیشتر اشکالی ندارد.</p>`,
+    en: `<p><b>Pipeline</b> the same calculation so the estimated Fmax is at least <b>100 MHz</b> (WNS in the timing summary zero or positive). Put a register in the middle of the chain and delay <code>a</code> and <code>b</code> by the same amount so the result stays right. One more clock of latency is fine.</p>`,
+    check(h, t) {
+      const f = (a: number, b: number) => ((((a * b + a) * b + b) * a) >>> 0) & 0xffff;
+      const r = firstFail(
+        [[5, 7], [255, 255], [3, 200], [17, 1]],
+        ([a, b]) => {
+          h.sw(a | (b << 8));
+          h.run(8);
+          const want = f(a, b);
+          return { ok: h.led() === want, detail: { expected: hex(want), actual: hex(h.led()), scene: { sw: a | (b << 8) } } };
+        },
+      );
+      t.ok(r.ok, 'LED15..LED0 هنوز ((a·b + a)·b + b)·a را نشان می‌دهد', 'LED15..LED0 still show ((a·b + a)·b + b)·a', r.detail);
+      const tm = techMap(buildNetlist(h.design)).timing;
+      const fmax = Math.round(1000 / (tm.period - tm.wns));
+      t.ok(tm.wns >= 0, `Fmax تخمینی دست‌کم 100 MHz است (شما: ${fmax} MHz، WNS = ${tm.wns} ns)`, `the estimated Fmax is at least 100 MHz (yours: ${fmax} MHz, WNS = ${tm.wns} ns)`, { expected: '≥ 100 MHz', actual: `${fmax} MHz` });
+    },
+  },
+  clocking: {
+    fa: `<p>یک enable دوم با فرکانس <b>2 Hz</b> اضافه کنید (هر ۵۰۰ تیک 1 kHz یک پالس) و با آن ${part('LD1')} را چشمک‌زن کنید: هر نیم ثانیه عوض شود. کلاک دوم نسازید: همهٔ رجیسترها روی <code>CLK100MHZ</code> بمانند. بقیهٔ LEDها مثل قبل کار کنند.</p>`,
+    en: `<p>Add a second enable at <b>2 Hz</b> (one pulse every 500 of the 1 kHz ticks) and use it to blink ${part('LD1')}: it changes every half second. Do not make a second clock: every register stays on <code>CLK100MHZ</code>. The other LEDs work as before.</p>`,
+    params: { DIV: 10 },
+    check(h, t) {
+      // DIV = 10: one 1 kHz tick every 10 clocks, so 2 Hz = every 5,000 clocks and 1 Hz = every 10,000
+      const nl = buildNetlist(h.design);
+      const byId = new Map(nl.cells.map((c) => [c.id, c]));
+      const clocks = new Set<string>();
+      for (const c of nl.cells)
+        if (c.type === 'reg' && !c.unused) {
+          const src = c.ins.find((p) => p.name === 'C')?.src;
+          const from = src ? byId.get(src.cell) : null;
+          clocks.add(from?.type === 'in' ? from.name!.toUpperCase() : from ? `${from.type} ${from.name ?? ''}`.trim() : '?');
+        }
+      t.need([...clocks].every((c) => c === 'CLK100MHZ'), `همهٔ رجیسترها با CLK100MHZ کار می‌کنند (کلاک‌ها: ${[...clocks].join(', ')})`, `every register runs on CLK100MHZ (clocks: ${[...clocks].join(', ')})`);
+      const flips: number[] = [];
+      let prev = (h.led() >> 1) & 1;
+      let blink = h.led() & 1;
+      let blinkFlips = 0;
+      for (let i = 0; i < 2600 && flips.length < 5; i++) {
+        h.run(10);
+        const v = (h.led() >> 1) & 1;
+        if (v !== prev) flips.push(h.cycles);
+        prev = v;
+        const b = h.led() & 1;
+        if (b !== blink) blinkFlips++;
+        blink = b;
+      }
+      const per = flips.length >= 2 ? Math.round((flips[flips.length - 1] - flips[0]) / (flips.length - 1)) : 0;
+      t.ok(flips.length >= 3 && Math.abs(per - 5000) <= 20, `LD1 هر نیم ثانیه عوض می‌شود (هر ${per} کلاک، باید 5000 باشد)`, `LD1 changes every half second (every ${per} clocks, should be 5000)`, { expected: '5000', actual: String(per) });
+      t.ok(blinkFlips >= 2, 'LD0 هنوز هر ثانیه عوض می‌شود', 'LD0 still changes every second');
+    },
+  },
+  cdc: {
+    fa: `<p>بعد از سنکرون‌ساز یک <b>debouncer</b> بگذارید تا هر فشار ${part('BTNC')}، حتی با لرزش، شمارنده را <b>دقیقاً یک</b> بار زیاد کند. ترتیب: ${part('BTNC')} ← دو فلیپ‌فلاپ ← debouncer ← آشکارساز لبه. زمان debounce یک <code>parameter</code> به نام <b>DB</b> با مقدار پیش‌فرض <code>1_000_000</code> (۱۰ میلی‌ثانیه) است.</p>`,
+    en: `<p>Put a <b>debouncer</b> after the synchroniser so every press of ${part('BTNC')}, bounces and all, adds <b>exactly one</b> to the count. The order: ${part('BTNC')} → two flip-flops → debouncer → edge detector. The debounce time is a <code>parameter</code> named <b>DB</b> with the default <code>1_000_000</code> (10 ms).</p>`,
+    params: { DB: 200 },
+    check(h, t) {
+      const nl = buildNetlist(h.design);
+      const inp = nl.cells.find((c) => c.type === 'in' && c.name?.toUpperCase() === 'BTNC');
+      const users = (id: number) => nl.cells.filter((c) => !c.unused && c.ins.some((p) => p.src?.cell === id));
+      const first = inp ? users(inp.id) : [];
+      const second = first.length === 1 && first[0].type === 'reg' ? users(first[0].id) : [];
+      t.ok(
+        first.length === 1 && first[0].type === 'reg' && second.length === 1 && second[0].type === 'reg',
+        'BTNC از دو فلیپ‌فلاپ پشت سر هم می‌گذرد و منطق دیگری به آن وصل نیست',
+        'BTNC goes through two flip-flops in a row, with no other logic on it',
+        { expected: 'BTNC → FF → FF', actual: first.length ? `BTNC → ${first.map((c) => c.type).join(', ')}${second.length ? ` → ${second.map((c) => c.type).join(', ')}` : ''}` : 'BTNC → —' },
+      );
+      h.run(50);
+      const bouncy = (v: number) => {
+        for (let i = 0; i < 9; i++) {
+          h.btn('BTNC', i % 2 === 0 ? v : 1 - v);
+          h.run(30);
+        }
+        h.btn('BTNC', v);
+        h.run(1200);
+      };
+      const got: number[] = [];
+      for (let p = 0; p < 3; p++) {
+        bouncy(1);
+        bouncy(0);
+        got.push(h.led());
+      }
+      t.ok(got.join() === '1,2,3', `هر فشار با لرزش دقیقاً یک بار می‌شمارد: 1, 2, 3 (شما: ${got.join(', ')})`, `each bouncy press counts exactly once: 1, 2, 3 (yours: ${got.join(', ')})`, { expected: '1, 2, 3', actual: got.join(', '), scene: { btn: 'BTNC' } });
+    },
+  },
+  bram: {
+    fa: `<p>به حافظه یک <b>درگاه خواندن دوم</b> بدهید: ${part('LD7..LD0')} مثل قبل خانهٔ <code>addr</code> را نشان دهد و ${part('LD15..LD8')} خانهٔ بعدی، <code>addr + 1</code> را. هر دو خواندن همگام باشند تا حافظه همچنان در یک BRAM جا شود. (نمایش page روی ${part('LD15..LD14')} حذف می‌شود.)</p>`,
+    en: `<p>Give the memory a <b>second read port</b>: ${part('LD7..LD0')} show cell <code>addr</code> as before and ${part('LD15..LD8')} show the next cell, <code>addr + 1</code>. Keep both reads synchronous so the memory still fits in a block RAM. (The page display on ${part('LD15..LD14')} goes away.)</p>`,
+    check(h, t) {
+      const write = (a: number, v: number) => {
+        h.sw((a << 8) | v);
+        h.btn('BTNC', 1);
+        h.run(2);
+        h.btn('BTNC', 0);
+        h.run(2);
+      };
+      write(5, 0x11);
+      write(6, 0x22);
+      write(7, 0x33);
+      const r = firstFail(
+        [[5, 0x11, 0x22], [6, 0x22, 0x33], [7, 0x33, 0x00]],
+        ([a, lo, hi]) => {
+          h.sw(a << 8);
+          h.run(4);
+          const want = (hi << 8) | lo;
+          return { ok: h.led() === want, detail: { expected: hex(want), actual: hex(h.led()), scene: { sw: a << 8 } } };
+        },
+      );
+      t.ok(r.ok, 'LD7..LD0 خانهٔ addr و LD15..LD8 خانهٔ addr+1 را نشان می‌دهند', 'LD7..LD0 show cell addr and LD15..LD8 cell addr+1', r.detail);
+      const u = techMap(buildNetlist(h.design)).util;
+      t.ok(u.bram18 + u.bram36 >= 1, `حافظه هنوز یک BRAM است (RAMB18: ${u.bram18}، RAMB36: ${u.bram36})`, `the memory is still a block RAM (RAMB18: ${u.bram18}, RAMB36: ${u.bram36})`);
+    },
+  },
+
+  // ---------------------------------------------------------------- guided project 1: digital clock (Phase 4.4)
+  'proj-clock': {
+    fa: `<p>ساعت کامل: <b>HH.MM.SS</b> روی شش رقم سمت راست، ثانیه‌ها و دقیقه‌ها در 59 و ساعت‌ها در 23 به صفر برمی‌گردند، ${part('BTNU')} یک دقیقه جلو و ${part('BTND')} یک دقیقه عقب می‌برد (با سنکرون‌ساز و debounce؛ هر فشار دقیقاً یک دقیقه). پارامترهای <code>DIV</code>، <code>SCAN</code> و <code>DB</code> را نگه دارید؛ بررسی‌کننده آن‌ها را کوچک می‌کند.</p>`,
+    en: `<p>The whole clock: <b>HH.MM.SS</b> on the six right-most digits; seconds and minutes wrap at 59 and hours at 23; ${part('BTNU')} sets the minutes one forward and ${part('BTND')} one back (synchronised and debounced: exactly one minute per press). Keep the parameters <code>DIV</code>, <code>SCAN</code> and <code>DB</code>; the checker makes them small.</p>`,
+    params: { DIV: 400, SCAN: 4, DB: 8 },
+    check(h, t) {
+      needDevice(h, t, 'an', XDC_SEG.fa, XDC_SEG.en);
+      // one full scan of the six digits takes 24 clocks; a second is 400
+      const show = () => {
+        const { seg } = h.digits(32, 1);
+        let s = '';
+        for (let d = 5; d >= 0; d--) s += segChar(seg[d]);
+        return s;
+      };
+      const at = (sec: number) => {
+        const hh = Math.floor(sec / 3600) % 24;
+        const mm = Math.floor(sec / 60) % 60;
+        const ss = sec % 60;
+        return [hh, mm, ss].map((x) => String(x).padStart(2, '0')).join('');
+      };
+      h.run(100);
+      t.need(show() === '000000', `در شروع 00.00.00 نمایش داده می‌شود (شما: ${show()})`, `it starts at 00.00.00 (yours: ${show()})`, { expected: '000000', actual: show() });
+      h.run(400 * 5);
+      t.ok(show() === at(5), `بعد از ۵ ثانیه ${at(5)} (شما: ${show()})`, `after 5 seconds ${at(5)} (yours: ${show()})`, { expected: at(5), actual: show() });
+      h.run(400 * 60);
+      t.ok(show() === at(65), `ثانیه‌ها در 59 به 00 برمی‌گردند و یک دقیقه اضافه می‌شود: ${at(65)} (شما: ${show()})`, `seconds wrap 59 → 00 and carry a minute: ${at(65)} (yours: ${show()})`, { expected: at(65), actual: show() });
+      // the set buttons, with bounce
+      const pressMin = (btn: string) => {
+        for (let i = 0; i < 5; i++) {
+          h.btn(btn, i % 2 === 0 ? 1 : 0);
+          h.run(3);
+        }
+        h.btn(btn, 1);
+        h.run(40);
+        h.btn(btn, 0);
+        h.run(40);
+      };
+      const mins = () => show().slice(2, 4);
+      const m0 = Number(mins());
+      pressMin('BTNU');
+      pressMin('BTNU');
+      t.ok(Number(mins()) === (m0 + 2) % 60, `دو فشار BTNU (با لرزش) دقیقه را دو تا جلو می‌برد: ${String((m0 + 2) % 60).padStart(2, '0')} (شما: ${mins()})`, `two bouncy BTNU presses add two minutes: ${String((m0 + 2) % 60).padStart(2, '0')} (yours: ${mins()})`, { expected: String((m0 + 2) % 60).padStart(2, '0'), actual: mins(), scene: { btn: 'BTNU' } });
+      for (let i = 0; i < 4; i++) pressMin('BTND');
+      t.ok(mins() === '59', `BTND دقیقه را کم می‌کند و از 00 به 59 می‌رود (شما: ${mins()})`, `BTND takes minutes down and wraps 00 → 59 (yours: ${mins()})`, { expected: '59', actual: mins(), scene: { btn: 'BTND' } });
+      // from hh:59:ss to the next hour, then all the way to 23:59 and over midnight
+      const hh = Number(show().slice(0, 2));
+      const ss = Number(show().slice(4, 6));
+      const toNext = 60 - ss;
+      h.run(400 * toNext + 50);
+      t.ok(show().slice(0, 4) === String((hh + 1) % 24).padStart(2, '0') + '00', `دقیقه‌ها در 59 به 00 برمی‌گردند و یک ساعت اضافه می‌شود (شما: ${show()})`, `minutes wrap 59 → 00 and carry an hour (yours: ${show()})`, { expected: String((hh + 1) % 24).padStart(2, '0') + '00xx', actual: show() });
+      const now = Number(show().slice(0, 2)) * 3600 + Number(show().slice(2, 4)) * 60 + Number(show().slice(4, 6));
+      const toMidnight = 24 * 3600 - now;
+      h.run(400 * (toMidnight + 3));
+      t.ok(show().slice(0, 4) === '0000', `ساعت‌ها در 23 به 00 برمی‌گردند (شما: ${show()})`, `hours wrap 23 → 00 (yours: ${show()})`, { expected: '0000xx', actual: show() });
     },
   },
 };

@@ -549,3 +549,60 @@ export function figShiftReg(o: { title?: string; fb?: string } = {}): string {
   b += T(x0 + 40, 146, lab.fb, 'sm ta');
   return svg(xr + 30, 160, lab.title, b);
 }
+
+// ---------------------------------------------------------------- 16. setup and hold (Phase 4.3)
+export function figSetupHold(o: { title?: string; setup?: string; hold?: string; ok?: string; edge?: string } = {}): string {
+  const lab = { title: 'Setup and hold: D must be stable from the setup time before the clock edge until the hold time after it', setup: 'setup', hold: 'hold', ok: 'D stable', edge: 'clock edge', ...o };
+  const x0 = 64;
+  const u = 18;
+  let b = timing(
+    [
+      { n: 'clk', b: '0000001111110000001111', c: 'ln' },
+      { n: 'D', bus: [[3, 'old'], [5, 'new'], [8, ''], [6, 'next']] },
+      { n: 'Q', bus: [[6, 'old'], [12, 'new'], [4, 'next']] },
+    ],
+    x0,
+    26,
+    u,
+    22,
+    18,
+  );
+  const edge = x0 + 6 * u;
+  b += `<rect class="hl" x="${edge - 2 * u}" y="20" width="${3 * u}" height="${2 * 40 + 6}" rx="3"/>`;
+  b += L(edge, 16, edge, 150, 'lm ld');
+  b += T(edge - u, 14, lab.setup, 'sm tb');
+  b += T(edge + u / 2 + 4, 14, lab.hold, 'sm tb', 's');
+  b += T(edge, 166, lab.edge, 'sm tm');
+  b += T(x0 + 3 * u + 4 * u, 102, lab.ok, 'sm ta');
+  return svg(x0 + 22 * u + 12, 176, lab.title, b);
+}
+
+// ---------------------------------------------------------------- 17. a metastable flip-flop (Phase 4.3)
+export function figMetastable(o: { title?: string; async?: string; q1?: string; q2?: string; meta?: string; settle?: string } = {}): string {
+  const lab = { title: 'Metastability: the input changes right at the clock edge, the first flip-flop hangs between 0 and 1 and then settles; the second flip-flop sees a clean value one clock later', async: 'btn (async)', q1: 'q1', q2: 'q2 (synced)', meta: 'metastable', settle: 'settles', ...o };
+  const x0 = 96;
+  const u = 16;
+  let b = timing(
+    [
+      { n: 'clk', b: '001100110011001100', c: 'ln' },
+      { n: lab.async, b: '001111111111111111', c: 'lb' },
+      { n: lab.q2, b: '000000111111111111' },
+    ],
+    x0,
+    20,
+    u,
+    20,
+    40,
+  );
+  // q1: drawn by hand, a wobbly middle level between the edge at t=2 and the settle point
+  const top = 110; // in the gap between the btn row (80..100) and the q2 row (140..160)
+  const y0 = top + 20;
+  const y1 = top;
+  const xe = x0 + 2 * u;
+  b += T(x0 - 8, top + 14, lab.q1, 'mono', 'e');
+  b += `<path class="la" d="M${x0} ${y0}H${xe}L${xe + 6} ${top + 10}C${xe + 14} ${top + 4} ${xe + 22} ${top + 16} ${xe + 30} ${top + 9}C${xe + 38} ${top + 3} ${xe + 44} ${top + 12} ${xe + 50} ${y1}H${x0 + 18 * u}"/>`;
+  b += L(xe, 12, xe, 196, 'lm ld');
+  b += T(xe + 26, top - 6, lab.meta, 'sm tb');
+  b += T(xe + 56, top + 30, lab.settle, 'sm ta', 's');
+  return svg(x0 + 18 * u + 12, 204, lab.title, b);
+}

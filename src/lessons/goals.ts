@@ -34,6 +34,12 @@ export const PREREQ: Record<string, string[]> = {
   vga: ['counter'],
   ram: ['ff'],
   softcore: ['ram', 'fsm', 'alu'],
+  timing: ['ff', 'alu'],
+  clocking: ['counter'],
+  cdc: ['timing', 'debounce'],
+  bram: ['ram'],
+  realboard: ['intro'],
+  'proj-clock': ['stopwatch', 'multiplex', 'cdc'],
 };
 
 export const GOALS: Record<string, { fa: Goals; en: Goals }> = {
@@ -736,6 +742,162 @@ export const GOALS: Record<string, { fa: Goals; en: Goals }> = {
         'A soft core is a processor built from FPGA logic that gets its job from a program.',
         'Every instruction takes two clocks: fetch loads <code>ir</code> and execute runs it.',
         'A jump only changes the PC; a conditional jump looks at the Z or C flag.',
+      ],
+    },
+  },
+  timing: {
+    fa: {
+      objectives: [
+        'زمان setup و hold فلیپ‌فلاپ را توضیح دهید.',
+        'تأخیر یک مسیر رجیستر به رجیستر و slack آن را حساب کنید.',
+        'یک مسیر طولانی را با Pipeline کوتاه کنید و WNS را در گزارش Timing ببینید.',
+      ],
+      takeaways: [
+        'تأخیر هر مسیر بین دو فلیپ‌فلاپ باید از دورهٔ کلاک منهای setup کمتر باشد.',
+        'WNS منفی یعنی طرح در آن کلاک درست کار نمی‌کند.',
+        'Pipeline مسیر را کوتاه و Fmax را بلند می‌کند، به بهای چند کلاک latency.',
+      ],
+    },
+    en: {
+      objectives: [
+        'Explain a flip-flop’s setup and hold times.',
+        'Work out the delay and slack of a register-to-register path.',
+        'Shorten a long path with a pipeline and read WNS in the Timing report.',
+      ],
+      takeaways: [
+        'Every path between two flip-flops must be shorter than the clock period minus setup.',
+        'A negative WNS means the design does not work at that clock.',
+        'A pipeline shortens the path and raises Fmax, at the cost of a few clocks of latency.',
+      ],
+    },
+  },
+  clocking: {
+    fa: {
+      objectives: [
+        'توضیح دهید چرا سیگنال تقسیم‌شده نباید کلاک یک بخش دیگر شود.',
+        'با یک کلاک و چند clock enable رویدادهای کند بسازید.',
+        'بدانید MMCM و PLL برای ساختن کلاک‌های دیگر به کار می‌روند.',
+      ],
+      takeaways: [
+        'همهٔ رجیسترها روی یک کلاک؛ سرعت هر بخش را enable تعیین می‌کند.',
+        'enable یک پالس یک‌کلاکه است که از prescaler می‌آید.',
+        'کلاک واقعی دیگر را MMCM یا PLL می‌سازد، نه یک شمارنده.',
+      ],
+    },
+    en: {
+      objectives: [
+        'Explain why a divided signal must not clock another part.',
+        'Make slow events from one clock and a few clock enables.',
+        'Know that an MMCM or PLL is what makes other clocks.',
+      ],
+      takeaways: [
+        'Every register on one clock; an enable sets each part’s pace.',
+        'An enable is a one-clock pulse that comes from a prescaler.',
+        'A real second clock comes from an MMCM or PLL, not from a counter.',
+      ],
+    },
+  },
+  cdc: {
+    fa: {
+      objectives: [
+        'شبه‌پایداری و علت آن را توضیح دهید.',
+        'یک سنکرون‌ساز دو فلیپ‌فلاپی برای ورودی ناهمگام بسازید.',
+        'سنکرون‌ساز و debouncer را به ترتیب درست پشت هم بگذارید.',
+      ],
+      takeaways: [
+        'هر سیگنال ناهمگام پیش از استفاده از دو فلیپ‌فلاپ پشت سر هم می‌گذرد.',
+        'به خروجی فلیپ‌فلاپ اول سنکرون‌ساز هیچ منطقی وصل نمی‌شود.',
+        'سنکرون‌ساز لرزش را حذف نمی‌کند؛ debounce بعد از آن می‌آید.',
+      ],
+    },
+    en: {
+      objectives: [
+        'Explain metastability and what causes it.',
+        'Build a two-flop synchroniser for an asynchronous input.',
+        'Put the synchroniser and the debouncer in the right order.',
+      ],
+      takeaways: [
+        'Every asynchronous signal goes through two flip-flops in a row before use.',
+        'No logic connects to the output of the synchroniser’s first flip-flop.',
+        'A synchroniser does not remove bounce; the debouncer comes after it.',
+      ],
+    },
+  },
+  bram: {
+    fa: {
+      objectives: [
+        'یک حافظهٔ بزرگ را طوری بنویسید که Vivado برایش BRAM بگذارد.',
+        'فرق read-first و write-first را توضیح دهید.',
+        'RAMB18 و RAMB36 را در گزارش Utilization پیدا کنید.',
+      ],
+      takeaways: [
+        'BRAM فقط خواندن همگام دارد؛ خروجی حافظه باید یک رجیستر باشد.',
+        'در read-first خروجی کلاک نوشتن مقدار قدیمی است و در write-first مقدار تازه.',
+        'هر RAMB36 سی‌وشش کیلوبیت است و می‌تواند دو RAMB18 مستقل باشد.',
+      ],
+    },
+    en: {
+      objectives: [
+        'Write a big memory so Vivado gives it a block RAM.',
+        'Explain the difference between read-first and write-first.',
+        'Find RAMB18 and RAMB36 in the Utilization report.',
+      ],
+      takeaways: [
+        'Block RAM has only synchronous reads; the memory output must be a register.',
+        'In read-first the write clock outputs the old value, in write-first the new one.',
+        'A RAMB36 holds 36 Kbit and can act as two independent RAMB18s.',
+      ],
+    },
+  },
+  realboard: {
+    fa: {
+      objectives: [
+        'یک برد مناسب انتخاب کنید و Vivado را نصب کنید.',
+        'پروژهٔ دانلودشده از FPGA Lab را در Vivado بسازید و bitstream تولید کنید.',
+        'برد را برنامه‌ریزی کنید و خطاهای رایج را رفع کنید.',
+      ],
+      takeaways: [
+        'کد و XDC همین دوره بدون تغییر روی Nexys A7 کار می‌کنند.',
+        'مسیر Vivado: Synthesis، Implementation، Generate Bitstream و Program Device.',
+        'بیشتر مشکلات از XDC نادرست، درایور کابل یا زمان‌بندی می‌آیند.',
+      ],
+    },
+    en: {
+      objectives: [
+        'Choose a suitable board and install Vivado.',
+        'Build the project downloaded from FPGA Lab in Vivado and make a bitstream.',
+        'Program the board and fix the common problems.',
+      ],
+      takeaways: [
+        'This course’s code and XDC work unchanged on a Nexys A7.',
+        'The Vivado path: Synthesis, Implementation, Generate Bitstream, Program Device.',
+        'Most problems come from a wrong XDC, the cable driver or timing.',
+      ],
+    },
+  },
+  'proj-clock': {
+    fa: {
+      objectives: [
+        'یک طرح بزرگ‌تر را به چند گام کوچک قابل آزمایش بشکنید.',
+        'prescaler، شمارنده‌های BCD و مالتی‌پلکس را در یک طرح کنار هم بگذارید.',
+        'دکمه‌ها را با سنکرون‌ساز و debounce به یک ورودی قابل اعتماد تبدیل کنید.',
+      ],
+      takeaways: [
+        'طرح بزرگ از بلوک‌های کوچکی ساخته می‌شود که هر کدام را جدا آزمایش کرده‌اید.',
+        'پارامتر DIV اجازه می‌دهد زمان را برای آزمایش سریع کنید.',
+        'هر ورودی از بیرون: سنکرون‌ساز، debounce، بعد لبه‌یاب.',
+      ],
+    },
+    en: {
+      objectives: [
+        'Break a bigger design into small milestones you can test.',
+        'Combine a prescaler, BCD counters and multiplexing in one design.',
+        'Turn buttons into reliable inputs with a synchroniser and debounce.',
+      ],
+      takeaways: [
+        'A big design is built from small blocks, each tested on its own.',
+        'The DIV parameter lets you speed time up for testing.',
+        'Every outside input: synchroniser, debounce, then an edge detector.',
       ],
     },
   },

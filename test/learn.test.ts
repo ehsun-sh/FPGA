@@ -1,14 +1,20 @@
 // The learning loop data: objectives, takeaways, levels, prerequisites, predict-first and the quiz.
 import { describe, expect, it } from 'vitest';
-import { ALL_LESSONS, PLAYGROUND } from '../src/lessons/course';
+import { ALL_LESSONS, COURSE_LESSONS, PROJECTS, PLAYGROUND } from '../src/lessons/course';
 import { EN } from '../src/lessons/en';
 import { EXERCISES } from '../src/grade/exercises';
 
 const plain = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&[a-z]+;/g, 'x');
+// the course lessons and the guided projects (the playground has no learning loop)
 const course = ALL_LESSONS.filter((l) => l !== PLAYGROUND);
 
 describe('objectives, takeaways, level and prerequisites', () => {
-  it('there are 27 course lessons', () => expect(course.length).toBe(27));
+  it('there are 32 course lessons and the projects are apart', () => {
+    expect(COURSE_LESSONS.length).toBe(32);
+    expect(PROJECTS.lessons.map((l) => l.id)).toEqual(['proj-clock']);
+    expect(PROJECTS.soon?.length).toBe(2);
+    for (const l of PROJECTS.lessons) expect(COURSE_LESSONS).not.toContain(l);
+  });
   for (const l of course)
     it(`${l.id}: 3 objectives, 3–4 takeaways in both languages, a level, valid prerequisites`, () => {
       for (const t of [l, EN[l.id]]) {

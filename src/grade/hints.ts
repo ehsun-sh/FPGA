@@ -272,4 +272,54 @@ export const HINTS: Record<string, [H, H]> = {
       en: 'For “if x = 233”: <code>XORI 233</code> then <code>JZ 0</code>, because the XOR of two equal numbers is zero. Start: <code>LDI 1; ST 0; LDI 2; ST 1</code>, loop: <code>LD 0; OUT 0; WAIT; XORI 233; JZ 0; LD 0; ADD 1; ST 2; LD 1; ST 0; LD 2; ST 1; JMP 4</code>.',
     },
   ],
+  timing: [
+    {
+      fa: 'مسیر بلند از رجیسترهای a و b شروع می‌شود و از سه ضرب‌کننده می‌گذرد. اگر نتیجهٔ میانی <code>(a*b + a)*b</code> را در یک رجیستر ذخیره کنید، هر مرحله فقط نیمی از مسیر را دارد. a و b را هم یک کلاک تأخیر دهید تا با نتیجهٔ میانی هم‌زمان باشند.',
+      en: 'The long path starts at the a and b registers and runs through three multipliers. Store the middle result <code>(a*b + a)*b</code> in a register and each stage holds only half the path. Delay a and b by one clock too, so they line up with the middle result.',
+    },
+    {
+      fa: '<code>reg [23:0] p; reg [7:0] a2, b2;</code> و در لبهٔ کلاک: <code>p &lt;= (a*b + a)*b; a2 &lt;= a; b2 &lt;= b; y &lt;= (p + b2)*a2;</code>. بعد Run Synthesis و گزارش Timing را ببینید.',
+      en: '<code>reg [23:0] p; reg [7:0] a2, b2;</code> and on the clock edge: <code>p &lt;= (a*b + a)*b; a2 &lt;= a; b2 &lt;= b; y &lt;= (p + b2)*a2;</code>. Then Run Synthesis and read the Timing report.',
+    },
+  ],
+  clocking: [
+    {
+      fa: 'همان الگوی 1 Hz را تکرار کنید: یک شمارندهٔ دیگر که فقط روی <code>tick_1k</code> جلو می‌رود، این بار تا ۴۹۹. وقتی به ۴۹۹ رسید و tick_1k هم یک است، یک پالس 2 Hz دارید.',
+      en: 'Repeat the 1 Hz pattern: another counter that steps only on <code>tick_1k</code>, this time up to 499. When it is at 499 and tick_1k is high, you have a 2 Hz pulse.',
+    },
+    {
+      fa: '<code>reg [9:0] c3; wire tick_2hz = tick_1k &amp;&amp; (c3 == 499);</code>، در always: <code>if (tick_1k) c3 &lt;= (c3 == 499) ? 0 : c3 + 1; if (tick_2hz) blink2 &lt;= ~blink2;</code> و <code>LED = {seconds, 6\'b0, blink2, blink}</code>. هیچ <code>always @(posedge tick_2hz)</code> ننویسید.',
+      en: '<code>reg [9:0] c3; wire tick_2hz = tick_1k &amp;&amp; (c3 == 499);</code>, in the always block: <code>if (tick_1k) c3 &lt;= (c3 == 499) ? 0 : c3 + 1; if (tick_2hz) blink2 &lt;= ~blink2;</code> and <code>LED = {seconds, 6\'b0, blink2, blink}</code>. Never write <code>always @(posedge tick_2hz)</code>.',
+    },
+  ],
+  cdc: [
+    {
+      fa: 'سنکرون‌ساز لرزش را از بین نمی‌برد، فقط آن را هم‌گام با کلاک می‌کند. یک debouncer ساده: مقدار پذیرفته‌شدهٔ <code>clean</code> را نگه دارید و فقط وقتی <code>s2</code> به مدت DB کلاک با آن فرق داشت، عوضش کنید. آشکارساز لبه باید روی <code>clean</code> کار کند.',
+      en: 'The synchroniser does not remove bounce; it only lines it up with the clock. A simple debouncer: keep the accepted level <code>clean</code> and change it only when <code>s2</code> has differed from it for DB clocks. The edge detector must look at <code>clean</code>.',
+    },
+    {
+      fa: '<code>module top #(parameter DB = 1_000_000) (...)</code>؛ در always: <code>if (s2 == clean) cnt &lt;= 0; else if (cnt == DB - 1) begin clean &lt;= s2; cnt &lt;= 0; end else cnt &lt;= cnt + 1; prev &lt;= clean;</code> و شرط شمارش: <code>clean &amp;&amp; !prev</code>.',
+      en: '<code>module top #(parameter DB = 1_000_000) (...)</code>; in the always block: <code>if (s2 == clean) cnt &lt;= 0; else if (cnt == DB - 1) begin clean &lt;= s2; cnt &lt;= 0; end else cnt &lt;= cnt + 1; prev &lt;= clean;</code> and count on <code>clean &amp;&amp; !prev</code>.',
+    },
+  ],
+  bram: [
+    {
+      fa: 'BRAM دو درگاه مستقل دارد. یک ورودی آدرس و یک خروجی دیگر به ماژول حافظه بدهید و در همان بلوک کلاک‌دار، خانهٔ آن آدرس را هم بخوانید.',
+      en: 'A block RAM has two independent ports. Give the memory module another address input and another output, and read that cell too in the same clocked block.',
+    },
+    {
+      fa: 'در ماژول: <code>input [9:0] addr_b, output reg [7:0] dout_b</code> و <code>dout_b &lt;= mem[addr_b];</code>. در top: <code>wire [9:0] addr = {page, SW[15:8]};</code>، <code>.addr_b(addr + 10\'d1)</code> و <code>LED = {dout_b, dout}</code>.',
+      en: 'In the module: <code>input [9:0] addr_b, output reg [7:0] dout_b</code> and <code>dout_b &lt;= mem[addr_b];</code>. In top: <code>wire [9:0] addr = {page, SW[15:8]};</code>, <code>.addr_b(addr + 10\'d1)</code> and <code>LED = {dout_b, dout}</code>.',
+    },
+  ],
+  'proj-clock': [
+    {
+      fa: 'گام‌ها را به ترتیب انجام دهید و بعد از هر گام اجرا کنید: اول تیک یک‌ثانیه‌ای (مثل درس شمارنده)، بعد شمارنده‌های BCD آبشاری (مثل کرنومتر)، بعد مالتی‌پلکس شش رقم و آخر دکمه‌ها با سنکرون‌ساز و debounce (مثل درس CDC).',
+      en: 'Do the milestones in order and run after each one: first the one-second tick (as in the counter lesson), then cascaded BCD counters (as in the stopwatch), then multiplexing six digits, and last the buttons with a synchroniser and debounce (as in the CDC lesson).',
+    },
+    {
+      fa: 'ساعت‌ها: <code>if (h1 == 2 &amp;&amp; h0 == 3) begin h1 &lt;= 0; h0 &lt;= 0; end else if (h0 != 9) h0 &lt;= h0 + 1; else begin h0 &lt;= 0; h1 &lt;= h1 + 1; end</code>. مالتی‌پلکس: <code>if (scan_cnt == SCAN - 1) digit &lt;= (digit == 5) ? 0 : digit + 1;</code> و <code>case (digit) 0: nibble = s0; ... default: nibble = h1;</code>.',
+      en: 'Hours: <code>if (h1 == 2 &amp;&amp; h0 == 3) begin h1 &lt;= 0; h0 &lt;= 0; end else if (h0 != 9) h0 &lt;= h0 + 1; else begin h0 &lt;= 0; h1 &lt;= h1 + 1; end</code>. Multiplexing: <code>if (scan_cnt == SCAN - 1) digit &lt;= (digit == 5) ? 0 : digit + 1;</code> and <code>case (digit) 0: nibble = s0; ... default: nibble = h1;</code>.',
+    },
+  ],
 };

@@ -28,8 +28,9 @@ function grade(l: Lesson, src: string, lang: 'verilog' | 'vhdl' = 'verilog', tb?
 const show = (r: GradeResult) => r.items.map((i) => `${i.ok ? '✓' : '✗'} ${i.en}`).join('\n');
 
 describe('exercise checkers', () => {
-  it('every lesson but the playground has an exercise', () => {
-    for (const l of ALL_LESSONS) if (l.id !== 'playground') expect(EXERCISES[l.id], l.id).toBeDefined();
+  it('every lesson but the playground and the real-board guide has an exercise', () => {
+    for (const l of ALL_LESSONS) if (l.id !== 'playground' && l.id !== 'realboard') expect(EXERCISES[l.id], l.id).toBeDefined();
+    expect(EXERCISES.realboard).toBeUndefined();
   });
 
   for (const [id, ex] of Object.entries(EXERCISES)) {

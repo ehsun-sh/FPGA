@@ -18,6 +18,8 @@ const all: [string, string][] = [
   ['figVga', F.figVga()],
   ['figTiny8', F.figTiny8()],
   ['figShiftReg', F.figShiftReg()],
+  ['figSetupHold', F.figSetupHold()],
+  ['figMetastable', F.figMetastable()],
   // Persian labels go through the same code
   ['figUartFrame fa', F.figUartFrame({ idle: 'بیکار', start: 'شروع', stop: 'پایان' })],
 ];

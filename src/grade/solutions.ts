@@ -3,6 +3,7 @@
 // test/exercises.test.ts proves every checker accepts both languages; the lesson page shows them after the hints.
 import { HEX_CASE_V, HEX_CASE_VHDL, type Lesson } from '../lessons/lessons';
 import { ALL_LESSONS } from '../lessons/course';
+import { BEYOND_SOLUTIONS } from './beyond-solutions';
 
 const lesson = (id: string): Lesson => {
   const l = ALL_LESSONS.find((x) => x.id === id);
@@ -834,7 +835,8 @@ const TB: Record<'verilog' | 'vhdl', () => string> = {
 // the reference solution of an exercise (for the testbench exercise: the testbench)
 export function solutionOf(id: string): { verilog: string; vhdl: string } | undefined {
   if (id === 'testbench') return { verilog: TB.verilog(), vhdl: TB.vhdl() };
+  if (BEYOND_SOLUTIONS[id]) return BEYOND_SOLUTIONS[id]();
   if (!VERILOG[id] || !VHDL[id]) return undefined;
   return { verilog: VERILOG[id](), vhdl: VHDL[id]() };
 }
-export const SOLUTION_IDS = [...new Set([...Object.keys(VERILOG), ...Object.keys(VHDL), 'testbench'])];
+export const SOLUTION_IDS = [...new Set([...Object.keys(VERILOG), ...Object.keys(VHDL), ...Object.keys(BEYOND_SOLUTIONS), 'testbench'])];

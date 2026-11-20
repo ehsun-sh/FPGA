@@ -466,6 +466,66 @@ const checks: Record<string, (h: Harness) => void> = {
     const tr = bh.capture(['F4', 'B2'], 320_000, () => k.set!('k:Up', 0));
     expect(decodePs2(tr, { clk: 0, data: 1 }).map((x) => x.text).join(' | ')).toBe('0xE0 ext | 0xF0 break | 0x75 Up');
   },
+  timing(h) {
+    for (const [a, b] of [[5, 7], [255, 255], [0, 9]]) {
+      h.sw(a | (b << 8));
+      h.sim.run(4);
+      expect(h.led(), `${a}, ${b}`).toBe(((((a * b + a) * b + b) * a) >>> 0) & 0xffff);
+    }
+  },
+  clocking(h) {
+    // DIV = 10: the 1 Hz tick comes every 10,000 clocks; LD0 toggles and LD15..LD8 count it
+    h.sim.run(10_000 * 3 + 5);
+    expect(h.led()).toBe((3 << 8) | 1);
+  },
+  cdc(h) {
+    for (let i = 0; i < 3; i++) {
+      h.btn('BTNC', 1);
+      h.sim.run(5);
+      h.btn('BTNC', 0);
+      h.sim.run(5);
+    }
+    expect(h.led()).toBe(3);
+    h.btn('BTNU', 1);
+    h.sim.run(2);
+    expect(h.led()).toBe(0);
+  },
+  bram(h) {
+    const write = (a: number, v: number) => {
+      h.sw((a << 8) | v);
+      h.btn('BTNC', 1);
+      h.sim.run(2);
+      h.btn('BTNC', 0);
+      h.sim.run(2);
+    };
+    write(3, 0xab);
+    write(200, 0x5c);
+    h.sw(3 << 8);
+    h.sim.run(2);
+    expect(h.led()).toBe(0xab);
+    h.sw(200 << 8);
+    h.sim.run(2);
+    expect(h.led()).toBe(0x5c);
+    // the next page has its own cells
+    h.btn('BTNR', 1);
+    h.sim.run(2);
+    h.btn('BTNR', 0);
+    h.sim.run(2);
+    expect(h.led()).toBe(1 << 14);
+  },
+  realboard(h) {
+    h.sw(0xff00);
+    h.sim.run(5);
+    expect(h.led()).toBe(0xff00);
+    h.sim.run(10);
+    expect(h.led()).toBe(0xff01);
+  },
+  'proj-clock'(h) {
+    // the starter compiles and keeps the display at 0: every milestone is still a TODO
+    h.sim.run(2000);
+    expect(h.an() & 0x3f).not.toBe(0x3f);
+    expect(h.seg()).toBe(0x40);
+  },
   softcore(h) {
     // PERIOD = 2^19 clocks per tick; the display is read over 2^18 clocks right after a tick
     const bh = new BoardHarness(h.d, DEFAULT_BOARD.masterXdc({ clk: true, reset: true, sw: true, led: true, seg: true }), DEFAULT_BOARD);
@@ -493,7 +553,7 @@ const checks: Record<string, (h: Harness) => void> = {
 };
 
 // lessons whose delays are shortened for the test
-const PARAMS: Record<string, Record<string, number>> = { softcore: { PERIOD: 1 << 19 } };
+const PARAMS: Record<string, Record<string, number>> = { softcore: { PERIOD: 1 << 19 }, clocking: { DIV: 10 }, realboard: { DIV: 10 }, 'proj-clock': { DIV: 40, SCAN: 1 } };
 
 describe('lessons', () => {
   for (const l of ALL_LESSONS) {
