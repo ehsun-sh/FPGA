@@ -677,3 +677,5 @@ auto-generated animations/GIFs from the simulator, a comments/community feature.
 Accounts with GitHub/email sign-in and cloud progress sync (Cloudflare D1), an instructor dashboard (class codes,
 who solved what, view a student's code), simulator-generated animations/GIFs for timing-heavy concepts, community
 Q&A per lesson, a second board (Basys 3) using the existing board plug-in interface, and SystemVerilog basics.
+
+The second board is now the EBAZ4205 (Zynq-7010) with its extension board: see [EBAZ4205-ROADMAP.md](EBAZ4205-ROADMAP.md).
