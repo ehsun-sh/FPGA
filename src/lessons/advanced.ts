@@ -1,6 +1,6 @@
 // Lessons for chapters 2-7. Persian text lives here next to the code; English text is in en.ts.
 import { HEX_CASE_V, HEX_CASE_VHDL, VHDL_NUMERIC, type Lesson } from './lessons';
-import { ref, truth, part } from './helpers';
+import { ref, truth, part, term } from './helpers';
 import { figFsm, figI2c, figShiftReg, figSpi, figUartFrame, figure } from './figures';
 
 export const HEX7SEG_V = `module hex7seg (
@@ -1091,7 +1091,7 @@ end rtl;
     title: 'حافظه RAM همگام',
     summary: 'RAM با ۱۶ خانه ۸ بیتی: نوشتن با دکمه و خواندن همگام.',
     body: `
-<p>FPGA علاوه بر فلیپ‌فلاپ، بلوک‌های حافظه آماده دارد: <b>Block RAM</b> (در Artix-7 هر بلوک ۳۶ کیلوبیت) و <b>Distributed RAM</b> (ساخته‌شده از LUTها). لازم نیست آن‌ها را دستی نمونه‌سازی کنیم: کافی است حافظه را با یک الگوی استاندارد توصیف کنیم تا Vivado خودش آن را تشخیص دهد (<b>inference</b>).</p>
+<p>FPGA علاوه بر فلیپ‌فلاپ، بلوک‌های حافظه آماده دارد: <b>${term('bram', 'Block RAM')}</b> (در Artix-7 هر بلوک ۳۶ کیلوبیت) و <b>Distributed RAM</b> (ساخته‌شده از LUTها). لازم نیست آن‌ها را دستی نمونه‌سازی کنیم: کافی است حافظه را با یک الگوی استاندارد توصیف کنیم تا Vivado خودش آن را تشخیص دهد (<b>inference</b>).</p>
 <h3>الگوی RAM همگام</h3>
 <ul>
   <li>Verilog: آرایه <code>reg [7:0] mem [0:15]</code></li>
@@ -1196,7 +1196,7 @@ end rtl;
     title: 'PWM: کنترل نور LED',
     summary: 'مدولاسیون پهنای پالس با ماژول پارامتری و ترکیب رنگ در LED سه‌رنگ.',
     body: `
-<p>خروجی دیجیتال فقط 0 یا 1 است؛ پس چطور یک LED را کم‌نور کنیم؟ با <b>PWM</b> (Pulse Width Modulation): خروجی را خیلی سریع روشن و خاموش می‌کنیم و نسبت زمان روشن بودن (<b>Duty Cycle</b>) میزان نور را تعیین می‌کند. همین روش برای کنترل سرعت موتور، سروو و تولید صدا هم به کار می‌رود.</p>
+<p>خروجی دیجیتال فقط 0 یا 1 است؛ پس چطور یک LED را کم‌نور کنیم؟ با <b>PWM</b> (Pulse Width Modulation): خروجی را خیلی سریع روشن و خاموش می‌کنیم و نسبت زمان روشن بودن (<b>${term('duty-cycle', 'Duty Cycle')}</b>) میزان نور را تعیین می‌کند. همین روش برای کنترل سرعت موتور، سروو و تولید صدا هم به کار می‌رود.</p>
 <h3>مدار</h3>
 <p>یک شمارنده W بیتی آزاد می‌شمارد و خروجی تا وقتی شمارنده از <code>duty</code> کوچک‌تر است یک است:</p>
 <pre class="formula">pwm = (cnt &lt; duty)      Duty = duty / 2^W</pre>
@@ -1300,7 +1300,7 @@ end rtl;
   <li><b>۸ بیت داده</b>، اول کم‌ارزش‌ترین بیت (LSB first)</li>
   <li><b>بیت توقف</b>: یک بیت 1</li>
 </ul>
-<pre class="formula">115200 baud ← هر بیت = 100,000,000 / 115200 ≈ 868 کلاک ≈ 8.68 µs</pre>
+<pre class="formula">115200 ${term('baud', 'baud')} ← هر بیت = 100,000,000 / 115200 ≈ 868 کلاک ≈ 8.68 µs</pre>
 ${figure(figUartFrame({ title: 'یک قاب UART (8N1): حالت بیکار یک، بیت شروع، هشت بیت داده با LSB اول، بیت پایان', idle: 'بیکار', start: 'شروع', stop: 'پایان', bit: '1 بیت = 1/115200 s ≈ 8.68 µs = 868 کلاک' }), 'ارسال حرف <code>H</code> (0x48): خط در حالت بیکار یک است، بیت شروع صفر است، بعد هشت بیت داده از کم‌ارزش‌ترین (D0) و در آخر بیت پایان که یک است.')}
 <h3>طراحی</h3>
 <p>ماژول <code>uart_tx</code> یک FSMD با چهار حالت IDLE، START، DATA و STOP است: یک شمارنده طول هر بیت را می‌سازد و یک شیفت رجیستر بیت‌ها را یکی‌یکی بیرون می‌فرستد. ماژول بالایی یک ROM کوچک با متن پیام دارد و هر وقت فرستنده آزاد شد (<code>busy=0</code>) حرف بعدی را می‌فرستد.</p>
@@ -2038,7 +2038,7 @@ end rtl;
     summary: 'نوشتن و خواندن یک رجیستر در یک سنسور شبیه‌سازی‌شده با آدرس 0x48، روی Pmod JB.',
     body: `
 <p><b>I²C</b> فقط <b>دو سیم</b> دارد و چند دستگاه روی همان دو سیم با <b>آدرس</b> ۷ بیتی از هم جدا می‌شوند. سنسورهای دما، شتاب‌سنج‌ها، EEPROMها و ساعت‌های RTC معمولاً I²C هستند.</p>
-<h3>Open-drain</h3>
+<h3>${term('open-drain', 'Open-drain')}</h3>
 <p>هیچ‌کس خط را به 1 «هل» نمی‌دهد: هر دستگاه فقط می‌تواند خط را به صفر بکشد یا رها کند و یک مقاومت pull-up آن را به 1 برمی‌گرداند. پس خط برابر است با AND همه دستگاه‌ها: <code>sda = !(m_low || d_low)</code>. به همین دلیل master و دستگاه می‌توانند نوبتی روی یک سیم حرف بزنند.</p>
 <h3>قاب I²C</h3>
 <ul>

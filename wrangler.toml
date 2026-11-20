@@ -1,5 +1,6 @@
 # One Worker serves the built site (dist/) at learn.shahmohammadi.dev/fpga.
-# Cloudflare build settings: build `npm run build`, deploy `npx wrangler deploy`.
+# Build with VITE_BASE=/fpga/ (deploy.yml sets it; set it in the Cloudflare build settings too), then
+# `npx wrangler deploy`.
 name = "fpga"
 main = "worker/index.js"
 compatibility_date = "2026-10-01"
@@ -11,3 +12,7 @@ routes = [
 directory = "./dist"
 binding = "ASSETS"
 run_worker_first = true
+# the Worker picks the file itself (fa/lesson/<id>/index.html), so no automatic trailing-slash redirects, which
+# would drop the /fpga prefix
+html_handling = "none"
+not_found_handling = "single-page-application"

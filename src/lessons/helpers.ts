@@ -17,3 +17,6 @@ export const part = (name: string, label = name) =>
 
 // The chip names in a piece of lesson HTML, in order of first appearance.
 export const partsIn = (html: string) => [...new Set([...html.matchAll(/data-part="([^"]+)"/g)].map((m) => m[1]))];
+
+// A glossary term (Phase 4.2): hovering or focusing it shows the definition from glossary.ts in a tooltip.
+export const term = (id: string, label: string) => `<abbr class="term" data-term="${id}" tabindex="0">${label}</abbr>`;

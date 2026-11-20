@@ -1,7 +1,8 @@
 // English text for the lessons. Code and constraints are shared with the Persian version (lessons.ts).
-import { ref, truth, part } from './helpers';
+import { ref, truth, part, term } from './helpers';
 import type { Question } from './predict';
 import { TINY8_ISA } from './softcore';
+import { BEYOND_EN } from './beyond-en';
 import { figAdder, figDivider, figFlipFlop, figFsm, figGates, figI2c, figLut, figMultiplex, figMux, figSeg7, figShiftReg, figSpi, figTiny8, figUartFrame, figVga, figure } from './figures';
 
 export interface LessonText {
@@ -24,8 +25,8 @@ export const EN: Record<string, LessonText> = {
 <p>An <b>FPGA</b> (Field Programmable Gate Array) is a chip whose <b>hardware</b> you define yourself. A processor runs instructions one after another; an FPGA becomes a real circuit in which every part works <b>at the same time</b>.</p>
 <h3>What is inside an FPGA?</h3>
 <ul>
-  <li><b>LUT</b> (Look-Up Table): a small table that implements any 6-input logic function.</li>
-  <li><b>Flip-flop</b>: one bit of memory that updates on a clock edge.</li>
+  <li><b>${term('lut', 'LUT')}</b> (Look-Up Table): a small table that implements any 6-input logic function.</li>
+  <li><b>${term('flip-flop', 'Flip-flop')}</b>: one bit of memory that updates on a clock edge.</li>
   <li><b>Routing</b>: programmable wiring between the blocks.</li>
   <li>Dedicated blocks such as <b>BRAM</b> (memory), <b>DSP</b> (multipliers) and clock management.</li>
 </ul>
@@ -34,9 +35,9 @@ ${figure(figLut(), 'A 4-input LUT is really a 16-bit memory: inputs A to D pick 
 <h3>The Vivado design flow</h3>
 <ol class="flow-steps">
   <li><b>Design Sources</b>: write the design in Verilog or VHDL</li>
-  <li><b>Constraints (XDC)</b>: connect the design's ports to the chip's pins</li>
+  <li><b>Constraints (${term('xdc', 'XDC')})</b>: connect the design's ports to the chip's pins</li>
   <li><b>Simulation</b>: check the behaviour</li>
-  <li><b>Synthesis</b>: turn the code into gates and flip-flops</li>
+  <li><b>${term('synthesis', 'Synthesis')}</b>: turn the code into gates and flip-flops</li>
   <li><b>Implementation</b>: place and route inside the chip</li>
   <li><b>Generate Bitstream</b> and <b>Program Device</b>: load the design onto the board</li>
 </ol>
@@ -232,7 +233,7 @@ ${figure(figMultiplex(), 'The AN lines are active-low and take turns; at the sam
     title: 'Finite state machines: a traffic light',
     summary: 'A Moore FSM with a timer and the RGB LED.',
     body: `
-<p>A <b>finite state machine (FSM)</b> is a circuit that is always in one of a few <b>states</b> and moves to the next state based on inputs and time. Almost every controller (protocols, menus, games) is built from FSMs.</p>
+<p>A <b>finite state machine (${term('fsm', 'FSM')})</b> is a circuit that is always in one of a few <b>states</b> and moves to the next state based on inputs and time. Almost every controller (protocols, menus, games) is built from FSMs.</p>
 <h3>Traffic light</h3>
 ${figure(figFsm(['RED', 'GREEN', 'YELLOW'], [[0, 1, '2 s'], [1, 2, '2 s or BTNC'], [2, 0, '1 s']], { title: 'Traffic-light state diagram', sub: ['LD16 red', 'LD16 green', 'LD16 yellow'], angle: 210, h: 280 }), 'Each circle is a state and each arrow a transition with its condition. The dot marks the state after reset. The output (the colour of LD16) depends only on the state, so this is a Moore machine.')}
 <ul>
@@ -258,7 +259,7 @@ ${figure(figFsm(['RED', 'GREEN', 'YELLOW'], [[0, 1, '2 s'], [1, 2, '2 s or BTNC'
   <li><b>8 data bits</b>, least significant bit first</li>
   <li><b>Stop bit</b>: one 1 bit</li>
 </ul>
-<pre class="formula">115200 baud → one bit = 100,000,000 / 115200 ≈ 868 clocks ≈ 8.68 µs</pre>
+<pre class="formula">115200 ${term('baud', 'baud')} → one bit = 100,000,000 / 115200 ≈ 868 clocks ≈ 8.68 µs</pre>
 ${figure(figUartFrame(), 'Sending <code>H</code> (0x48): the line idles high, the start bit is low, then eight data bits from the least significant (D0), and finally a high stop bit.')}
 <h3>The design</h3>
 <p>The <code>uart_tx</code> module is an FSMD with four states, IDLE, START, DATA and STOP: a counter times each bit and a shift register sends the bits out one by one. The top module holds a small ROM with the message and sends the next character whenever the transmitter is free (<code>busy=0</code>).</p>
@@ -325,7 +326,7 @@ ${figure(figSpi(), 'In mode 0 SCLK idles low. Both sides read a bit on the risin
     summary: 'Write and read back a register in a simulated sensor at address 0x48, on Pmod JB.',
     body: `
 <p><b>I²C</b> has only <b>two wires</b>, and several devices share them, told apart by a 7-bit <b>address</b>. Temperature sensors, accelerometers, EEPROMs and real-time clocks usually speak I²C.</p>
-<h3>Open drain</h3>
+<h3>${term('open-drain', 'Open drain')}</h3>
 <p>Nobody drives the line to 1: each device can only pull it to 0 or let go, and a pull-up resistor brings it back to 1. So the line is the AND of all devices: <code>sda = !(m_low || d_low)</code>. That is how the master and the device can take turns on the same wire.</p>
 <h3>An I²C frame</h3>
 <ul>
@@ -347,7 +348,7 @@ ${figure(figI2c(), 'After START come the 7-bit address and the R/W bit (W here, 
     title: 'Simulation with a testbench and waveforms',
     summary: 'Test the design with a testbench before it goes on the board, and watch its signals over time.',
     body: `
-<p>So far every design went straight onto the board. In real projects a design is <b>simulated</b> before the FPGA is programmed. A second HDL program, the <b>testbench</b>, changes the inputs at chosen times and checks the outputs, and every signal can be inspected in a <b>waveform</b> view. In Vivado this is <b>Run Behavioral Simulation</b>, and it works the same way here.</p>
+<p>So far every design went straight onto the board. In real projects a design is <b>simulated</b> before the FPGA is programmed. A second HDL program, the <b>${term('testbench', 'testbench')}</b>, changes the inputs at chosen times and checks the outputs, and every signal can be inspected in a <b>waveform</b> view. In Vivado this is <b>Run Behavioral Simulation</b>, and it works the same way here.</p>
 <h3>What a testbench contains</h3>
 <ol>
   <li><b>A module with no ports</b>: the testbench is the top level and connects to no pins.</li>
@@ -575,7 +576,7 @@ ${figure(figFsm(['IDLE', 'OP', 'DONE'], [[0, 1, 'start'], [1, 1, 'n ≠ 0'], [1,
     title: 'Synchronous RAM',
     summary: 'A 16 × 8 RAM: write with a button, read synchronously.',
     body: `
-<p>Besides flip-flops, an FPGA has ready-made memory blocks: <b>block RAM</b> (36 Kbit per block on Artix-7) and <b>distributed RAM</b> (built from LUTs). You don't have to instantiate them by hand: describe the memory with a standard template and Vivado recognises it (<b>inference</b>).</p>
+<p>Besides flip-flops, an FPGA has ready-made memory blocks: <b>${term('bram', 'block RAM')}</b> (36 Kbit per block on Artix-7) and <b>distributed RAM</b> (built from LUTs). You don't have to instantiate them by hand: describe the memory with a standard template and Vivado recognises it (<b>inference</b>).</p>
 <h3>The synchronous RAM template</h3>
 <ul>
   <li>Verilog: an array <code>reg [7:0] mem [0:15]</code></li>
@@ -601,7 +602,7 @@ ${truth(
     title: 'PWM: dimming an LED',
     summary: 'Pulse-width modulation with a parameterised module, mixing colours on the RGB LED.',
     body: `
-<p>A digital output is only 0 or 1, so how do we dim an LED? With <b>PWM</b> (pulse-width modulation): switch the output on and off very fast, and the fraction of time it is on (the <b>duty cycle</b>) sets the brightness. The same method drives motors, servos and sound.</p>
+<p>A digital output is only 0 or 1, so how do we dim an LED? With <b>PWM</b> (pulse-width modulation): switch the output on and off very fast, and the fraction of time it is on (the <b>${term('duty-cycle', 'duty cycle')}</b>) sets the brightness. The same method drives motors, servos and sound.</p>
 <h3>The circuit</h3>
 <p>A free-running W-bit counter counts, and the output is 1 while the counter is below <code>duty</code>:</p>
 <pre class="formula">pwm = (cnt &lt; duty)      duty cycle = duty / 2^W</pre>
@@ -718,6 +719,7 @@ ${TINY8_ISA('en')}
     tryIt: `<p>Press <span class="kbd">▶ Run</span> and turn on ${part('SW0')}: every 0.25 s the number on the LEDs and the display goes up by one. Change the step with ${part('SW7..SW0')}. ${part('CPU_RESET')} starts the program again from the top.</p>
 <p>In the schematic (RTL Analysis → Schematic), choose the <code>cpu</code> instance to see the processor's datapath: the PC register, the instruction register, the accumulator and the RAM.</p>`,
   },
+  ...BEYOND_EN,
 };
 
 // Lesson-page labels

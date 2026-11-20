@@ -329,4 +329,76 @@ export const QUIZ: Record<string, { fa: Question[]; en: Question[] }> = {
       q('How does a soft core differ from a dedicated circuit?', ['It takes its job from a program in ROM, so changing the program changes the job', 'It is faster', 'It needs fewer LUTs', 'There is no difference'], 0, 'The hardware stays fixed and the program sets the behaviour; a dedicated circuit is usually faster.'),
     ],
   },
+  timing: {
+    fa: [
+      q('WNS منفی در گزارش Timing یعنی چه؟', ['دست‌کم یک مسیر از دورهٔ کلاک کندتر است', 'طرح خیلی کوچک است', 'کلاک تعریف نشده است', 'همهٔ قیدها برقرارند'], 0, 'WNS بدترین slack است؛ منفی یعنی داده دیرتر از لبهٔ بعدی به فلیپ‌فلاپ می‌رسد.'),
+      q('Pipeline کردن یک مسیر چه چیزی را بیشتر می‌کند؟', ['Fmax و latency را', 'فقط تعداد LUTها را', 'دورهٔ کلاک را', 'زمان hold را'], 0, 'مسیرها کوتاه‌تر می‌شوند پس Fmax بالا می‌رود، و نتیجه یک یا چند کلاک دیرتر آماده می‌شود.'),
+      q('زمان setup چیست؟', ['مدتی که D باید پیش از لبهٔ کلاک ثابت باشد', 'مدتی که Q بعد از لبه طول می‌کشد تا عوض شود', 'تأخیر سیم‌کشی', 'زمان روشن شدن برد'], 0, 'setup قبل از لبه است و hold بعد از آن؛ تأخیر clk→Q چیز دیگری است.'),
+    ],
+    en: [
+      q('What does a negative WNS in the Timing report mean?', ['At least one path is slower than the clock period', 'The design is very small', 'No clock is defined', 'Every constraint is met'], 0, 'WNS is the worst slack; negative means data reaches a flip-flop after the next edge.'),
+      q('What does pipelining a path increase?', ['Fmax and latency', 'Only the number of LUTs', 'The clock period', 'The hold time'], 0, 'Shorter paths raise Fmax, and the result is ready one or more clocks later.'),
+      q('What is the setup time?', ['How long D must be stable before the clock edge', 'How long Q takes to change after the edge', 'The routing delay', 'How long the board takes to power up'], 0, 'Setup is before the edge and hold after it; the clk→Q delay is something else.'),
+    ],
+  },
+  clocking: {
+    fa: [
+      q('برای اینکه یک بخش هر ثانیه یک بار به‌روز شود، بهترین راه کدام است؟', ['همان کلاک ۱۰۰ مگاهرتز با یک enable یک‌ثانیه‌ای', '<code>always @(posedge slow)</code> با سیگنال تقسیم‌شده', 'کلاک را با یک گیت AND قطع و وصل کنید', 'یک کلاک جدا از یک پایهٔ دیگر'], 0, 'enable روی پایهٔ CE فلیپ‌فلاپ کار می‌کند و همه‌چیز در یک دامنهٔ کلاک می‌ماند.'),
+      q('چرا خروجی یک فلیپ‌فلاپ کلاک خوبی نیست؟', ['روی سیم‌کشی معمولی می‌رود و skew زیادی دارد', 'چون همیشه ۰ است', 'چون LUT مصرف نمی‌کند', 'چون فرکانسش خیلی بالاست'], 0, 'کلاک‌های واقعی روی شبکهٔ BUFG پخش می‌شوند تا تقریباً هم‌زمان برسند.'),
+      q('برای ساختن یک کلاک ۲۵ مگاهرتز واقعی در Artix-7 از چه استفاده می‌شود؟', ['MMCM یا PLL (Clocking Wizard)', 'یک شمارندهٔ ۲ بیتی', 'یک LUT', 'یک بلوک BRAM'], 0, 'MMCM و PLL بلوک‌های سخت‌افزاری مدیریت کلاک‌اند و کلاک تمیز با فاز و فرکانس دلخواه می‌سازند.'),
+    ],
+    en: [
+      q('What is the best way to update a block once a second?', ['The same 100 MHz clock with a one-second enable', '<code>always @(posedge slow)</code> with the divided signal', 'Gate the clock with an AND', 'A separate clock from another pin'], 0, 'The enable uses the flip-flop’s CE pin and everything stays in one clock domain.'),
+      q('Why is a flip-flop output a poor clock?', ['It travels on ordinary routing with a lot of skew', 'It is always 0', 'It uses no LUTs', 'Its frequency is too high'], 0, 'Real clocks are spread on the BUFG network so they arrive almost together.'),
+      q('What makes a real 25 MHz clock on an Artix-7?', ['An MMCM or PLL (Clocking Wizard)', 'A 2-bit counter', 'A LUT', 'A block RAM'], 0, 'MMCMs and PLLs are hard clock-management blocks that make clean clocks of any phase and frequency.'),
+    ],
+  },
+  cdc: {
+    fa: [
+      q('سنکرون‌ساز دو فلیپ‌فلاپی چه مشکلی را حل می‌کند؟', ['شبه‌پایداری ورودی ناهمگام را', 'لرزش دکمه را', 'کم بودن LUT را', 'WNS منفی را'], 0, 'به فلیپ‌فلاپ اول فرصت می‌دهد آرام شود؛ لرزش را debouncer حذف می‌کند.'),
+      q('کدام ترتیب برای یک دکمه درست است؟', ['سنکرون‌ساز، debouncer، لبه‌یاب', 'لبه‌یاب، سنکرون‌ساز، debouncer', 'debouncer، لبه‌یاب، سنکرون‌ساز', 'فقط لبه‌یاب'], 0, 'اول سیگنال هم‌گام می‌شود، بعد لرزش آن فیلتر می‌شود و آخر لحظهٔ فشار پیدا می‌شود.'),
+      q('چه چیزی نباید به خروجی فلیپ‌فلاپ اول سنکرون‌ساز وصل شود؟', ['هیچ منطقی جز فلیپ‌فلاپ دوم', 'فلیپ‌فلاپ دوم', 'کلاک', 'هیچ چیز؛ همه‌چیز مجاز است'], 0, 'خروجی اول ممکن است شبه‌پایدار باشد؛ فقط فلیپ‌فلاپ دوم آن را می‌خواند.'),
+    ],
+    en: [
+      q('What does a two-flop synchroniser fix?', ['Metastability of an asynchronous input', 'Button bounce', 'A shortage of LUTs', 'A negative WNS'], 0, 'It gives the first flip-flop time to settle; the debouncer removes bounce.'),
+      q('Which order is right for a button?', ['Synchroniser, debouncer, edge detector', 'Edge detector, synchroniser, debouncer', 'Debouncer, edge detector, synchroniser', 'Only an edge detector'], 0, 'First the signal is brought into step, then its bounce is filtered, and last the moment of the press is found.'),
+      q('What must not connect to the output of the synchroniser’s first flip-flop?', ['Any logic other than the second flip-flop', 'The second flip-flop', 'The clock', 'Nothing; anything is allowed'], 0, 'The first output may be metastable; only the second flip-flop reads it.'),
+    ],
+  },
+  bram: {
+    fa: [
+      q('چرا <code>assign dout = mem[addr]</code> حافظه را از BRAM بیرون می‌برد؟', ['BRAM خواندن ترکیبی ندارد و خروجی‌اش رجیستر است', 'چون assign در Verilog ممنوع است', 'چون آرایه کوچک می‌شود', 'تفاوتی نمی‌کند'], 0, 'BRAM فقط خواندن همگام دارد؛ خواندن ترکیبی با Distributed RAM در LUTها ساخته می‌شود.'),
+      q('در حالت read-first، خروجی کلاکی که همان خانه نوشته می‌شود چیست؟', ['مقدار قدیمی خانه', 'مقدار تازه', 'صفر', 'نامعلوم'], 0, 'read-first اول می‌خواند و بعد می‌نویسد؛ write-first مقدار تازه را بیرون می‌دهد.'),
+      q('یک حافظهٔ 1024 × 8 در Artix-7 معمولاً چه منبعی مصرف می‌کند؟', ['یک RAMB18', 'هزار LUT', 'یک DSP', 'هشت RAMB36'], 0, '۸ کیلوبیت در یک RAMB18 (نیم RAMB36) جا می‌شود.'),
+    ],
+    en: [
+      q('Why does <code>assign dout = mem[addr]</code> take the memory out of block RAM?', ['Block RAM has no combinational read; its output is a register', 'assign is not allowed in Verilog', 'The array gets smaller', 'It makes no difference'], 0, 'Block RAM reads only synchronously; a combinational read is built as distributed RAM in LUTs.'),
+      q('In read-first mode, what is the output in a clock that writes the same cell?', ['The cell’s old value', 'The new value', 'Zero', 'Undefined'], 0, 'Read-first reads and then writes; write-first outputs the new value.'),
+      q('What does a 1024 × 8 memory usually use on an Artix-7?', ['One RAMB18', 'A thousand LUTs', 'One DSP', 'Eight RAMB36s'], 0, '8 Kbit fits in one RAMB18 (half a RAMB36).'),
+    ],
+  },
+  realboard: {
+    fa: [
+      q('کدام فایل از zip دانلودشده پروژهٔ Vivado را می‌سازد؟', ['create_project.tcl', 'top.bit', 'board.xdc', 'readme.txt'], 0, 'اسکریپت Tcl را از Tools → Run Tcl Script اجرا می‌کنید؛ bitstream را خود Vivado می‌سازد.'),
+      q('ترتیب درست مراحل در Vivado کدام است؟', ['Synthesis، Implementation، Generate Bitstream، Program Device', 'Program Device، Synthesis، Implementation', 'Generate Bitstream، Synthesis، Program Device', 'Implementation، Synthesis، Program Device'], 0, 'سنتز netlist می‌سازد، پیاده‌سازی آن را روی تراشه می‌گذارد، و bitstream آخر ساخته و برنامه‌ریزی می‌شود.'),
+      q('Hardware Manager برد را پیدا نمی‌کند. محتمل‌ترین علت چیست؟', ['درایور کابل نصب نیست یا کابل USB فقط شارژ می‌کند', 'WNS منفی است', 'XDC اشتباه است', 'کد VHDL است'], 0, 'پیدا کردن برد به کابل و درایور مربوط است؛ XDC و زمان‌بندی بعداً مهم می‌شوند.'),
+    ],
+    en: [
+      q('Which file in the downloaded zip creates the Vivado project?', ['create_project.tcl', 'top.bit', 'board.xdc', 'readme.txt'], 0, 'You run the Tcl script from Tools → Run Tcl Script; Vivado itself makes the bitstream.'),
+      q('What is the right order of steps in Vivado?', ['Synthesis, Implementation, Generate Bitstream, Program Device', 'Program Device, Synthesis, Implementation', 'Generate Bitstream, Synthesis, Program Device', 'Implementation, Synthesis, Program Device'], 0, 'Synthesis makes the netlist, implementation places it on the chip, and the bitstream is built and programmed last.'),
+      q('Hardware Manager does not find the board. What is the likeliest cause?', ['The cable driver is missing or the USB cable only charges', 'WNS is negative', 'The XDC is wrong', 'The code is VHDL'], 0, 'Finding the board depends on the cable and driver; the XDC and timing matter later.'),
+    ],
+  },
+  'proj-clock': {
+    fa: [
+      q('چرا شمارش ساعت با BCD (یک رقم در هر ۴ بیت) راحت‌تر است؟', ['هر رقم مستقیم به دیکودر هفت‌قطعه‌ای می‌رود', 'LUT کمتری از هر روش دیگر مصرف می‌کند', 'چون کلاک لازم ندارد', 'چون Verilog عدد دودویی ندارد'], 0, 'با BCD برای نمایش نیازی به تقسیم بر ۱۰ نیست.'),
+      q('ساعت از 23:59:59 به چه می‌رود؟', ['00:00:00', '24:00:00', '23:00:00', '00:59:59'], 0, 'ثانیه و دقیقه در 59 و ساعت در 23 به صفر برمی‌گردند.'),
+      q('چرا DIV پارامتر است؟', ['تا بررسی‌کننده و شما بتوانید زمان را برای آزمایش سریع کنید', 'چون Verilog عدد ثابت ندارد', 'تا LUT کمتری مصرف شود', 'دلیلی ندارد'], 0, 'شبیه‌سازی یک روز با ۱۰۰ مگاهرتز طولانی است؛ DIV کوچک همان رفتار را سریع نشان می‌دهد.'),
+    ],
+    en: [
+      q('Why is counting the time in BCD (one digit per 4 bits) easier?', ['Each digit goes straight to the seven-segment decoder', 'It uses fewer LUTs than any other way', 'It needs no clock', 'Verilog has no binary numbers'], 0, 'With BCD the display needs no division by 10.'),
+      q('What comes after 23:59:59?', ['00:00:00', '24:00:00', '23:00:00', '00:59:59'], 0, 'Seconds and minutes wrap at 59 and hours at 23.'),
+      q('Why is DIV a parameter?', ['So the checker and you can speed time up for testing', 'Verilog has no constants', 'To use fewer LUTs', 'No reason'], 0, 'Simulating a day at 100 MHz takes long; a small DIV shows the same behaviour quickly.'),
+    ],
+  },
 };

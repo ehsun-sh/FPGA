@@ -1,7 +1,7 @@
 // Step-by-step FPGA course. Lesson text is Persian (RTL); code and identifiers stay in English.
 import type { XdcGroup } from '../boards';
 import type { LaConfig } from '../la/window';
-import { ref, truth, part } from './helpers';
+import { ref, truth, part, term } from './helpers';
 import type { Question } from './predict';
 import { figAdder, figDivider, figFlipFlop, figFsm, figGates, figLut, figMultiplex, figMux, figSeg7, figure } from './figures';
 
@@ -83,8 +83,8 @@ export const LESSONS: Lesson[] = [
 <p><b>FPGA</b> (Field Programmable Gate Array) تراشه‌ای است که <b>سخت‌افزار</b> داخلش را خودمان تعریف می‌کنیم. برخلاف پردازنده که دستورها را یکی‌یکی اجرا می‌کند، در FPGA مدار واقعی ساخته می‌شود و همه بخش‌ها <b>هم‌زمان</b> کار می‌کنند.</p>
 <h3>داخل FPGA چه خبر است؟</h3>
 <ul>
-  <li><b>LUT</b> (Look-Up Table): جدول کوچکی که هر تابع منطقی ۶ ورودی را پیاده می‌کند.</li>
-  <li><b>Flip-Flop</b>: یک بیت حافظه که با لبه کلاک مقدار می‌گیرد.</li>
+  <li><b>${term('lut', 'LUT')}</b> (Look-Up Table): جدول کوچکی که هر تابع منطقی ۶ ورودی را پیاده می‌کند.</li>
+  <li><b>${term('flip-flop', 'Flip-Flop')}</b>: یک بیت حافظه که با لبه کلاک مقدار می‌گیرد.</li>
   <li><b>Routing</b>: سیم‌کشی قابل برنامه‌ریزی بین بلوک‌ها.</li>
   <li>بلوک‌های ویژه مثل <b>BRAM</b> (حافظه)، <b>DSP</b> (ضرب‌کننده) و مدیریت کلاک.</li>
 </ul>
@@ -93,9 +93,9 @@ ${figure(figLut({ title: 'یک LUT چهارورودی: ۱۶ بیت ذخیره‌
 <h3>جریان کار در Vivado</h3>
 <ol class="flow-steps">
   <li><b>Design Sources</b>: نوشتن کد به زبان Verilog یا VHDL</li>
-  <li><b>Constraints (XDC)</b>: وصل کردن پورت‌های کد به پایه‌های تراشه</li>
+  <li><b>Constraints (${term('xdc', 'XDC')})</b>: وصل کردن پورت‌های کد به پایه‌های تراشه</li>
   <li><b>Simulation</b>: بررسی رفتار مدار</li>
-  <li><b>Synthesis</b>: تبدیل کد به گیت و فلیپ‌فلاپ</li>
+  <li><b>${term('synthesis', 'Synthesis')}</b>: تبدیل کد به گیت و فلیپ‌فلاپ</li>
   <li><b>Implementation</b>: جای‌گذاری و سیم‌کشی داخل تراشه</li>
   <li><b>Generate Bitstream</b> و <b>Program Device</b>: ریختن طرح روی برد</li>
 </ol>
@@ -751,7 +751,7 @@ end rtl;
     title: 'ماشین حالت (FSM): چراغ راهنمایی',
     summary: 'ماشین حالت Moore با تایمر و LED سه‌رنگ.',
     body: `
-<p><b>ماشین حالت متناهی (FSM)</b> مداری است که در هر لحظه در یکی از چند <b>حالت</b> مشخص قرار دارد و بر اساس ورودی‌ها و زمان به حالت بعدی می‌رود. تقریباً همه کنترلرها (پروتکل‌ها، منوها، بازی‌ها) با FSM ساخته می‌شوند.</p>
+<p><b>ماشین حالت متناهی (${term('fsm', 'FSM')})</b> مداری است که در هر لحظه در یکی از چند <b>حالت</b> مشخص قرار دارد و بر اساس ورودی‌ها و زمان به حالت بعدی می‌رود. تقریباً همه کنترلرها (پروتکل‌ها، منوها، بازی‌ها) با FSM ساخته می‌شوند.</p>
 <h3>چراغ راهنمایی</h3>
 ${figure(figFsm(['RED', 'GREEN', 'YELLOW'], [[0, 1, '2 s'], [1, 2, '2 s یا BTNC'], [2, 0, '1 s']], { title: 'نمودار حالت چراغ راهنمایی', sub: ['LD16 قرمز', 'LD16 سبز', 'LD16 زرد'], angle: 210, h: 280 }), 'هر دایره یک حالت است و هر پیکان یک گذار با شرطش. نقطه‌ی سیاه حالت شروع بعد از reset را نشان می‌دهد. خروجی (رنگ LD16) فقط به حالت بستگی دارد؛ پس این یک ماشین Moore است.')}
 <ul>

@@ -26,7 +26,7 @@ import {
   type Lang,
 } from "./hdl";
 import { EN, LESSON_UI, type LessonText } from "./lessons/en";
-import { ALL_LESSONS, CHAPTERS, chapterOf } from "./lessons/course";
+import { ALL_LESSONS, CHAPTERS, COURSE_LESSONS, chapterOf } from "./lessons/course";
 import { LESSONS, PLAYGROUND, type Lesson } from "./lessons/lessons";
 import { defaultConfig, LogicAnalyzer, type LaConfig } from "./la/window";
 import { SerialConsole } from "./serial/console";
@@ -46,10 +46,15 @@ import { CodeEditor } from "./ui/editor";
 import { highlight } from "./ui/highlight";
 import { bindLangMenu, homeNav, renderHome } from "./ui/home";
 import { icon } from "./ui/icons";
-import { num, TOUR, UI, type UiLang } from "./ui/strings";
+import { HOME, num, TOUR, UI, type UiLang } from "./ui/strings";
+import { bindTermTips, GLOSSARY_UI, renderGlossary } from "./ui/glossary";
+import { GLOSSARY } from "./lessons/glossary";
+import { buildIndex, openSearch, stripTags, type SearchDoc, type SearchIndex } from "./ui/search";
+import { certificateSvg, collect, makeFile, merge, parseFile, stampKey, svgToPng } from "./ui/progress";
 import { startTour, type TourStep } from "./ui/tour";
 import { ISSUES_URL, limitsDialog, shortcutsDialog } from "./ui/help";
 import { versionLabel } from "./version";
+import { legacyHash, parse, urlFor, type Route } from "./ui/router";
 import { BOARD_BG, cycleTheme, initTheme } from "./ui/theme";
 import { toolIcons, toolLegend, toolsBox } from "./ui/tools";
 import { lessonTools, type Tool } from "./lessons/tools";
@@ -371,13 +376,18 @@ const srcEditor = new CodeEditor(
 );
 const xdcEditor = new CodeEditor($("#xdc-editor"), "xdc", xdcFor(lesson));
 let saveTimer = 0;
+// editor text is saved with a time stamp (at:<key>), so a progress import keeps the newer copy (Phase 4.5)
+function saveCode(key: string, t: string) {
+  store.set(key, t);
+  store.set(stampKey(key), String(Date.now()));
+}
 srcEditor.onChange = (t) => {
   clearTimeout(saveTimer);
-  saveTimer = window.setTimeout(() => store.set(srcKey(lesson, lang), t), 300);
+  saveTimer = window.setTimeout(() => saveCode(srcKey(lesson, lang), t), 300);
 };
 xdcEditor.onChange = (t) => {
   clearTimeout(saveTimer);
-  saveTimer = window.setTimeout(() => store.set(xdcKey(lesson), t), 300);
+  saveTimer = window.setTimeout(() => saveCode(xdcKey(lesson), t), 300);
 };
 const tbEditor = new CodeEditor($("#tb-editor"), lang, tbFor(lesson, lang));
 let tbDirty = false; // the user edited the testbench (only then is it saved)
@@ -385,7 +395,7 @@ tbEditor.onChange = (t) => {
   if (!tbDirty && !tbEditor.programmatic) tbDirty = true;
   if (!tbDirty) return;
   clearTimeout(saveTimer);
-  saveTimer = window.setTimeout(() => store.set(tbKey(lesson, lang), t), 300);
+  saveTimer = window.setTimeout(() => saveCode(tbKey(lesson, lang), t), 300);
 };
 
 const board = boardDef.createView($("#board"));
@@ -1015,7 +1025,7 @@ function renderLessonList() {
   let n = 0;
   el.innerHTML = CHAPTERS.map((c, ci) => {
     const items = c.lessons.map((l) => {
-      const no = l === PLAYGROUND ? "★" : num(++n, uiLang);
+      const no = l === PLAYGROUND ? "★" : c.projects ? icon("flag", 12) : num(++n, uiLang);
       const cur = l.id === lesson.id;
       const done = doneMark(l);
       return `<button class="flow-item lesson-item ${cur ? "active" : ""}" data-lesson="${l.id}" dir="${dir}"${cur ? ' aria-current="page"' : ""}><span class="num">${no}</span><span class="lt">${esc(text(l).title)}</span>${levelDot(l, uiLang)}${toolIcons(l)}${done}</button>`;
@@ -1026,11 +1036,12 @@ function renderLessonList() {
     );
     const open = chapterOpen(ci);
     const lab = c.lessons.includes(PLAYGROUND);
+    const unnumbered = lab || !!c.projects;
     const done = c.lessons.filter(isDone).length;
     const count = lab
       ? ""
       : `<span class="ch-prog${done === c.lessons.length ? " full" : ""}" title="${ui.chapterDone(num(done, uiLang), num(c.lessons.length, uiLang))}">${num(done, uiLang)}/${num(c.lessons.length, uiLang)}</span>`;
-    return `<div class="chap${open ? " open" : ""}"><button class="chapter-h" dir="${dir}" data-chapter="${ci}" aria-expanded="${open}" aria-controls="chap-${ci}">${icon("chevron", 12)}<span class="ct">${lab ? "" : `<span class="cno">${num(ci + 1, uiLang)}</span>`}${esc(c.title[uiLang])}</span>${count}</button><div class="chap-body" id="chap-${ci}"${open ? "" : " hidden"}>${items.join("")}${soon.join("")}</div></div>`;
+    return `<div class="chap${open ? " open" : ""}"><button class="chapter-h" dir="${dir}" data-chapter="${ci}" aria-expanded="${open}" aria-controls="chap-${ci}">${icon("chevron", 12)}<span class="ct">${unnumbered ? "" : `<span class="cno">${num(ci + 1, uiLang)}</span>`}${esc(c.title[uiLang])}</span>${count}</button><div class="chap-body" id="chap-${ci}"${open ? "" : " hidden"}>${items.join("")}${soon.join("")}</div></div>`;
   }).join("") + toolLegend(ALL_LESSONS, uiLang, true);
   el.querySelector<HTMLElement>(".lesson-item.active")?.scrollIntoView({ block: "nearest" });
 }
@@ -1229,7 +1240,7 @@ function checkExercise() {
 
 function l10nChapter(ci: number) {
   const c = CHAPTERS[ci];
-  return c.lessons.includes(PLAYGROUND)
+  return c.lessons.includes(PLAYGROUND) || c.projects
     ? c.title[uiLang]
     : `${LESSON_UI[uiLang].chapter(num(ci + 1, uiLang))}: ${c.title[uiLang]}`;
 }
@@ -1245,7 +1256,7 @@ const timeOf = (l: Lesson) =>
 // fills the cross-reference links (ref() in lessons/helpers.ts): "lesson 5: Seven-segment display", numbered by
 // the course order, with data-lesson so the click delegation opens the lesson
 function fillRefs(root: HTMLElement) {
-  const course = ALL_LESSONS.filter((l) => l !== PLAYGROUND);
+  const course = COURSE_LESSONS;
   for (const a of root.querySelectorAll<HTMLAnchorElement>("a.xref[data-ref]")) {
     const id = a.dataset.ref!;
     const i = course.findIndex((l) => l.id === id);
@@ -1268,7 +1279,7 @@ function renderLesson() {
   const ui = LESSON_UI[uiLang];
   const u = UI[uiLang];
   const rtl = uiLang === "fa";
-  const course = ALL_LESSONS.filter((l) => l !== PLAYGROUND);
+  const course = COURSE_LESSONS;
   const pos = course.indexOf(lesson);
   const of =
     pos < 0
@@ -1332,6 +1343,7 @@ ${exerciseHtml()}
   ${navCard(next, `${u.next} ${rtl ? "←" : "→"}`, "next")}
 </nav>`;
   fillRefs(el);
+  restoreMilestones(el);
   el.scrollTop = 0;
   setRunState();
 }
@@ -1359,6 +1371,20 @@ $("#lesson").addEventListener("click", (ev) => {
     const lg = codeBtn.dataset.code as Lang;
     setLang(lg);
   }
+});
+
+// project milestones (Phase 4.4): the ticks are a bitmask per project, ms:<id>
+const msKey = (l: Lesson) => `ms:${l.id}`;
+function restoreMilestones(root: HTMLElement) {
+  const bits = Number(store.get(msKey(lesson)) ?? 0);
+  root.querySelectorAll<HTMLInputElement>("input[data-ms]").forEach((b) => (b.checked = !!((bits >> Number(b.dataset.ms)) & 1)));
+}
+$("#lesson").addEventListener("change", (ev) => {
+  const b = (ev.target as HTMLElement).closest("input[data-ms]") as HTMLInputElement | null;
+  if (!b) return;
+  let bits = 0;
+  $("#lesson").querySelectorAll<HTMLInputElement>("input[data-ms]").forEach((x) => x.checked && (bits |= 1 << Number(x.dataset.ms)));
+  store.set(msKey(lesson), String(bits));
 });
 
 // a radio pick in predict-first or the quiz
@@ -1406,7 +1432,7 @@ function openLesson(l: Lesson, switchTab = true) {
   playgroundMode();
   store.set("lesson", l.id);
   markSeen(l);
-  if (!homeOpen) history.replaceState(null, "", `#lesson/${l.id}`);
+  if (!homeOpen) setUrl(currentRoute(), "replace");
   srcEditor.setText(sourceFor(l, lang), lang);
   xdcEditor.setText(xdcFor(l), "xdc");
   loadTb();
@@ -1467,7 +1493,7 @@ function setMode(m: Mode) {
 
 function setLang(lg: Lang) {
   if (lg === lang) return;
-  store.set(srcKey(lesson, lang), srcEditor.text);
+  if (srcEditor.text !== sourceFor(lesson, lang) || store.get(srcKey(lesson, lang)) !== null) saveCode(srcKey(lesson, lang), srcEditor.text);
   lang = lg;
   store.set("lang", lg);
   srcEditor.setText(sourceFor(lesson, lang), lang);
@@ -1511,6 +1537,7 @@ function setUiLang(l: UiLang) {
   modules.render();
   renderMessages();
   if (homeOpen) renderHomePage();
+  setUrl(currentRoute(), "push");
 }
 
 function applyUiLang() {
@@ -1781,6 +1808,21 @@ function act(name: string) {
       break;
     case "home":
       goHome();
+      break;
+    case "glossary":
+      goHome("glossary");
+      break;
+    case "search":
+      showSearch();
+      break;
+    case "export-progress":
+      exportProgress();
+      break;
+    case "import-progress":
+      importProgress();
+      break;
+    case "certificate":
+      openCertificate();
       break;
     case "lab":
       // the workbench is the course; from the playground go back to the last lesson
@@ -2092,6 +2134,10 @@ document.addEventListener("keydown", (ev) => {
     ev.preventDefault();
     act("serial");
   }
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "k") {
+    ev.preventDefault();
+    act("search");
+  }
 });
 
 // contact bounce on the push buttons
@@ -2330,12 +2376,30 @@ const boardEl = $("#board");
 const boardPane = boardEl.parentElement!;
 let homeOpen = false;
 let heroRan = false;
+// the page shown in the landing-page layer: the landing page itself or the glossary
+type HomeView = "home" | "glossary";
+let homeView: HomeView = "home";
+
+function scrollToTerm(id: string) {
+  const el = document.getElementById(`term-${id}`) ?? document.getElementById(id);
+  if (!el) return;
+  el.scrollIntoView({ block: "start" });
+  el.classList.add("flash");
+  setTimeout(() => el.classList.remove("flash"), 1600);
+}
 
 function renderHomePage() {
   // the live board moves into the hero; take it out before the page is rebuilt
   boardPane.appendChild(boardEl);
   homeEl.dir = uiLang === "fa" ? "rtl" : "ltr";
   homeEl.lang = uiLang;
+  if (homeView === "glossary") {
+    homeEl.innerHTML = renderGlossary(uiLang, (id) => {
+      const l = ALL_LESSONS.find((x) => x.id === id);
+      return l ? text(l).title : "";
+    });
+    return;
+  }
   homeEl.innerHTML = renderHome({
     lang: uiLang,
     chapters: CHAPTERS,
@@ -2419,22 +2483,260 @@ function maybeAutoTour() {
   }, 600);
 }
 
-function goHome() {
-  if (location.hash) history.pushState(null, "", location.pathname + location.search);
+// ---------------------------------------------------------------- search (Phase 4.2)
+// the index is built on first use and again after a language switch
+let searchIx: { lang: UiLang; ix: SearchIndex } | null = null;
+function searchIndex(): SearchIndex {
+  if (searchIx?.lang === uiLang) return searchIx.ix;
+  const docs: SearchDoc[] = [];
+  CHAPTERS.forEach((c) => {
+    for (const l of c.lessons) {
+      const t = text(l);
+      docs.push({
+        kind: "lesson",
+        id: l.id,
+        chapter: c.title[uiLang],
+        title: t.title,
+        // the glossary words a lesson introduces find it too («دیباونس» finds the debounce lesson)
+        terms: GLOSSARY.filter((g) => g.lesson === l.id).map((g) => g.term[uiLang]).join(" · "),
+        summary: [t.summary, ...(t.objectives ?? [])].map(stripTags).join(" · "),
+        body: stripTags(t.body),
+      });
+    }
+  });
+  for (const g of GLOSSARY)
+    docs.push({ kind: "term", id: g.id, chapter: "", title: g.term[uiLang], terms: g.term.fa + " " + g.term.en, summary: stripTags(g.def[uiLang]), lesson: g.lesson });
+  searchIx = { lang: uiLang, ix: buildIndex(docs) };
+  return searchIx.ix;
+}
+function showSearch() {
+  const u = SEARCH_UI[uiLang];
+  openSearch(searchIndex(), { ...u, dir: uiLang === "fa" ? "rtl" : "ltr" }, (d) => {
+    if (d.kind === "lesson") {
+      const l = ALL_LESSONS.find((x) => x.id === d.id);
+      if (!l) return;
+      if (!(homeOpen && l === lesson)) openLesson(l);
+      if (homeOpen) goLab();
+    } else {
+      goHome("glossary");
+      history.replaceState(null, "", location.pathname + location.search + "#" + d.id);
+      scrollToTerm(d.id);
+    }
+  });
+}
+const SEARCH_UI = {
+  fa: { placeholder: "جستجو در درس‌ها و واژه‌نامه…", empty: "چیزی پیدا نشد.", label: "جستجو", term: "واژه‌نامه" },
+  en: { placeholder: "Search lessons and glossary…", empty: "Nothing found.", label: "Search", term: "Glossary" },
+};
+
+// ---------------------------------------------------------------- progress file and certificate (Phase 4.5)
+function exportProgress() {
+  let keys: Record<string, string> = {};
+  try {
+    keys = collect(localStorage);
+  } catch {
+    /* storage blocked: export an empty file */
+  }
+  download("fpgalab-progress.json", JSON.stringify(makeFile(keys), null, 1), "application/json");
+}
+function importProgress() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".json,application/json";
+  input.addEventListener("change", async () => {
+    const f = input.files?.[0];
+    if (!f) return;
+    const keys = parseFile(await f.text());
+    if (!keys) {
+      alertDlg(HOME[uiLang].importBad);
+      return;
+    }
+    let local: Record<string, string> = {};
+    try {
+      local = collect(localStorage);
+    } catch {
+      /* ignore */
+    }
+    for (const [k, v] of Object.entries(merge(local, keys))) if (local[k] !== v) store.set(k, v);
+    location.reload();
+  });
+  input.click();
+}
+// a small message dialog (no window.alert, which blocks the page)
+function alertDlg(msg: string) {
+  let d = document.getElementById("msg-dlg") as HTMLDialogElement | null;
+  if (!d) {
+    d = document.createElement("dialog");
+    d.id = "msg-dlg";
+    d.className = "help-dlg";
+    app.appendChild(d);
+  }
+  d.dir = uiLang === "fa" ? "rtl" : "ltr";
+  d.innerHTML = `<form method="dialog"><p>${esc(msg)}</p><button>${uiLang === "fa" ? "بستن" : "Close"}</button></form>`;
+  d.showModal();
+}
+const CERT = {
+  fa: {
+    title: "گواهی پایان دوره",
+    presented: "این گواهی تقدیم می‌شود به",
+    line: (n: string) => `برای پایان دورهٔ FPGA Lab: ${n} درس، Verilog و VHDL`,
+    dateLabel: "تاریخ",
+    sealLabel: "مهر",
+    note: "این گواهی خودتأییدی است و فقط در مرورگر شما ساخته می‌شود.",
+    ask: "نامی که روی گواهی نوشته شود:",
+    make: "ساختن گواهی",
+    svg: "دانلود SVG",
+    png: "دانلود PNG",
+    close: "بستن",
+  },
+  en: {
+    title: "Certificate of completion",
+    presented: "This certificate is presented to",
+    line: (n: string) => `for completing the FPGA Lab course: ${n} lessons, Verilog and VHDL`,
+    dateLabel: "Date",
+    sealLabel: "seal",
+    note: "This certificate is self-attested and generated in your browser.",
+    ask: "The name to put on the certificate:",
+    make: "Make the certificate",
+    svg: "Download SVG",
+    png: "Download PNG",
+    close: "Close",
+  },
+};
+function openCertificate() {
+  const c = CERT[uiLang];
+  let d = document.getElementById("cert-dlg") as HTMLDialogElement | null;
+  if (!d) {
+    d = document.createElement("dialog");
+    d.id = "cert-dlg";
+    d.className = "help-dlg cert-dlg";
+    app.appendChild(d);
+  }
+  const dlg = d;
+  dlg.dir = uiLang === "fa" ? "rtl" : "ltr";
+  dlg.lang = uiLang;
+  const saved = store.get("cert-name") ?? "";
+  dlg.innerHTML = `<form method="dialog"><h2>${c.title}</h2>
+<p class="dim">${c.note}</p>
+<label class="cert-name">${c.ask}<input id="cert-name" type="text" maxlength="60" autocomplete="name" value="${esc(saved)}"/></label>
+<div class="cert-prev" id="cert-prev"></div>
+<div class="cert-acts"><button type="button" class="btn primary small" id="cert-svg" disabled>${c.svg}</button><button type="button" class="btn ghost small" id="cert-png" disabled>${c.png}</button><span class="grow"></span><button class="btn ghost small">${c.close}</button></div></form>`;
+  const input = $<HTMLInputElement>("#cert-name", dlg);
+  const prev = $("#cert-prev", dlg);
+  const date = new Date().toISOString().slice(0, 10);
+  const svgText = () =>
+    certificateSvg(input.value || "—", date, `learn.shahmohammadi.dev/fpga`, {
+      title: c.title,
+      presented: c.presented,
+      line: c.line(num(COURSE_LESSONS.length, uiLang)),
+      dateLabel: c.dateLabel,
+      sealLabel: c.sealLabel,
+      note: c.note,
+      rtl: uiLang === "fa",
+    });
+  const paint = () => {
+    const ok = input.value.trim().length > 0;
+    $<HTMLButtonElement>("#cert-svg", dlg).disabled = !ok;
+    $<HTMLButtonElement>("#cert-png", dlg).disabled = !ok;
+    prev.innerHTML = ok ? svgText().replace("<svg ", '<svg role="img" aria-label="' + esc(c.title) + '" ') : "";
+    if (ok) store.set("cert-name", input.value.trim());
+  };
+  input.addEventListener("input", paint);
+  $("#cert-svg", dlg).addEventListener("click", () => download("fpgalab-certificate.svg", svgText(), "image/svg+xml"));
+  $("#cert-png", dlg).addEventListener("click", async () => {
+    try {
+      const png = await svgToPng(svgText());
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(png);
+      a.download = "fpgalab-certificate.png";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    } catch (e) {
+      alertDlg((e as Error).message);
+    }
+  });
+  paint();
+  dlg.showModal();
+  input.focus();
+}
+
+// ---------------------------------------------------------------- URLs (Phase 4.1)
+// the page on screen as a route: the landing page or glossary, or the workbench on a lesson or the playground
+function currentRoute(): Route {
+  if (homeOpen) return homeView === "glossary" ? { page: "glossary", lang: uiLang } : { page: "home", lang: uiLang };
+  if (lesson === PLAYGROUND) return { page: "playground", lang: uiLang };
+  return { page: "lesson", lang: uiLang, id: lesson.id };
+}
+function setUrl(r: Route, how: "push" | "replace") {
+  // a glossary anchor (#fsm) stays; any other hash is an old-style link that the route already used
+  const hash = r.page === "glossary" && location.hash && !/^#(lesson\/|lab$)/.test(location.hash) ? location.hash : "";
+  const url = urlFor(r) + location.search + hash;
+  if (url !== location.pathname + location.search + location.hash) {
+    if (how === "push") history.pushState(null, "", url);
+    else history.replaceState(null, "", url);
+  }
+  updateHead();
+}
+// the tab title and description follow the page (the prerendered head is right for crawlers, this for people)
+function updateHead() {
+  const r = currentRoute();
+  const base = uiLang === "fa" ? "FPGA Lab | محیط یادگیری به سبک Vivado" : "FPGA Lab | a Vivado-style learning environment";
+  let title = base;
+  let desc = HOME[uiLang].lead.replace(/<[^>]+>/g, "");
+  if (r.page === "lesson") {
+    title = `${text(lesson).title} · FPGA Lab`;
+    desc = text(lesson).summary;
+  } else if (r.page === "glossary") {
+    title = `${GLOSSARY_UI[uiLang].title} · FPGA Lab`;
+    desc = GLOSSARY_UI[uiLang].lead;
+  } else if (r.page === "playground") title = `${text(PLAYGROUND).title} · FPGA Lab`;
+  document.title = title;
+  document.querySelector('meta[name="description"]')?.setAttribute("content", desc);
+}
+
+function goHome(view: HomeView = "home") {
+  const was = homeOpen && homeView === view;
+  homeView = view;
+  if (homeOpen && !was) renderHomePage();
   showHome(true);
+  if (!was) homeEl.scrollTop = 0;
+  setUrl(currentRoute(), "push");
 }
 
 function goLab() {
-  if (homeOpen) history.pushState(null, "", `#lesson/${lesson.id}`);
+  const was = homeOpen;
   showHome(false);
+  if (was) setUrl(currentRoute(), "push");
 }
 
-// #lesson/<id> (or #lab) opens the workbench, anything else the landing page
+// the URL decides the page: /<lang>/lesson/<id>, /<lang>/lab, /<lang>/playground, /<lang>/glossary or the landing
+// page. The old #lesson/<id> and #lab links are mapped to the new URLs.
 function route() {
-  const m = /^#lesson\/(.+)$/.exec(location.hash);
-  const l = m && ALL_LESSONS.find((x) => x.id === m[1]);
+  const old = legacyHash(location.hash, uiLang);
+  const r: Route = old ?? parse(location.pathname) ?? { page: "home" };
+  if (r.lang && r.lang !== uiLang) {
+    uiLang = r.lang;
+    store.set("ui-lang", uiLang);
+    applyUiLang();
+    renderLessonList();
+    renderLesson();
+    modules.render();
+    renderMessages();
+  }
+  const l = r.page === "lesson" ? ALL_LESSONS.find((x) => x.id === r.id) : r.page === "playground" ? PLAYGROUND : null;
   if (l && l !== lesson) openLesson(l);
-  showHome(!l && location.hash !== "#lab");
+  if (r.page === "lab" && lesson === PLAYGROUND) openLesson(lastCourse);
+  const view: HomeView = r.page === "glossary" ? "glossary" : "home";
+  const toHome = r.page === "home" || r.page === "glossary" || (r.page === "lesson" && !l);
+  if (toHome && homeOpen && view !== homeView) {
+    homeView = view;
+    renderHomePage();
+  }
+  homeView = view;
+  showHome(toHome);
+  if (toHome && r.page === "glossary" && location.hash.length > 1 && !old) scrollToTerm(location.hash.slice(1));
+  // canonical form: legacy hashes, /lab, the bare root and unknown paths get the real URL
+  setUrl(currentRoute(), "replace");
 }
 window.addEventListener("popstate", route);
 
@@ -2460,6 +2762,9 @@ document.querySelectorAll<HTMLElement>("[data-lang]").forEach((b) => markLang(b)
 applyFlowSections();
 applyUiLang();
 bindLangMenu();
+bindTermTips(() => uiLang);
+// the prerendered copy of the page is for crawlers and no-JS readers; the app replaces it
+document.getElementById("seo")?.remove();
 // the theme button sits in both top bars; the 3D scene's backdrop follows the theme too
 initTheme({ icon: (n) => icon(n, 16), lang: () => uiLang, onChange: (t) => board.setBackground?.(BOARD_BG[t]) });
 $("#src-name").textContent = fileName();
