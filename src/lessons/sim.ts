@@ -1,6 +1,6 @@
 // Lesson: behavioral simulation with a testbench and the waveform viewer.
 import { VHDL_NUMERIC, type Lesson } from './lessons';
-import { part } from './helpers';
+import { part, term } from './helpers';
 
 const DESIGN_V = `// 8-bit counter that steps every DIV clocks while SW0 is on.
 // DIV is a parameter, so the testbench can make it small.
@@ -155,7 +155,7 @@ export const TESTBENCH_LESSON: Lesson = {
   title: 'شبیه‌سازی با Testbench و نمودار شکل موج',
   summary: 'قبل از رفتن روی برد، طرح را با یک Testbench آزمایش کنید و سیگنال‌ها را در نمودار زمانی ببینید.',
   body: `
-<p>تا اینجا هر طرح را مستقیم روی برد امتحان کردیم. در کار واقعی قبل از برنامه‌ریزی FPGA طرح را <b>شبیه‌سازی</b> می‌کنند: یک برنامهٔ HDL دیگر به نام <b>Testbench</b> ورودی‌ها را در زمان‌های مشخص تغییر می‌دهد، خروجی‌ها را بررسی می‌کند و همهٔ سیگنال‌ها در یک <b>نمودار شکل موج</b> (Waveform) دیده می‌شوند. در Vivado این کار با <b>Run Behavioral Simulation</b> انجام می‌شود و اینجا هم همین است.</p>
+<p>تا اینجا هر طرح را مستقیم روی برد امتحان کردیم. در کار واقعی قبل از برنامه‌ریزی FPGA طرح را <b>شبیه‌سازی</b> می‌کنند: یک برنامهٔ HDL دیگر به نام <b>${term('testbench', 'Testbench')}</b> ورودی‌ها را در زمان‌های مشخص تغییر می‌دهد، خروجی‌ها را بررسی می‌کند و همهٔ سیگنال‌ها در یک <b>نمودار شکل موج</b> (Waveform) دیده می‌شوند. در Vivado این کار با <b>Run Behavioral Simulation</b> انجام می‌شود و اینجا هم همین است.</p>
 <h3>Testbench از چه چیزهایی ساخته می‌شود؟</h3>
 <ol>
   <li><b>ماژول بدون پورت</b>: Testbench بالاترین سطح است و به هیچ پایه‌ای وصل نیست.</li>

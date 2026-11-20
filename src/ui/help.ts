@@ -9,6 +9,8 @@ export const HELP = {
     tour: 'گشت آشنایی',
     shortcuts: 'میان‌برهای صفحه‌کلید',
     limits: 'محدودیت‌های شبیه‌ساز',
+    glossary: 'واژه‌نامه',
+    search: 'جستجو',
     downloads: 'دانلودها',
     dlSrc: 'کد طرح',
     dlTb: 'Testbench',
@@ -21,6 +23,7 @@ export const HELP = {
       ['Ctrl+Enter', 'Run on Board'],
       ['Shift+F6', 'Simulate (Testbench)'],
       ['F5', 'Reset و اجرای دوباره'],
+      ['Ctrl+K', 'جستجو در درس‌ها و واژه‌نامه'],
       ['Ctrl+L', 'Logic Analyzer'],
       ['Ctrl+M', 'Serial Console'],
       ['Esc', 'بستن منوها و پنجره‌ها'],
@@ -42,6 +45,8 @@ export const HELP = {
     tour: 'Take the tour',
     shortcuts: 'Keyboard shortcuts',
     limits: 'Simulator limits',
+    glossary: 'Glossary',
+    search: 'Search',
     downloads: 'Downloads',
     dlSrc: 'Design source',
     dlTb: 'Testbench',
@@ -54,6 +59,7 @@ export const HELP = {
       ['Ctrl+Enter', 'Run on Board'],
       ['Shift+F6', 'Simulate (testbench)'],
       ['F5', 'Reset and run again'],
+      ['Ctrl+K', 'Search lessons and glossary'],
       ['Ctrl+L', 'Logic Analyzer'],
       ['Ctrl+M', 'Serial Console'],
       ['Esc', 'Close menus and windows'],
@@ -81,7 +87,7 @@ export function helpMenu(lang: UiLang, where: string): string {
   return `<div class="lang-dd help-dd">
     <button class="lang-btn help-btn" data-act="help-menu" aria-haspopup="menu" aria-expanded="false" aria-controls="help-menu-${where}" aria-label="${h.help}" title="${h.help}">?</button>
     <div class="lang-menu help-menu" id="help-menu-${where}" dir="${lang === 'fa' ? 'rtl' : 'ltr'}" role="menu" aria-label="${h.help}" hidden>
-      ${item('tour', h.tour)}${item('shortcuts', h.shortcuts)}${item('limits', h.limits)}
+      ${item('tour', h.tour)}${item('search', `${h.search} <kbd dir="ltr">Ctrl+K</kbd>`)}${item('glossary', h.glossary)}${item('shortcuts', h.shortcuts)}${item('limits', h.limits)}
       <div class="menu-h" role="presentation">${h.downloads}</div>
       ${item('download-src', h.dlSrc)}${item('download-tb', h.dlTb)}${item('download-xdc', h.dlXdc)}${item('download-project', h.dlProject)}
       <hr role="separator"/>
