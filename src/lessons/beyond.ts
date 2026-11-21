@@ -167,7 +167,8 @@ ${truth(
 </ul>
 <h3>۳. از FPGA Lab به پروژهٔ Vivado</h3>
 <ol>
-  <li>در FPGA Lab منوی <b>File → Download Vivado project (.zip)</b> را بزنید. فایل zip کد طرح، XDC، Testbench و یک اسکریپت <code>create_project.tcl</code> دارد.</li>
+  <li>پایین هر درس کادر <b>ساخت روی برد واقعی با Vivado</b> هست که پروژه را در پوشه‌ای که انتخاب می‌کنید (یا به صورت zip) ذخیره می‌کند. پروژه کد طرح، XDC، Testbench، اسکریپت <code>create_project.tcl</code> و <code>build.bat</code> دارد.</li>
+  <li>سریع‌ترین راه: روی <code>build.bat</code> دوبار کلیک کنید (در لینوکس <code>sh build.sh</code>) تا Vivado بدون تایپ دستور بیت‌استریم را بسازد. اگر FPGA Lab helper در حال اجرا باشد، دکمه‌ی <b>ساخت در Vivado</b> همین کار را از خود سایت انجام می‌دهد.</li>
   <li>zip را باز کنید، Vivado را اجرا کنید و از <b>Tools → Run Tcl Script</b> فایل <code>create_project.tcl</code> را اجرا کنید. پروژه با همان تراشه و فایل‌ها ساخته می‌شود.</li>
   <li>در Flow Navigator به ترتیب <b>Run Synthesis</b>، <b>Run Implementation</b> و <b>Generate Bitstream</b> را بزنید.</li>
 </ol>
@@ -192,7 +193,7 @@ ${truth(
     verilog: BLINKY_V,
     vhdl: BLINKY_VHDL,
     xdc: { clk: true, sw: true, led: true },
-    tryIt: `<p>Run را بزنید: ${part('LD0')} هر ثانیه یک بار چشمک می‌زند و ${part('SW15..SW1')} بقیهٔ LEDها را روشن می‌کنند. همین طرح را با <b>File → Download Vivado project</b> بردارید و روی برد واقعی امتحان کنید.</p>`,
+    tryIt: `<p>Run را بزنید: ${part('LD0')} هر ثانیه یک بار چشمک می‌زند و ${part('SW15..SW1')} بقیهٔ LEDها را روشن می‌کنند. همین طرح را با کادر <b>ساخت روی برد واقعی با Vivado</b> پایین درس بردارید و روی برد واقعی امتحان کنید.</p>`,
   },
 ];
 

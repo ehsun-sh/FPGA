@@ -49,8 +49,9 @@ const prepList = (lang: 'fa' | 'en') =>
     (p, i) => `<li><label><input type="checkbox" data-prep-bit="${i}"> <span>${p[lang]}</span></label></li>`,
   ).join('')}</ul></div>`;
 
+// jumps to the "Build it in Vivado" box at the end of the lesson (src/ui/vivado.ts), which saves or builds the project
 const dlButton = (lang: 'fa' | 'en', extra: string) =>
-  `<p><button class="btn primary small" data-act="download-project">${lang === 'fa' ? 'دانلود پروژه‌ی Vivado (.zip)' : 'Download the Vivado project (.zip)'}</button> <span class="dim">${extra}</span></p>`;
+  `<p><button class="btn primary small" data-jump="sec-vivado">${lang === 'fa' ? 'ساخت یا دانلود پروژه‌ی Vivado ↓' : 'Build or download the Vivado project ↓'}</button> <span class="dim">${extra}</span></p>`;
 
 // the four real-board lessons keep the blinker in the editor, so Run still shows the board doing something
 const BLINK = { verilog: Z_BLINK_V, vhdl: Z_BLINK_VHD, xdc: { led: true } };
@@ -101,7 +102,7 @@ ${sourcesBox('fa', 'codeasm', 'zynq1', 'xjtuecho', 'keitetsu', 'elrori')}`,
 <h3>۲. XDC بدون پایه‌ی کلاک</h3>
 <p>در XDC فقط دو خط برای <code>W14</code> و <code>W13</code> هست. خط <code>create_clock</code> و پایه‌ی کلاک وجود ندارد، چون کلاک از داخل تراشه می‌آید و Vivado محدودیت آن را از تنظیمات PS می‌داند.</p>
 <h3>۳. روی برد واقعی</h3>
-<p>یک bitstream به‌تنهایی کافی نیست: FCLK_CLK0 فقط بعد از اجرای <code>ps7_init</code> روی PS روشن می‌شود. پس حتی یک چشمک‌زن هم یک block design با ZYNQ7 Processing System لازم دارد. «Download Vivado project» در منوی File این block design را خودکار می‌سازد. بعد با JTAG از Vitis (با تیک Program FPGA) یا با BOOT.bin روی کارت SD اجرا کنید (${ref('z-bootflow')}).</p>
+<p>یک bitstream به‌تنهایی کافی نیست: FCLK_CLK0 فقط بعد از اجرای <code>ps7_init</code> روی PS روشن می‌شود. پس حتی یک چشمک‌زن هم یک block design با ZYNQ7 Processing System لازم دارد. کادر «ساخت روی برد واقعی با Vivado» پایین هر درس این block design را خودکار می‌سازد. بعد با JTAG از Vitis (با تیک Program FPGA) یا با BOOT.bin روی کارت SD اجرا کنید (${ref('z-bootflow')}).</p>
 ${sourcesBox('fa', 'xjtuecho', 'keitetsu', 'zynq1')}`,
     ...BLINK,
     tryIt: `<p><span class="kbd">▶ Run</span> را بزنید: ${part('LED_R')} و ${part('LED_G')} به نوبت چشمک می‌زنند. در کنسول خط <code>clk is driven by FCLK_CLK0</code> را می‌بینید.</p>`,
@@ -141,7 +142,7 @@ ${truth(
 <p class="note">💡 FSBL هر چیزی را می‌تواند بار کند. پروژه‌ی blkf2016 یک FSBL تغییریافته دارد که فایل <code>u-boot.bin</code> را از کارت SD می‌خواند، در آدرس <code>0x04000000</code> از DDR می‌گذارد و اجرا می‌کند. این‌طوری با کپی یک فایل U-Boot عوض می‌شود و BOOT.bin دوباره ساخته نمی‌شود.</p>
 ${sourcesBox('fa', 'zynq1', 'zynq2', 'codeasm', 'blkf')}`,
     ...BLINK,
-    tryIt: `<p>در این درس شبیه‌سازی جدیدی نیست. منوی File → Download Vivado project را باز کنید و فایل <code>boot.bif</code> داخل zip را با شکل بالا مقایسه کنید.</p>`,
+    tryIt: `<p>در این درس شبیه‌سازی جدیدی نیست. در کادر «ساخت روی برد واقعی با Vivado» پایین همین درس پروژه را ذخیره کنید و فایل <code>boot.bif</code> آن را با شکل بالا مقایسه کنید.</p>`,
   },
   {
     id: 'z-ps-hello',
@@ -263,7 +264,7 @@ ${sourcesBox('en', 'codeasm', 'zynq1', 'xjtuecho', 'keitetsu', 'elrori')}`,
 <h3>2. An XDC with no clock pin</h3>
 <p>The XDC has only two lines, for <code>W14</code> and <code>W13</code>. There is no clock pin and no <code>create_clock</code>: the clock comes from inside the chip and Vivado knows its constraint from the PS settings.</p>
 <h3>3. On the real board</h3>
-<p>A bitstream alone is not enough: FCLK_CLK0 only starts after the PS has run <code>ps7_init</code>. So even a blinker needs a block design with the ZYNQ7 Processing System. File → Download Vivado project builds that block design for you. Then run it over JTAG from Vitis (with Program FPGA ticked) or from a BOOT.bin on an SD card (${ref('z-bootflow')}).</p>
+<p>A bitstream alone is not enough: FCLK_CLK0 only starts after the PS has run <code>ps7_init</code>. So even a blinker needs a block design with the ZYNQ7 Processing System. The box "Build it on a real board with Vivado" at the end of each lesson builds that block design for you. Then run it over JTAG from Vitis (with Program FPGA ticked) or from a BOOT.bin on an SD card (${ref('z-bootflow')}).</p>
 ${sourcesBox('en', 'xjtuecho', 'keitetsu', 'zynq1')}`,
     tryIt: `<p>Press <span class="kbd">▶ Run</span>: ${part('LED_R')} and ${part('LED_G')} blink in turn. The console shows <code>clk is driven by FCLK_CLK0</code>.</p>`,
     exercise: `<p>Make ${part('LED_G')} blink twice as fast as ${part('LED_R')}.</p>`,
@@ -300,7 +301,7 @@ ${truth(
 )}
 <p class="note">💡 The FSBL can load anything. The blkf2016 project has a modified FSBL that reads <code>u-boot.bin</code> from the SD card, puts it in DDR at <code>0x04000000</code> and jumps there. U-Boot can then be replaced by copying a file, without rebuilding BOOT.bin.</p>
 ${sourcesBox('en', 'zynq1', 'zynq2', 'codeasm', 'blkf')}`,
-    tryIt: `<p>There is no new simulation in this lesson. Open File → Download Vivado project and compare the <code>boot.bif</code> inside the zip with the figure above.</p>`,
+    tryIt: `<p>There is no new simulation in this lesson. Save the project from "Build it on a real board with Vivado" at the end of this lesson and compare its <code>boot.bif</code> with the figure above.</p>`,
   },
   'z-ps-hello': {
     title: 'First program on the ARM: Hello World over UART',

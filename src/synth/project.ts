@@ -2,6 +2,7 @@
 // in real Vivado (vivado -mode batch -source create_project.tcl), optionally running the whole flow to a bitstream.
 import type { Lang } from "../hdl";
 import { zip } from "../util/zip";
+import { buildBat, buildSh, programBat, programSh, programTcl } from "./scripts";
 
 export interface ProjectSpec {
   name: string; // project name (a lesson id)
@@ -29,9 +30,28 @@ const firstUnit = (src: string, lang: Lang): string | undefined => {
   return names[names.length - 1];
 };
 
+// the folder name of an exported project (also the folder the helper and the folder picker write into)
+export const projectDir = (p: Pick<ProjectSpec, "name">) => p.name.replace(/[^\w-]/g, "_") || "fpga_lab";
+
+// The project files, plus double-click scripts that run Vivado (build.bat / build.sh) and, for a board whose
+// bitstream can go straight in over JTAG, program_board.tcl with program.bat / program.sh. A Zynq PL design needs
+// the PS to start first (ps7_init), so the EBAZ4205 projects get no program script.
 export function projectFiles(p: ProjectSpec): { name: string; data: string }[] {
-  if (p.ps) return zynqPsProjectFiles(p);
-  if (p.internalClock) return zynqProjectFiles(p);
+  const dir = projectDir(p);
+  const files = p.ps ? zynqPsProjectFiles(p) : p.internalClock ? zynqProjectFiles(p) : nexysProjectFiles(p);
+  files.push({ name: `${dir}/build.bat`, data: buildBat(dir) }, { name: `${dir}/build.sh`, data: buildSh(dir) });
+  if (canProgram(p))
+    files.push(
+      { name: `${dir}/program_board.tcl`, data: programTcl(p.part) },
+      { name: `${dir}/program.bat`, data: programBat(dir) },
+      { name: `${dir}/program.sh`, data: programSh() },
+    );
+  return files;
+}
+
+export const canProgram = (p: Pick<ProjectSpec, "ps" | "internalClock">) => !p.ps && !p.internalClock;
+
+function nexysProjectFiles(p: ProjectSpec): { name: string; data: string }[] {
   const ext = p.lang === "verilog" ? "v" : "vhd";
   const dir = p.name.replace(/[^\w-]/g, "_") || "fpga_lab";
   const srcFile = `src/${p.top}.${ext}`;
@@ -65,8 +85,10 @@ set_property -name {xsim.simulate.runtime} -value {all} -objects [get_filesets s
 if {[info exists argv] && [lsearch -exact $argv build] >= 0} {
   launch_runs synth_1 -jobs 4
   wait_on_run synth_1
+  if {[get_property PROGRESS [get_runs synth_1]] ne "100%"} { error "synthesis failed: see vivado/$proj_name.runs/synth_1/runme.log" }
   launch_runs impl_1 -to_step write_bitstream -jobs 4
   wait_on_run impl_1
+  if {[get_property PROGRESS [get_runs impl_1]] ne "100%"} { error "implementation failed: see vivado/$proj_name.runs/impl_1/runme.log" }
   puts "Bitstream: [get_property DIRECTORY [get_runs impl_1]]/${p.top}.bit"
 }
 `;
@@ -76,8 +98,12 @@ Board: ${p.board}   Part: ${p.part}   Language: ${p.lang === "verilog" ? "Verilo
   ${srcFile.padEnd(28)} design source (top: ${p.top})
   ${`constrs/${p.xdcName}`.padEnd(28)} pin constraints
 ${tbFile ? `  ${tbFile.padEnd(28)} testbench (top: ${tbTop})\n` : ""}  create_project.tcl            re-creates the Vivado project
+  build.bat / build.sh          build it with no command to type (double-click build.bat on Windows)
+  program.bat / program.sh      program the board over USB with the last build
 
-Open it in Vivado:
+Quickest: double-click build.bat (Windows) or run "sh build.sh", then program.bat (or "sh program.sh").
+
+Or open it in Vivado yourself:
   1. Start Vivado, then Tools > Run Tcl Script... and choose create_project.tcl
      (or: vivado -mode batch -source create_project.tcl -tclargs build)
   2. Run Synthesis, Run Implementation, Generate Bitstream.
@@ -205,6 +231,7 @@ Board: ${p.board}   Part: ${p.part}   Language: ${p.lang === "verilog" ? "Verilo
   ${srcFile.padEnd(28)} design source (top: ${p.top})
   ${`constrs/${p.xdcName}`.padEnd(28)} pin constraints (no clock pin: ${ic.port} is internal)
   create_project.tcl            re-creates the Vivado project with the PS block design
+  build.bat / build.sh          runs step 1 below with no command to type (double-click build.bat on Windows)
   boot.bif                      BOOT.bin layout for an SD-card boot
   vitis/app.c                   an empty application for BOOT.bin
 
@@ -383,6 +410,7 @@ Board: ${p.board}   Part: ${p.part}
 
   constrs/${p.xdcName.padEnd(21)} LED pins${eth ? " and the Ethernet pins (MII, MDIO, FCLK_CLK3 on U18)" : ""}
   create_project.tcl            re-creates the Vivado project (PS-only block design)
+  build.bat / build.sh          runs step 1 below with no command to type (double-click build.bat on Windows)
   boot.bif                      BOOT.bin layout for an SD-card boot
 ${eth ? "" : "  vitis/ps_hello.c              the application: prints on UART1 (J7) and blinks the LEDs\n"}
 1. Build, in the Vivado Tcl Shell (a folder without spaces or parentheses, such as C:/fpga):

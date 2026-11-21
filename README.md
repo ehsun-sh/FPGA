@@ -25,8 +25,13 @@ and watch it run on an interactive 3D Digilent Nexys A7-100T on the right.
   Synthesis maps the netlist onto 7-series primitives (LUT1–LUT6, CARRY4, FDRE/FDCE, DSP48E1, RAMB36, …) and reports
   utilization per hierarchy, a timing summary with the worst register-to-register path and estimated Fmax, inferred
   FSMs with their encoding, latches and removed (unused) registers. These are estimates, not a real Vivado run.
-- **Vivado project download** (File → Download Vivado project): a zip with the sources, the XDC, the testbench and a
-  `create_project.tcl` that re-creates the project in real Vivado (`-tclargs build` runs it through to a bitstream).
+- **Build it in Vivado** (a box at the end of every lesson, also File → Download Vivado project): the sources, the XDC,
+  the testbench and a `create_project.tcl` that re-creates the project in real Vivado (`-tclargs build` runs it through
+  to a bitstream), plus `build.bat` / `build.sh` (and `program.bat` / `program.sh` on the Nexys) so it builds with a
+  double-click. In Chrome and Edge the project is written unzipped into a folder the learner picks (File System Access
+  API); elsewhere it is a zip. With the optional **FPGA Lab helper** (`src/helper/fpgalab-helper.tcl`, a small HTTP
+  server that runs in Vivado's own Tcl on 127.0.0.1:47474 and answers only the site's origins) the Build button writes
+  the project and runs Vivado from the page, streaming the log back.
 - **In-browser HDL simulator**: Verilog-2001 and VHDL subsets are parsed, elaborated (hierarchy, parameters/generics,
   enums) and compiled to JavaScript. Single-clock designs run at close to the real 100 MHz clock, so counters and
   multiplexed displays behave like on hardware. Clock (above the board) can be slowed to 1 Hz to watch every step.
@@ -141,7 +146,7 @@ install chromium`); without it the script says so and exits.
 | `src/sim/tbsim.ts`, `src/sim/tbgen.ts` | behavioral simulation of testbenches (event scheduler, messages) and testbench generator |
 | `src/wave/` | waveform viewer |
 | `src/modules/` | external modules: the pin bus (`bus.ts`), module models (`library.ts`), the Modules panel (`panel.ts`) |
-| `src/synth/` | RTL netlist (`netlist.ts`), primitive mapping, timing and FSM estimate (`techmap.ts`), schematic layout and SVG (`schematic.ts`, `panel.ts`), Vivado project export (`project.ts`) |
+| `src/synth/` | RTL netlist (`netlist.ts`), primitive mapping, timing and FSM estimate (`techmap.ts`), schematic layout and SVG (`schematic.ts`, `panel.ts`), Vivado project export (`project.ts`), its double-click scripts (`scripts.ts`) and the helper client (`helper.ts`) |
 | `src/vga/` | VGA monitor: sync decoding and picture (`monitor.ts`), the screen and its window (`screen.ts`) |
 | `src/grade/` | exercises and their checkers (`exercises.ts`), the virtual board they drive (`harness.ts`) |
 | `src/la/` | logic analyzer: `capture.ts` (recording, trigger), `decode.ts` (protocol decoders), `window.ts` (UI) |
