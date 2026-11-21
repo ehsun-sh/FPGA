@@ -9,7 +9,7 @@ import type { BoardOutputs, BoardView, ModuleSpec } from '../types';
 import { angleDelta, Detents, screenAngle, wheelPx } from './controls';
 import { moduleModel, roundedSlab, type ModModel, type ModPart, type ModState } from './modules3d';
 import { HEADERS } from './pins';
-import { expandParts } from '../parts';
+import { expandNexysParts as expandParts } from './parts';
 
 type ButtonName = 'BTNC' | 'BTNU' | 'BTNL' | 'BTNR' | 'BTND' | 'CPU_RESETN';
 

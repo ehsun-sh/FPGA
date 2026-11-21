@@ -124,7 +124,7 @@ export class BoardHarness {
   }
 
   sw(v: number) {
-    for (let i = 0; i < 16; i++) this.set((b) => b.device.kind === 'sw' && b.device.index === i, (v >> i) & 1);
+    for (let i = 0; i < Math.max(16, this.board.io.switches); i++) this.set((b) => b.device.kind === 'sw' && b.device.index === i, (v >> i) & 1);
   }
   btn(name: string, v: number) {
     this.set((b) => b.device.kind === 'btn' && b.device.name === name, v);

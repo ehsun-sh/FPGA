@@ -16,7 +16,7 @@ import "@fontsource/vazirmatn/latin-800.css";
 import "@fontsource/jetbrains-mono/latin-400.css";
 import "@fontsource/jetbrains-mono/latin-600.css";
 import "./style.css";
-import { BOARDS, deviceLabel, getBoard } from "./boards";
+import { BOARDS, DEFAULT_BOARD, deviceLabel, getBoard } from "./boards";
 import { mapPorts, type Mapping } from "./boards/mapping";
 import {
   HdlError,
@@ -26,7 +26,8 @@ import {
   type Lang,
 } from "./hdl";
 import { EN, LESSON_UI, type LessonText } from "./lessons/en";
-import { ALL_LESSONS, CHAPTERS, COURSE_LESSONS, chapterOf } from "./lessons/course";
+import { ALL_LESSONS, chapterOf as courseChapterOf, chaptersFor, courseLessonsFor, lessonBoards, lessonOnBoard } from "./lessons/course";
+import { applyBoardVariants, hasVariant } from "./lessons/boards";
 import { LESSONS, PLAYGROUND, type Lesson } from "./lessons/lessons";
 import { defaultConfig, LogicAnalyzer, type LaConfig } from "./la/window";
 import { SerialConsole } from "./serial/console";
@@ -54,6 +55,7 @@ import { certificateSvg, collect, makeFile, merge, parseFile, stampKey, svgToPng
 import { startTour, type TourStep } from "./ui/tour";
 import { ISSUES_URL, limitsDialog, shortcutsDialog } from "./ui/help";
 import { versionLabel } from "./version";
+import { BOARD_UI, boardBanner, boardPicker, boardTitle, progressLine } from "./ui/boardpick";
 import { legacyHash, parse, urlFor, type Route } from "./ui/router";
 import { BOARD_BG, cycleTheme, initTheme } from "./ui/theme";
 import { toolIcons, toolLegend, toolsBox } from "./ui/tools";
@@ -102,9 +104,29 @@ const $ = <T extends HTMLElement = HTMLElement>(
 const noBreakParts = (h: string) => h.replace(/\b(Nexys|Artix|Digilent) (A7|7|Nexys)\b/g, "$1&nbsp;$2");
 
 // ---------------------------------------------------------------- board
-const boardDef = getBoard(store.get("board"));
+// the learner's board (store key "board"); a lesson URL for another board switches it for this visit only
+const savedBoard = getBoard(store.get("board"));
+const boardDef = (() => {
+  const r = parse(location.pathname);
+  const l = r?.page === "lesson" ? ALL_LESSONS.find((x) => x.id === r.id) : undefined;
+  return l && !lessonOnBoard(l, savedBoard.id) ? getBoard(lessonBoards(l)[0]) : savedBoard;
+})();
+const boardVisit = boardDef !== savedBoard;
+applyBoardVariants(boardDef.id, ALL_LESSONS, EN);
+// the course as this board shows it: its chapters, the lessons in them, and the counted course lessons
+const CHAPTERS = chaptersFor(boardDef.id);
+const BOARD_LESSONS = CHAPTERS.flatMap((c) => c.lessons);
+const COURSE_LESSONS = courseLessonsFor(boardDef.id);
+const chapterOf = (l: Lesson) => CHAPTERS.findIndex((c) => c.lessons.includes(l));
+// store keys of things that differ per board: the Nexys keeps the original keys
+const boardKey = (k: string) => (boardDef === DEFAULT_BOARD ? k : `${k}:${boardDef.id}`);
+const switchBoard = (id: string) => {
+  store.set("board", id);
+  location.reload();
+};
 const xdcName = `${boardDef.id}.xdc`;
-const hwDev = `${boardDef.part.replace(/csg.*|cpg.*|ftg.*|fgg.*/, "")}_0`;
+// a Zynq shows the ARM debug port first (arm_dap_0), so its PL is device 1
+const hwDev = `${boardDef.part.replace(/csg.*|cpg.*|ftg.*|fgg.*|clg.*/, "")}_${boardDef.internalClock ? 1 : 0}`;
 const clockLabel =
   boardDef.clockHz >= 1e6
     ? `${boardDef.clockHz / 1e6} MHz`
@@ -140,6 +162,8 @@ app.innerHTML = `
     <button data-act="view-reset">Board: perspective view</button>
     <button data-act="view-top">Board: top view</button>
     <button data-act="toggle-flow">Toggle Flow Navigator</button>
+    <hr/>
+${BOARDS.map((b) => `    <button data-board="${b.id}" role="menuitemradio" aria-checked="${b === boardDef}">Board: ${boardTitle(b)}</button>`).join("\n")}
     <hr/>
     <button data-act="mode-learn" role="menuitemradio" aria-checked="false">Workbench: Learn mode</button>
     <button data-act="mode-vivado" role="menuitemradio" aria-checked="false">Workbench: Vivado mode</button>
@@ -252,7 +276,7 @@ app.innerHTML = `
   <div class="splitter v" id="split-v" title="Drag to resize"></div>
   <section class="pane right" aria-label="Hardware">
     <div class="hw-title">
-      <span class="rtabs" role="tablist" aria-label="Hardware and simulation"><button data-rtab="hw" class="active" role="tab" aria-selected="true"><span class="v-only"><b>HARDWARE MANAGER</b> <span class="dim">— localhost/xilinx_tcf/Digilent</span></span><b class="l-only">${boardDef.name}</b></button><button data-rtab="sim" role="tab" aria-selected="false"><span class="v-only"><b>SIMULATION</b> <span class="dim">— Behavioral</span></span><b class="l-only" id="sim-title-l"></b></button></span>
+      <span class="rtabs" role="tablist" aria-label="Hardware and simulation"><button data-rtab="hw" class="active" role="tab" aria-selected="true"><span class="v-only"><b>HARDWARE MANAGER</b> <span class="dim">— ${boardDef.jtag ?? "localhost/xilinx_tcf/Digilent"}</span></span><b class="l-only">${boardDef.name}</b></button><button data-rtab="sim" role="tab" aria-selected="false"><span class="v-only"><b>SIMULATION</b> <span class="dim">— Behavioral</span></span><b class="l-only" id="sim-title-l"></b></button></span>
       <span class="hw-dev" id="hw-dev">${hwDev} (not programmed)</span>
     </div>
     <div class="board-host" id="board">
@@ -319,9 +343,9 @@ app.innerHTML = `
 // ---------------------------------------------------------------- state
 let lang: Lang = store.get("lang") === "vhdl" ? "vhdl" : "verilog";
 let lesson: Lesson =
-  ALL_LESSONS.find((l) => l.id === store.get("lesson")) ?? LESSONS[0];
+  BOARD_LESSONS.find((l) => l.id === store.get(boardKey("lesson"))) ?? COURSE_LESSONS[0] ?? PLAYGROUND;
 // the course lesson the workbench returns to when leaving the playground
-let lastCourse: Lesson = lesson === PLAYGROUND ? LESSONS[0] : lesson;
+let lastCourse: Lesson = lesson === PLAYGROUND ? (COURSE_LESSONS[0] ?? PLAYGROUND) : lesson;
 let tab: "lesson" | "source" | "xdc" | "tb" | "schematic" = "lesson";
 let uiLang: UiLang = store.get("ui-lang") === "fa" ? "fa" : "en";
 // the Vivado-style start-up lines; Learn mode starts with a quiet console and prints them on the first switch
@@ -345,14 +369,16 @@ let mode: Mode = store.get("mode") === "vivado" ? "vivado" : "learn";
 const text = (l: Lesson): LessonText =>
   uiLang === "en" && EN[l.id] ? EN[l.id] : l;
 
-const srcKey = (l: Lesson, lg: Lang) => `src:${l.id}:${lg}`;
+// a lesson's own version for this board keeps its code apart from the Nexys version (src:<id>:<lang>:<board>)
+const variantKey = (l: Lesson, k: string) => (boardDef !== DEFAULT_BOARD && hasVariant(l.id, boardDef.id) ? `${k}:${boardDef.id}` : k);
+const srcKey = (l: Lesson, lg: Lang) => variantKey(l, `src:${l.id}:${lg}`);
 const xdcKey = (l: Lesson) => `xdc:${boardDef.id}:${l.id}`;
 const sourceFor = (l: Lesson, lg: Lang) =>
   store.get(srcKey(l, lg)) ?? (lg === "verilog" ? l.verilog : l.vhdl);
 const xdcFor = (l: Lesson) => store.get(xdcKey(l)) ?? boardDef.masterXdc(l.xdc);
 const fileName = () => (lang === "verilog" ? "top.v" : "top.vhd");
 const tbName = () => (lang === "verilog" ? "tb.v" : "tb.vhd");
-const tbKey = (l: Lesson, lg: Lang) => `tb:${l.id}:${lg}`;
+const tbKey = (l: Lesson, lg: Lang) => variantKey(l, `tb:${l.id}:${lg}`);
 // a stored testbench, the lesson's own, or one generated from the design's ports
 function tbFor(l: Lesson, lg: Lang): string {
   const own = store.get(tbKey(l, lg)) ?? l.tb?.[lg];
@@ -405,7 +431,7 @@ const la = new LogicAnalyzer(document.body, boardDef, board, runner);
 const laPreset = (): LaConfig => lesson.la ?? { ...defaultConfig(boardDef), chans: [], auto: true };
 la.presetFor = laPreset;
 la.xdc = () => xdcEditor.text;
-la.onChange = (cfg) => store.set(`la:${lesson.id}`, JSON.stringify(cfg));
+la.onChange = (cfg) => store.set(boardKey(`la:${lesson.id}`), JSON.stringify(cfg));
 const serial = new SerialConsole(document.body, boardDef, runner);
 try {
   serial.load(JSON.parse(store.get("serial") ?? "{}"));
@@ -421,7 +447,7 @@ const modules = new ModulePanel(
   board,
   () => uiLang,
 );
-modules.onSave = (m) => store.set("modules", JSON.stringify(m));
+modules.onSave = (m) => store.set(boardKey("modules"), JSON.stringify(m));
 const schematic = new SchematicPanel(
   $("#schematic"),
   (line) => {
@@ -440,14 +466,14 @@ modules.onXdc = (lines) => {
   );
 };
 try {
-  modules.load(JSON.parse(store.get("modules") ?? "[]") as SavedModule[]);
+  modules.load(JSON.parse(store.get(boardKey("modules")) ?? "[]") as SavedModule[]);
 } catch {
   modules.load([]);
 }
 function loadLa() {
   let cfg: LaConfig | null = null;
   try {
-    cfg = JSON.parse(store.get(`la:${lesson.id}`) ?? "null");
+    cfg = JSON.parse(store.get(boardKey(`la:${lesson.id}`)) ?? "null");
   } catch {
     cfg = null;
   }
@@ -699,7 +725,7 @@ function doImpl(d: Design): Mapping | null {
   );
   if (map.clock !== undefined)
     log(
-      `INFO: [Timing 38-35] Clock 'sys_clk_pin' on '${d.sigs[map.clock].name}': period 10.000 ns (100 MHz)`,
+      `INFO: [Timing 38-35] Clock 'sys_clk_pin' on '${d.sigs[map.clock].name}': period ${(1e9 / boardDef.clockHz).toFixed(3)} ns (${boardDef.clockHz / 1e6} MHz)`,
       "info",
     );
   log(`route_design completed successfully`, "ok");
@@ -1169,7 +1195,7 @@ let lastResult: CheckItem[] = [];
 function showScene(scene: { sw?: number; btn?: string }) {
   if (!runner.running) act("run");
   if (scene.sw !== undefined)
-    for (let i = 0; i < 16; i++) board.setSwitch?.(i, ((scene.sw >> i) & 1) === 1, true);
+    for (let i = 0; i < boardDef.io.switches; i++) board.setSwitch?.(i, ((scene.sw >> i) & 1) === 1, true);
   if (scene.btn && board.press) {
     const b = scene.btn;
     board.press(b, true);
@@ -1251,7 +1277,7 @@ function codeBlock(code: string, lg: "verilog" | "vhdl") {
 
 // reading and practice minutes of a lesson, in the site language
 const timeOf = (l: Lesson) =>
-  lessonTime({ ...text(l), time: l.time }, !!(EXERCISES[l.id] || text(l).exercise), chapterOf(l) + 1);
+  lessonTime({ ...text(l), time: l.time }, !!(EXERCISES[l.id] || text(l).exercise), courseChapterOf(l) + 1);
 
 // fills the cross-reference links (ref() in lessons/helpers.ts): "lesson 5: Seven-segment display", numbered by
 // the course order, with data-lesson so the click delegation opens the lesson
@@ -1271,9 +1297,9 @@ function fillRefs(root: HTMLElement) {
 }
 
 function renderLesson() {
-  const idx = ALL_LESSONS.indexOf(lesson);
-  const prev = ALL_LESSONS[idx - 1];
-  const next = ALL_LESSONS[idx + 1];
+  const idx = BOARD_LESSONS.indexOf(lesson);
+  const prev = BOARD_LESSONS[idx - 1];
+  const next = BOARD_LESSONS[idx + 1];
   const el = $("#lesson");
   const tx = text(lesson);
   const ui = LESSON_UI[uiLang];
@@ -1425,12 +1451,17 @@ $("#lesson").addEventListener(
 );
 
 function openLesson(l: Lesson, switchTab = true) {
+  // a lesson for another board: load the page again, which switches the board for the visit
+  if (!lessonOnBoard(l, boardDef.id)) {
+    location.href = urlFor({ page: "lesson", id: l.id, lang: uiLang });
+    return;
+  }
   if (runner.running) stop();
   lesson = l;
   chapterFold.delete(chapterOf(l));
   if (l !== PLAYGROUND) lastCourse = l;
   playgroundMode();
-  store.set("lesson", l.id);
+  store.set(boardKey("lesson"), l.id);
   markSeen(l);
   if (!homeOpen) setUrl(currentRoute(), "replace");
   srcEditor.setText(sourceFor(l, lang), lang);
@@ -1558,8 +1589,12 @@ function applyUiLang() {
   $("#phone-note-x").setAttribute("aria-label", u.dismiss);
   document.body.classList.toggle("phone-note-off", store.get("phone-note") === "1");
   $("#shortcuts").innerHTML = shortcutsDialog(uiLang);
-  $("#limits").innerHTML = limitsDialog(uiLang);
-  $("#board-hint").textContent = u.boardHint;
+  $("#limits").innerHTML = limitsDialog(uiLang, boardDef.limits?.[uiLang]);
+  if (boardVisit) {
+    document.querySelector(".board-banner")?.remove();
+    document.body.insertAdjacentHTML("afterbegin", boardBanner(uiLang, boardDef, savedBoard));
+  }
+  $("#board-hint").textContent = boardDef === DEFAULT_BOARD ? u.boardHint : BOARD_UI[uiLang].idle;
   if (!lastDesign) $("#st-design").textContent = u.noDesign;
   document
     .querySelectorAll<HTMLElement>("[data-ml]")
@@ -1659,6 +1694,7 @@ function downloadProject() {
     part: boardDef.part,
     board: `${boardDef.vendor} ${boardDef.name}`,
     boardPart: boardDef.boardPart,
+    internalClock: boardDef.internalClock,
   });
   download(`${name}.zip`, data, "application/zip");
   log(
@@ -1991,6 +2027,21 @@ document.addEventListener("click", (ev) => {
     return;
   }
   closeMenus();
+  // the board picker (landing page, View menu) and the visiting-board banner
+  const pick = t.closest("[data-board]") as HTMLElement | null;
+  if (pick) {
+    if (pick.dataset.board !== boardDef.id || boardVisit) switchBoard(pick.dataset.board!);
+    return;
+  }
+  const back = t.closest("[data-board-back]") as HTMLElement | null;
+  if (back) {
+    location.href = urlFor({ page: "home", lang: uiLang });
+    return;
+  }
+  if (t.closest("[data-board-dismiss]")) {
+    document.querySelector(".board-banner")?.remove();
+    return;
+  }
   const a = t.closest("[data-act]") as HTMLElement | null;
   if (a) {
     if (a.tagName === "A") ev.preventDefault();
@@ -2154,12 +2205,12 @@ bouncy.addEventListener("change", () => {
 
 // speed
 const speedSel = $<HTMLSelectElement>("#speed");
-speedSel.value = store.get("speed") ?? String(boardDef.clockHz);
+speedSel.value = store.get(boardKey("speed")) ?? String(boardDef.clockHz);
 if (!speedSel.value) speedSel.value = String(boardDef.clockHz);
 runner.speedHz = Number(speedSel.value);
 speedSel.addEventListener("change", () => {
   runner.speedHz = Number(speedSel.value);
-  store.set("speed", speedSel.value);
+  store.set(boardKey("speed"), speedSel.value);
 });
 
 // board I/O
@@ -2414,7 +2465,18 @@ function renderHomePage() {
       const t = timeOf(l);
       return t.read + t.practice;
     },
-    live: runner.running && lesson === ALL_LESSONS[0],
+    live: runner.running && lesson === BOARD_LESSONS[0],
+    boardPicker: boardPicker(BOARDS, boardDef.id, uiLang),
+    // one line per board the learner has finished a lesson on, when there is more than this one
+    boardLines: (() => {
+      const lines = BOARDS.map((b) => {
+        const all = courseLessonsFor(b.id);
+        return { b, all: all.length, done: all.filter(isDone).length };
+      }).filter((x) => x.b === boardDef || x.done > 0);
+      return lines.length > 1 ? lines.map((x) => progressLine(uiLang, x.b, x.done, x.all)) : [];
+    })(),
+    empty: { title: BOARD_UI[uiLang].empty, lead: BOARD_UI[uiLang].emptyLead },
+    hero: boardDef === DEFAULT_BOARD ? undefined : BOARD_UI[uiLang],
   });
   $("#hero-stage").appendChild(boardEl);
 }
@@ -2429,7 +2491,7 @@ function showHome(on: boolean) {
   document.body.classList.toggle("at-home", on);
   if (on) {
     // first visit: run lesson 1 so the hero board reacts to its switches
-    if (!heroRan && !runner.running && lesson === ALL_LESSONS[0]) {
+    if (!heroRan && !runner.running && lesson === BOARD_LESSONS[0]) {
       heroRan = true;
       try {
         synthesize(srcEditor.text, lang);
@@ -2628,7 +2690,7 @@ function openCertificate() {
     certificateSvg(input.value || "—", date, `learn.shahmohammadi.dev/fpga`, {
       title: c.title,
       presented: c.presented,
-      line: c.line(num(COURSE_LESSONS.length, uiLang)),
+      line: `${c.line(num(COURSE_LESSONS.length, uiLang))} · ${boardTitle(boardDef)}`,
       dateLabel: c.dateLabel,
       sealLabel: c.sealLabel,
       note: c.note,
@@ -2758,6 +2820,13 @@ document.body.dataset.m = "lesson";
 phone.addEventListener("change", applyMode);
 
 // ---------------------------------------------------------------- init
+// tools for hardware this board does not have stay hidden (EBAZ4205: no VGA, buttons or USB-UART before E3)
+{
+  const has = (k: string) => Object.values(boardDef.pins).some((d) => d.kind === k);
+  if (!has("vga")) vgaBtn.style.display = "none";
+  if (!has("uart")) serialBtn.style.display = "none";
+  if (!boardDef.io.buttons.length) ($("#bouncy").closest("label") as HTMLElement).style.display = "none";
+}
 document.querySelectorAll<HTMLElement>("[data-lang]").forEach((b) => markLang(b));
 applyFlowSections();
 applyUiLang();

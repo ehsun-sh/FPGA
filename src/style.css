@@ -4835,3 +4835,94 @@ abbr.term:focus-visible {
 .gl-article .lead a {
   color: var(--accent-ink);
 }
+
+/* ---------------------------------------------------------------- board picker (EBAZ4205 roadmap E1.1) */
+.board-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin: 6px 0 14px;
+}
+.bp-label {
+  font-weight: 600;
+  color: var(--muted);
+}
+.bp-opts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel-2);
+}
+.bp-opts button {
+  display: grid;
+  gap: 2px;
+  text-align: start;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  max-width: 290px;
+}
+.bp-opts button span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.bp-opts button.on {
+  background: var(--panel);
+  border-color: var(--brand);
+  box-shadow: var(--shadow);
+}
+.bp-opts button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.board-lines {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.empty-card h3 {
+  margin-top: 6px;
+}
+.board-banner {
+  position: fixed;
+  z-index: 60;
+  inset-inline: 0;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 14px;
+  padding: 10px 16px;
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+  border-top: 1px solid var(--brand);
+  font-size: 14px;
+}
+.board-banner .bb-close {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 15px;
+}
+@media (max-width: 600px) {
+  .bp-opts,
+  .bp-opts button {
+    width: 100%;
+    max-width: none;
+  }
+}

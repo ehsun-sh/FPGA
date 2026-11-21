@@ -64,7 +64,10 @@ confirmed **(verify)** marks.
 ## Phase E1 — A second board in the platform
 
 Goal: a learner can pick the EBAZ4205, see its 3D model, run a PL design on it, and download a Vivado project for
-it. The board plug-in interface exists (`src/boards/types.ts`) but parts of the app assume the Nexys.
+it.
+
+Status (2026-11-21): implemented in one PR. Still open: the real Vivado run of the downloaded project (E1.4), and the
+3D model's exact sizes and positions, which wait for E0.3 (the model uses approximate ones). The board plug-in interface exists (`src/boards/types.ts`) but parts of the app assume the Nexys.
 
 ### E1.1 Board picker and per-board course
 

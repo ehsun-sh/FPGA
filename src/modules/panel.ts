@@ -59,6 +59,9 @@ const L = {
   },
 };
 
+// a header's signal pins in silkscreen order (Pmod: 1-4, 7-10; EBAZ4205 DATA: 5-9, 11, 13-20)
+const signalPins = (h: { pins: Record<number, string> }) => Object.keys(h.pins).map(Number).sort((a, b) => a - b);
+
 export class ModulePanel {
   el: HTMLElement;
   private items: Item[] = [];
@@ -138,11 +141,12 @@ export class ModulePanel {
   load(saved: SavedModule[]) {
     for (const it of this.items) this.runner.bus.detach(it.inst);
     this.items = [];
-    for (const d of ONBOARD_MODULES) {
+    // the on-board sensors of this board only (their pins are on the board)
+    for (const d of ONBOARD_MODULES.filter((d) => Object.values(d.onboard!).every((p) => this.board.pins[p]))) {
       const s = saved.find((x) => x.type === d.type) ?? { id: d.type, type: d.type, pins: { ...d.onboard! }, values: {} };
       this.attach({ ...s, pins: { ...d.onboard! } });
     }
-    for (const s of saved) if (!ONBOARD_MODULES.some((d) => d.type === s.type) && moduleDef(s.type)) this.attach(s);
+    for (const s of saved) if (Object.values(s.pins).every((p) => this.board.pins[p]) && !ONBOARD_MODULES.some((d) => d.type === s.type) && moduleDef(s.type)) this.attach(s);
     this.runner.modulesChanged();
     this.update3d();
     this.render();
@@ -169,16 +173,16 @@ export class ModulePanel {
     const def = moduleDef(type)!;
     const used = new Set(this.items.flatMap((i) => Object.values(i.saved.pins)));
     // first header with all the pins it needs still free
-    const order = [1, 2, 3, 4, 7, 8, 9, 10];
     let pins: Record<string, string> | null = null;
     for (const h of this.board.headers) {
+      const order = signalPins(h);
       const cand = def.roles.map((_, i) => h.pins[order[i]]);
       if (cand.every((p) => p && !used.has(p))) {
         pins = Object.fromEntries(def.roles.map((r, i) => [r.role, cand[i]]));
         break;
       }
     }
-    pins ??= Object.fromEntries(def.roles.map((r, i) => [r.role, this.board.headers[0].pins[order[i]]]));
+    pins ??= Object.fromEntries(def.roles.map((r, i) => [r.role, this.board.headers[0].pins[signalPins(this.board.headers[0])[i]]]));
     const id = `${type}-${Date.now().toString(36)}`;
     this.attach({ id, type, pins, values: {} });
     this.changed();
@@ -202,8 +206,9 @@ export class ModulePanel {
   private plug(id: string, header: number) {
     const it = this.items.find((i) => i.saved.id === id);
     if (!it) return;
-    const order = [1, 2, 3, 4, 7, 8, 9, 10];
-    it.saved.pins = Object.fromEntries(it.def.roles.map((r, i) => [r.role, this.board.headers[header].pins[order[i]]]));
+    const h = this.board.headers[header];
+    const order = signalPins(h);
+    it.saved.pins = Object.fromEntries(it.def.roles.map((r, i) => [r.role, h.pins[order[i]]]));
     this.reattach(it);
   }
 

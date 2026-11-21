@@ -24,6 +24,10 @@ export interface HomeData {
   resume: Lesson | null; // the lesson to continue, or null for a first visit
   live: boolean; // a design is running on the hero board
   minutes: (l: Lesson) => number; // reading + practice time of a lesson
+  boardPicker?: string; // the "Your board" control, above the chapters
+  boardLines?: string[]; // one progress line per board the learner has used
+  empty?: { title: string; lead: string }; // this board has no lessons yet
+  hero?: { eyebrow: string; live: string; idle: string }; // the hero's board line and hint, for a board other than the Nexys
 }
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -180,7 +184,9 @@ export function renderHome(d: HomeData): string {
     })
     .join('');
   const resume = d.resume && d.resume !== all[0];
-  const cta = resume
+  const cta = !all.length
+    ? `<button class="btn primary" data-act="playground">${icon('flask', 15)}<span>${h.openPlayground}</span></button>`
+    : resume
     ? `<button class="btn primary" data-lesson="${d.resume!.id}">${icon('play', 15)}<span>${esc(h.resume(d.title(d.resume!)))}</span></button>`
     : `<button class="btn primary" data-lesson="${all[0].id}">${icon('play', 15)}<span>${h.start}</span></button>`;
   return `
@@ -188,11 +194,11 @@ export function renderHome(d: HomeData): string {
 <main class="home-main">
 <section class="hero">
   <div class="hero-copy">
-    <span class="eyebrow" dir="ltr">${h.eyebrow}</span>
+    <span class="eyebrow" dir="ltr">${d.hero?.eyebrow ?? h.eyebrow}</span>
     <h1>${h.title}</h1>
     <p class="motto">${h.motto.map((m) => `<span>${m}</span>`).join('<i>·</i>')}</p>
     <p class="lead">${h.lead}</p>
-    <div class="cta">${cta}<button class="btn ghost" data-act="playground">${icon('flask', 15)}<span>${h.openPlayground}</span></button></div>
+    <div class="cta">${cta}${all.length ? `<button class="btn ghost" data-act="playground">${icon('flask', 15)}<span>${h.openPlayground}</span></button>` : ''}</div>
     <ul class="facts">${h
       .facts(n(all.length), n(course.length))
       .map(([v, k]) => `<li><b>${v}</b><span>${k}</span></li>`)
@@ -205,7 +211,7 @@ export function renderHome(d: HomeData): string {
       <button data-act="view-top" title="${h.viewTop}">${icon('top', 14)}<span>${h.viewTop}</span></button>
       <button data-act="view-fit" title="${h.viewFit}">${icon('fit', 14)}<span>${h.viewFit}</span></button>
     </div>
-    <p class="stage-hint">${d.live ? `<span class="live-dot"></span>${h.live}` : h.idle}</p>
+    <p class="stage-hint">${d.live ? `<span class="live-dot"></span>${d.hero?.live ?? h.live}` : (d.hero?.idle ?? h.idle)}</p>
   </div>
 </section>
 <section class="why" aria-labelledby="why-h">
@@ -225,15 +231,17 @@ export function renderHome(d: HomeData): string {
 </section>
 <section class="course" id="home-lessons">
   <div class="course-h"><h2>${h.lessonsTitle}</h2><span class="dim">${h.lessonsSub(n(doneAll), n(all.length))}</span></div>
-  <div class="bar big"><i style="width:${Math.round((100 * doneAll) / all.length)}%"></i></div>
+  ${d.boardPicker ?? ''}
+  ${d.boardLines?.length ? `<ul class="board-lines">${d.boardLines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
+  <div class="bar big"><i style="width:${all.length ? Math.round((100 * doneAll) / all.length) : 0}%"></i></div>
   <div class="progress-tools">
-    ${doneAll === all.length ? `<button class="btn primary small" data-act="certificate">${icon('award', 15)}<span>${h.certificate}</span></button><span class="cert-ready">${h.certReady}</span>` : ''}
+    ${all.length && doneAll === all.length ? `<button class="btn primary small" data-act="certificate">${icon('award', 15)}<span>${h.certificate}</span></button><span class="cert-ready">${h.certReady}</span>` : ''}
     <span class="grow"></span>
     <button class="btn ghost small" data-act="export-progress">${icon('download', 14)}<span>${h.exportProgress}</span></button>
     <button class="btn ghost small" data-act="import-progress">${icon('upload', 14)}<span>${h.importProgress}</span></button>
   </div>
   ${toolLegend(all, d.lang)}
-  <div class="ch-grid">${cards}
+  <div class="ch-grid">${cards}${!all.length && d.empty ? `<article class="ch-card empty-card"><header><span class="ch-no">${icon('clock', 13)}</span></header><h3>${esc(d.empty.title)}</h3><p class="dim">${esc(d.empty.lead)}</p></article>` : ''}
     <article class="ch-card lab-card">
       <header><span class="ch-no">${h.lab}</span></header>
       <h3>${esc(d.title(d.playground))}</h3>
