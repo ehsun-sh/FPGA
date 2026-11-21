@@ -9,6 +9,7 @@ import { techMap } from '../synth/techmap';
 import { ref, part } from '../lessons/helpers';
 import { HINTS } from './hints';
 import { solutionOf } from './solutions';
+import { Z_BLINK_EXERCISE } from './zynq';
 
 export interface CheckItem {
   ok: boolean;
@@ -923,6 +924,8 @@ function uartEcho(h: BoardHarness, text: string, baud: number): { text: string; 
   return { text: out, errors };
 }
 
+
+EXERCISES['z-blink'] = Z_BLINK_EXERCISE;
 
 // hints and reference solutions live in their own files; attach them once, at load
 for (const [id, ex] of Object.entries(EXERCISES)) {

@@ -18,6 +18,7 @@ import "@fontsource/jetbrains-mono/latin-600.css";
 import "./style.css";
 import { BOARDS, DEFAULT_BOARD, deviceLabel, getBoard } from "./boards";
 import { mapPorts, type Mapping } from "./boards/mapping";
+import { PS_HELLO_C } from "./boards/ebaz4205/code";
 import {
   HdlError,
   synthesize,
@@ -1370,9 +1371,26 @@ ${exerciseHtml()}
 </nav>`;
   fillRefs(el);
   restoreMilestones(el);
+  restorePrep(el);
   el.scrollTop = 0;
   setRunState();
 }
+
+// "Prepare your board" checklists (z-intro): the ticked steps are a bitmask in prep:<board>
+function restorePrep(el: HTMLElement) {
+  for (const box of el.querySelectorAll<HTMLElement>("[data-prep]")) {
+    const mask = Number(store.get(`prep:${box.dataset.prep}`) ?? 0);
+    for (const c of box.querySelectorAll<HTMLInputElement>("[data-prep-bit]")) c.checked = !!(mask & (1 << Number(c.dataset.prepBit)));
+  }
+}
+$("#lesson").addEventListener("change", (ev) => {
+  const c = ev.target as HTMLInputElement;
+  const box = c.closest<HTMLElement>("[data-prep]");
+  if (!box || !c.dataset.prepBit) return;
+  let mask = 0;
+  for (const x of box.querySelectorAll<HTMLInputElement>("[data-prep-bit]")) if (x.checked) mask |= 1 << Number(x.dataset.prepBit);
+  store.set(`prep:${box.dataset.prep}`, String(mask));
+});
 
 $("#lesson").addEventListener("click", (ev) => {
   const t = ev.target as HTMLElement;
@@ -1695,6 +1713,13 @@ function downloadProject() {
     board: `${boardDef.vendor} ${boardDef.name}`,
     boardPart: boardDef.boardPart,
     internalClock: boardDef.internalClock,
+    // the EBAZ4205 PS lessons download a PS-only project instead of the editor's design
+    ps:
+      lesson.id === "z-ps-hello"
+        ? { mode: "hello", app: PS_HELLO_C }
+        : lesson.id === "z-ethernet"
+          ? { mode: "ethernet" }
+          : undefined,
   });
   download(`${name}.zip`, data, "application/zip");
   log(

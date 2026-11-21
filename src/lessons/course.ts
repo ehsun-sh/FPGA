@@ -14,6 +14,13 @@ import { EN } from './en';
 import { GOALS, PREREQ, type Level } from './goals';
 import { PREDICT, type Question } from './predict';
 import { QUIZ } from './quiz';
+import { ZYNQ_EN, ZYNQ_GOALS, ZYNQ_LESSONS, ZYNQ_LEVEL, ZYNQ_PREREQ, ZYNQ_QUIZ } from './zynq';
+
+// chapter Z (EBAZ4205) keeps its learning-loop data in zynq.ts
+Object.assign(EN, ZYNQ_EN);
+Object.assign(GOALS, ZYNQ_GOALS);
+Object.assign(QUIZ, ZYNQ_QUIZ);
+Object.assign(PREREQ, ZYNQ_PREREQ);
 
 type Text = { fa: string; en: string };
 
@@ -26,7 +33,7 @@ export interface Chapter {
   boards?: string[];
 }
 
-const pool = new Map([...LESSONS, ...ADVANCED, TESTBENCH_LESSON, VGA_LESSON, SENSORS_LESSON, PS2_LESSON, SOFTCORE_LESSON, ...BEYOND, PROJECT_CLOCK, PLAYGROUND].map((l) => [l.id, l]));
+const pool = new Map([...LESSONS, ...ADVANCED, TESTBENCH_LESSON, VGA_LESSON, SENSORS_LESSON, PS2_LESSON, SOFTCORE_LESSON, ...BEYOND, ...ZYNQ_LESSONS, PROJECT_CLOCK, PLAYGROUND].map((l) => [l.id, l]));
 const pick = (...ids: string[]) =>
   ids.map((id) => {
     const l = pool.get(id);
@@ -43,6 +50,7 @@ export const CHAPTERS: Chapter[] = [
   { title: { fa: 'ورودی/خروجی و تجهیزات جانبی', en: 'I/O and peripherals' }, lessons: pick('pwm', 'sensors', 'ps2', 'vga') },
   { title: { fa: 'حافظه و پردازنده‌ی نرم', en: 'Memory and a soft-core processor' }, lessons: pick('ram', 'softcore') },
   { title: { fa: 'فراتر از مبانی', en: 'Beyond the basics' }, lessons: pick('timing', 'clocking', 'cdc', 'bram', 'realboard') },
+  { title: { fa: 'Zynq و برد EBAZ4205', en: 'Zynq and the EBAZ4205' }, lessons: pick('z-intro', 'z-blink', 'z-bootflow', 'z-ps-hello', 'z-ethernet'), boards: ['ebaz4205'] },
   { title: { fa: 'آزمایشگاه', en: 'Lab' }, lessons: [PLAYGROUND], boards: ['*'] },
   {
     title: { fa: 'پروژه‌ها', en: 'Projects' },
@@ -82,7 +90,7 @@ const LEVELS: Level[] = ['intro', 'intro', 'core', 'core', 'core', 'advanced', '
 CHAPTERS.forEach((c, ci) => {
   for (const l of c.lessons) {
     if (l === PLAYGROUND) continue;
-    l.level = c.projects ? 'core' : LEVELS[ci];
+    l.level = ZYNQ_LEVEL[l.id] ?? (c.projects ? 'core' : LEVELS[ci]);
     if (PREREQ[l.id]) l.prereq = PREREQ[l.id];
     const g = GOALS[l.id];
     if (g) {

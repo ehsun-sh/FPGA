@@ -20,6 +20,10 @@ const all: [string, string][] = [
   ['figShiftReg', F.figShiftReg()],
   ['figSetupHold', F.figSetupHold()],
   ['figMetastable', F.figMetastable()],
+  ['figZynq', F.figZynq()],
+  ['figBootFlow', F.figBootFlow()],
+  ['figMii', F.figMii()],
+  ['figZynq fa', F.figZynq({ ps: 'بخش PS', pl: 'بخش PL' })],
   // Persian labels go through the same code
   ['figUartFrame fa', F.figUartFrame({ idle: 'بیکار', start: 'شروع', stop: 'پایان' })],
 ];

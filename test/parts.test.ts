@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { expandParts } from '../src/boards/parts';
+import { expandEbazParts } from '../src/boards/ebaz4205/parts';
 import { ALL_LESSONS } from '../src/lessons/course';
 import { EN } from '../src/lessons/en';
 import { part, partsIn } from '../src/lessons/helpers';
@@ -53,7 +54,7 @@ describe('board part chips', () => {
   });
 
   it('every chip names a real part, and the intro tour has chips in both languages', () => {
-    for (const [id, html] of texts) for (const p of partsIn(html)) expect(expandParts([p]).length, `${id}: ${p}`).toBeGreaterThan(0);
+    for (const [id, html] of texts) for (const p of partsIn(html)) expect((id.startsWith('z-') ? expandEbazParts : expandParts)([p]).length, `${id}: ${p}`).toBeGreaterThan(0);
     for (const body of [intro.body, EN.intro.body]) {
       expect(body).toContain('data-part="SW0..SW15"');
       expect(body).toContain('data-part="CPU RESET"');

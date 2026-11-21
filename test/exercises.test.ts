@@ -1,9 +1,9 @@
 // Every exercise checker must accept a correct solution and reject the lesson's unchanged code.
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_BOARD, type XdcGroup } from '../src/boards';
+import { DEFAULT_BOARD, getBoard, type XdcGroup } from '../src/boards';
 import { EXERCISES } from '../src/grade/exercises';
 import { gradeExercise, type GradeResult } from '../src/grade/grade';
-import { ALL_LESSONS } from '../src/lessons/course';
+import { ALL_LESSONS, lessonBoards } from '../src/lessons/course';
 import type { Lesson } from '../src/lessons/lessons';
 
 const lesson = (id: string) => ALL_LESSONS.find((l) => l.id === id)!;
@@ -18,18 +18,23 @@ const EXTRA: Record<string, Partial<Record<XdcGroup, boolean>>> = {
 };
 
 function grade(l: Lesson, src: string, lang: 'verilog' | 'vhdl' = 'verilog', tb?: string): GradeResult {
+  const b = lessonBoards(l)[0];
+  const board = b === '*' ? DEFAULT_BOARD : getBoard(b);
   return gradeExercise(
     l.id,
-    { lang, src, xdc: DEFAULT_BOARD.masterXdc({ ...l.xdc, ...EXTRA[l.id] }), tb, original: lang === 'verilog' ? l.verilog : l.vhdl },
-    DEFAULT_BOARD,
+    { lang, src, xdc: board.masterXdc({ ...l.xdc, ...EXTRA[l.id] }), tb, original: lang === 'verilog' ? l.verilog : l.vhdl },
+    board,
   );
 }
 
 const show = (r: GradeResult) => r.items.map((i) => `${i.ok ? '✓' : '✗'} ${i.en}`).join('\n');
 
+// guided real-board lessons of the EBAZ4205 chapter: no checker
+const REAL = ['z-intro', 'z-bootflow', 'z-ps-hello', 'z-ethernet'];
+
 describe('exercise checkers', () => {
   it('every lesson but the playground and the real-board guide has an exercise', () => {
-    for (const l of ALL_LESSONS) if (l.id !== 'playground' && l.id !== 'realboard') expect(EXERCISES[l.id], l.id).toBeDefined();
+    for (const l of ALL_LESSONS) if (l.id !== 'playground' && l.id !== 'realboard' && !REAL.includes(l.id)) expect(EXERCISES[l.id], l.id).toBeDefined();
     expect(EXERCISES.realboard).toBeUndefined();
   });
 
