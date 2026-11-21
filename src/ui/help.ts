@@ -104,9 +104,9 @@ export function shortcutsDialog(lang: UiLang): string {
 <button>${h.close}</button></form>`;
 }
 
-export function limitsDialog(lang: UiLang): string {
+export function limitsDialog(lang: UiLang, board?: string): string {
   const h = HELP[lang];
   return `<form method="dialog" dir="${lang === 'fa' ? 'rtl' : 'ltr'}" lang="${lang}"><h2>${h.limits}</h2><p>${h.limitsIntro}</p>
-<ul class="limits">${h.lims.map(([id, t]) => `<li id="${id}">${t}</li>`).join('')}</ul>
+<ul class="limits">${board ? `<li id="lim-board">${board}</li>` : ''}${h.lims.map(([id, t]) => `<li id="${id}">${t}</li>`).join('')}</ul>
 <button>${h.close}</button></form>`;
 }

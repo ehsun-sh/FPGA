@@ -22,6 +22,8 @@ export interface Chapter {
   lessons: Lesson[];
   soon?: Text[]; // planned lessons, shown greyed out
   projects?: boolean; // the guided projects: listed on their own, not counted in the course progress
+  // the boards this chapter is for (default: the Nexys A7); '*' = any board (no board-specific hardware)
+  boards?: string[];
 }
 
 const pool = new Map([...LESSONS, ...ADVANCED, TESTBENCH_LESSON, VGA_LESSON, SENSORS_LESSON, PS2_LESSON, SOFTCORE_LESSON, ...BEYOND, PROJECT_CLOCK, PLAYGROUND].map((l) => [l.id, l]));
@@ -41,7 +43,7 @@ export const CHAPTERS: Chapter[] = [
   { title: { fa: 'ورودی/خروجی و تجهیزات جانبی', en: 'I/O and peripherals' }, lessons: pick('pwm', 'sensors', 'ps2', 'vga') },
   { title: { fa: 'حافظه و پردازنده‌ی نرم', en: 'Memory and a soft-core processor' }, lessons: pick('ram', 'softcore') },
   { title: { fa: 'فراتر از مبانی', en: 'Beyond the basics' }, lessons: pick('timing', 'clocking', 'cdc', 'bram', 'realboard') },
-  { title: { fa: 'آزمایشگاه', en: 'Lab' }, lessons: [PLAYGROUND] },
+  { title: { fa: 'آزمایشگاه', en: 'Lab' }, lessons: [PLAYGROUND], boards: ['*'] },
   {
     title: { fa: 'پروژه‌ها', en: 'Projects' },
     lessons: pick('proj-clock'),
@@ -99,5 +101,16 @@ CHAPTERS.forEach((c, ci) => {
     }
   }
 });
+export const NEXYS = 'nexys-a7-100t';
+export const chapterBoards = (c: Chapter) => c.boards ?? [NEXYS];
+export const chapterOnBoard = (c: Chapter, board: string) => chapterBoards(c).some((b) => b === '*' || b === board);
+// the chapters a learner on this board sees: its own and the board-independent ones
+export const chaptersFor = (board: string) => CHAPTERS.filter((c) => chapterOnBoard(c, board));
+export const courseChaptersFor = (board: string) => chaptersFor(board).filter((c) => COURSE_CHAPTERS.includes(c));
+export const courseLessonsFor = (board: string) => courseChaptersFor(board).flatMap((c) => c.lessons);
+// the boards a lesson can run on (those of its chapter)
+export const lessonBoards = (l: Lesson) => chapterBoards(CHAPTERS.find((c) => c.lessons.includes(l)) ?? CHAPTERS[0]);
+export const lessonOnBoard = (l: Lesson, board: string) => lessonBoards(l).some((b) => b === '*' || b === board);
+
 export const chapterOf = (l: Lesson) => CHAPTERS.findIndex((c) => c.lessons.includes(l));
 export { PLAYGROUND };
