@@ -1,4 +1,5 @@
-// x-buzzer: a square-wave tone generator that plays a C-major scale up and down.
+// x-tone: a square-wave tone generator that plays a C-major scale up and down on the audio jack
+// (EBAZEXT-V2: AUDIO_L/AUDIO_R go through an RC low-pass to the 3.5 mm jack, so a square wave is heard as a tone).
 // The note table is computed from CLK_HZ; NOTE_TICKS sets how long each note lasts.
 // Checkers and tests shrink CLK_HZ and NOTE_TICKS so a whole scale fits in a short run.
 module top #(
@@ -6,8 +7,9 @@ module top #(
     parameter NOTE_TICKS = 12_500_000      // 0.25 s per note at 50 MHz
 ) (
     input  wire clk,
-    input  wire KEY1,                      // hold to mute (active low on the extension board: to verify)
-    output reg  BUZZER = 0
+    input  wire KEY0,                      // hold to mute: KEY0 is active low (10 kOhm pull-up, pressed = 0)
+    output wire AUDIO_L,
+    output wire AUDIO_R
 );
     // half periods for C4 D4 E4 F4 G4 A4 B4 C5 (262 294 330 349 392 440 494 523 Hz)
     reg [3:0]  step = 0;                    // 0..13: up 0..7, down 6..1
@@ -30,12 +32,16 @@ module top #(
         endcase
     end
 
+    reg        wave = 0;
+    assign AUDIO_L = wave;
+    assign AUDIO_R = wave;
+
     reg [23:0] pcnt = 0;   // tone period counter
     reg [23:0] ncnt = 0;   // note length counter
     always @(posedge clk) begin
         if (pcnt >= half - 1) begin
             pcnt   <= 0;
-            BUZZER <= KEY1 ? ~BUZZER : 1'b0;
+            wave   <= KEY0 ? ~wave : 1'b0;
         end else
             pcnt <= pcnt + 1;
 

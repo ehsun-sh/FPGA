@@ -20,13 +20,13 @@ second-hand for a few dollars, which makes them the cheapest Zynq board around. 
 | SD card | TF/microSD slot U7 on SD0 (MIO 40-45, card detect MIO 34). **Not fitted** on most boards: solder a slot | xjtuecho, KeitetsuWorks |
 | UART | UART1 on MIO 24 (TX) and MIO 25 (RX), header **J7**, 115200 8N1, 3.3 V TTL. J7 is not fitted: solder a 3-pin header (TXD, RXD, GND; VCC not needed) | CodeAsm, zynq[2], xjtuecho |
 | JTAG | 14-pin header **J8** (Xilinx 2 mm 14-pin layout **(verify)**), not fitted by default | zynq[1], xjtuecho |
-| LEDs | Two on the core board, on PL pins: red `W14`, green `W13`. Active level **(verify)**: the reference designs drive them straight from EMIO GPIO | xjtuecho, KeitetsuWorks, gameltb |
+| LEDs | Two on the core board, on PL pins: red `W14`, green `W13` (xjtuecho, KeitetsuWorks, gameltb; Elrori's EBAZEXT-V1 XDC swaps the colours). Colour and active level **(verify)**: the reference designs drive them straight from EMIO GPIO | xjtuecho, KeitetsuWorks, gameltb |
 | Buttons | No PL button. Footprint **S3** (with C2410 and R2641A) can be populated; it is wired to the PS **(verify which MIO)** | KeitetsuWorks |
 | PL clock | **None on the stock board.** Footprint **X5** on pin `N18` takes an oscillator (frequency is your choice; the reference XDC uses a 10 ns period). Otherwise the PL is clocked from the PS: `FCLK_CLK0` | xjtuecho |
 | PHY clock | 25 MHz from crystal **Y3** when fitted. Cost-reduced boards have no Y3: the PS then makes 25 MHz on `FCLK_CLK3` and drives it out on PL pin `U18` | KeitetsuWorks |
 | Expansion | Three 2x10 headers **DATA1, DATA2, DATA3**, **2.0 mm pitch** (not 2.54 mm). 14 FPGA pins each (pins 5-9, 11, 13-20); see `ebaz4205-master.xdc` | xjtuecho |
 | Fans | J3 and J5 (originally fan power) with PWM and tach lines on PL pins: J3 PWM `U12`, J3 speed `V13`, J5 PWM `V12`, J5 speed `V15` | xjtuecho, gameltb |
-| Power | Stock: 5-12 V (at least 400 mA) into DATA1, DATA2 or DATA3, which have diodes to the board supply. 5 V works. With diode **D24** fitted (or shorted) the board can be powered from J3, J4 or J5; J3 or J5 is recommended. The 6-pin Mini-Fit Jr. header has ground on the top row and 12 V on the bottom row | xjtuecho, CodeAsm, zynq[1] |
+| Power | With the EBAZEXT extension board: 5 V from its USB-C socket through the DATA headers (§5). Stock: 5-12 V (at least 400 mA) into DATA1, DATA2 or DATA3, which have diodes to the board supply. 5 V works. With diode **D24** fitted (or shorted) the board can be powered from J3, J4 or J5; J3 or J5 is recommended. The 6-pin Mini-Fit Jr. header has ground on the top row and 12 V on the bottom row | xjtuecho, CodeAsm, zynq[1] |
 
 ### Hardware preparation (for lesson `z-intro`, "Prepare your board")
 
@@ -153,19 +153,65 @@ reserve 0x7E00000/0x200000. (zynq[2], CodeAsm boot log)
 A PetaLinux alternative (Vivado + PetaLinux 2021.2) is in the KeitetsuWorks repository; the lesson links to it
 rather than repeating it.
 
-## 5. Extension board (HDMI, USB, LCD, IO keys, buzzer, serial port)
+## 5. Extension board: EBAZEXT (Elrori)
 
-No source we could read documents this board. What we need from Ehsan (Phase E0 of the roadmap):
+Source: [Elrori/EBAZ4205](https://github.com/Elrori/EBAZ4205), folders `EBAZEXT-V1` (Altium, PDF schematic, XDC) and
+`EBAZEXT-V2` (KiCad 6 project, photo `ebazext-v2.png`). The V2 facts below were read from the KiCad PCB's netlist
+(every pad and its net); V1 facts from `ebazextv1.xdc`. The FPGA pins are in `ebaz4205-master.xdc`.
 
-- A photo of both sides, the seller's listing name, and the schematic or example project archive if the seller
-  gave one.
-- For each feature: which DATA header pin it uses, and the part number:
-  - **HDMI:** which pins carry the three data pairs and the clock pair (TMDS directly from the FPGA, or an HDMI
-    transmitter chip such as a SiI9022/ADV7511, which changes the lesson completely).
-  - **USB:** what the USB connector is for: power only, a USB-serial chip (CH340/CP2102) wired to which pins, or a
-    USB PHY.
-  - **Serial port:** a separate header, or the same USB-serial bridge? Wired to the PS UART1 (J7) or to PL pins?
-  - **LCD:** the module (for example 1.44"/1.8" SPI TFT with ST7735, 2.0"/2.4" with ST7789/ILI9341, or a 16x2
-    character LCD with HD44780) and its pins.
-  - **IO keys:** how many, which pins, pull-up or pull-down (level when pressed).
-  - **Buzzer:** active (DC) or passive (needs a tone), driven directly or through a transistor, active level.
+**Which version is Ehsan's? (verify)** Ehsan described HDMI, USB, LCD, IO keys, buzzer and a serial port. V2 has
+HDMI, USB-C serial, an IO header, two keys and two LEDs, an audio jack and a camera header, but **no LCD and no
+buzzer**. V1 has VGA instead of HDMI. If Ehsan's board has an LCD and a buzzer it is a third design, and its
+schematic or a photo is still needed; everything else below may still match it.
+
+### How the extension board meets the core board
+
+- It plugs onto DATA1, DATA2 and DATA3 with three 2x10 2.0 mm sockets (J8, J7, J6 on the V2 PCB).
+- The sockets are numbered mirror-wise to the headers: socket pin 2k-1 meets header pin 2k. Proof: socket pins 9
+  (unconnected) and 11 (GND) land on header pins 10 and 12, the two header pins with no FPGA pin; and with the swap
+  every differential pair on the extension board lands on an `_P`/`_N` pair of the FPGA (checked against Elrori's
+  `xc7z010clg400pkg.txt`). The keys, LEDs, UART and audio then come out on exactly the pins of V1's XDC.
+- Power: socket pins 1-2 carry +5 V and 3-4 GND. The extension board's USB-C connector supplies +5 V, so **one USB-C
+  cable powers both boards** (through the DATA headers' power pins) and gives the serial port. An AMS1117 makes 3.3 V
+  for the extension board; header J5 brings out 3V3, 5V and GND. Power LED D4.
+
+### What is on EBAZEXT-V2
+
+| Feature | Parts | FPGA pins | Notes for the simulator and lessons |
+|---|---|---|---|
+| 2 keys | SW1, SW2 | KEY0 `U19`, KEY1 `P19` | 10 kΩ pull-up, pressed = 0 (active low). Both are clock-capable pins (MRCC) |
+| 2 LEDs | D2, D3 | EXT_LED0 `T19`, EXT_LED1 `V20` | 1 kΩ to the LED, cathode to GND: 1 = on |
+| USB serial | CH340G (12 MHz crystal), USB-C (5.1 kΩ CC pull-downs) | UART_RX `J20` (PC → FPGA), UART_TX `K19` (FPGA → PC) | A PL UART: the learner's own UART design talks to the PC. Shows up as a CH340 COM port |
+| Audio out | 3.5 mm jack J2, 3.3 kΩ + 100 nF per channel | AUDIO_L `J19`, AUDIO_R `K18` | RC low-pass: PWM or a square wave becomes sound. This is where the "buzzer" lesson plays |
+| HDMI out | HDMI socket J1, 49.9 Ω pull-ups to 3.3 V on all 8 TMDS lines | CLK `H16`/`H17`, D0 `F19`/`F20`, D1 `C20`/`B20`, D2 `B19`/`A20` | TMDS straight from the FPGA (bank 35, `TMDS_33`): no transmitter chip. Needs the TMDS encoder + 10:1 serializer |
+| HDMI DDC | two AO3400 level shifters, 2.2 kΩ pull-ups both sides | HDMI_SCL `D19`, HDMI_SDA `D18` | Open-drain I²C to the monitor's EDID (5 V side). HPD has a 10 kΩ pull-down and is not wired to the FPGA; CEC has a 27 kΩ pull-up |
+| GPIO header | J4, 2.54 mm, 8 pins | IO[0..5] = `G19 H20 G20 J18 K17 E19` | Pin order on J4: IO_5, IO_4, IO_3, IO_2, IO_1, IO_0, 3V3, GND. Takes the existing Add Module parts (HC-SR04, servo …) |
+| Camera header | J3, 2.54 mm 2x9 | 16 lines, see the XDC | For OV7670/OV7725 modules; the pair on J3 pins 3-4 has 4.7 kΩ pull-ups (SCCB). Later lesson |
+
+### EBAZEXT-V1, for comparison
+
+VGA (`vga_hs` G19, `vga_vs` H20, RGB565 `vgad[15:0]` on 16 DATA1/DATA2 pins) instead of HDMI; the camera signals
+are named in its XDC (pclk P19, xclk P20, href R19, vsync N17, SCCB sclk R18 / sdat T20, pwdn L16, rst L19, 8 data
+bits); KEY1 is on `U20` instead of `P19`. Same keys/LEDs/UART/audio otherwise.
+
+## 6. Other boards that look similar (do not mix them up)
+
+- **Antminer S9 control board** (Bitmain, "AntMiner ControlBoard XC7010 V1.01"): also a Zynq-7010 board sold cheaply
+  for learning, but a different PCB with different pins. [KarolNi/S9miner_sample](https://github.com/KarolNi/S9miner_sample)
+  is for this board (schematic PDF and projects P01_HELLO, P02_GPIO, P03_SD_TEST, P04_SD_BOOT). Useful as a model
+  for the order of the PS lessons, not for pins. The EBAZ4205 is the control board of the **Ebit E9+** miner.
+- **EBAZ4203**: almost identical to the EBAZ4205 (zynq[1]).
+
+## 7. More boot and Linux material (blkf2016/ebaz4205)
+
+[blkf2016/ebaz4205](https://github.com/blkf2016/ebaz4205): U-Boot 2019.07-rc4, Linux 5.1.5 and Buildroot 2019.05
+for the EBAZ4205 (a Buildroot external tree under `buildroot/board/ebaz4205` and `buildroot/configs`), a ready
+`BOOT.bin` and an SD-card image (`buildroot-sdcard.img.7z`; root password `root`).
+
+Two ideas worth teaching from it:
+- **An FSBL hook that loads U-Boot from a file.** A modified Xilinx FSBL (`main.c`) calls `UBootLoader()`
+  (`uboot_loader.c`, GPLv3), which opens `u-boot.bin` on the SD card's FAT partition with FatFs, copies it to DDR at
+  `0x04000000`, and hands off there. U-Boot can then be replaced by copying a file, without rebuilding BOOT.bin.
+  Good material for `z-bootflow` ("the FSBL can load anything").
+- **A second UART on the header:** its block design routes the PS UART0 through EMIO to `F19` (RX) and `F20` (TX),
+  DATA1 pins 19 and 17. On EBAZEXT-V2 those pins are HDMI D0, so this only applies without the extension board.
