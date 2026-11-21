@@ -157,9 +157,10 @@ rather than repeating it.
 
 ### 5.1 Ehsan's extension board (the target)
 
-Source: the schematic sheet Ehsan sent on 2026-11-21 (title «与主控板的连接», "connection to the main board"). The
-pins are in `ebaz4205-master.xdc`. The sheet is cut below the HDMI part: **the LCD, keys and buzzer are still to be
-read from the rest of it.**
+Sources: the schematic sheet Ehsan sent on 2026-11-21 (title «与主控板的连接», "connection to the main board"), then
+the vendor's full package the same day: "adapter board_SCH.pdf" (REV 1.0, 2022-03-20), the PL and PS example
+projects and "PS_LCD_step.pdf". The vendor files themselves are not in the repository; only the pin facts are. The
+pins are in `ebaz4205-master.xdc` and `src/boards/ebaz4205/pins.ts`.
 
 - **Headers H1, H2, H3** (2x10, part 2543U-210CNG1SNT02) meet DATA1, DATA2, DATA3. Every signal pin is labelled with
   its FPGA pin, and the numbering is the same as the core board's (pin 10 not connected, pin 12 GND, pins 1-2 +5 V,
@@ -172,12 +173,14 @@ read from the rest of it.**
 | HDMI out | HDMI socket, 49.9 Ω pull-ups to 3.3 V on all 8 TMDS lines (R1-R8) | CLK `F19`/`F20`, D0 `D19`/`D20`, D1 `C20`/`B20`, D2 `B19`/`A20` | TMDS straight from bank 35 (`TMDS_33`), no transmitter chip. Every pair is an `_P`/`_N` pair (L15, L4, L1, L2). DDC, CEC and HPD are **not connected**: no EDID reading. +5 V to the socket through D1 |
 | USB serial | CH340C (no crystal needed), USB-C data lines; also a 4-pin header UART_USB_TTL (5V, H16, H17, GND) | UART_RX `H16` (from the PC), UART_TX `H17` (to the PC) | A PL UART at any baud rate the design picks. The PC sees a CH340 COM port |
 | 3 LEDs | LED1-LED3 (E6C0603QBAC1UDA), 2 kΩ each | `E19`, `K17`, `H18` | Active high (cathode to GND) |
-| LCD | "IPS130-12": a 1.3-inch IPS module with a 12-pin connector **(verify)**; usually a 240×240 ST7789 on SPI | `T20` is one of its pins (net `LCD_T20`); the rest **to read** | The lesson model is an ST7789 SPI LCD unless the rest of the sheet says otherwise |
-| Keys | **to read** | **to read** | |
-| Buzzer | **to read** | **to read** | Active (fixed tone) or passive (needs a tone)? |
+| LCD | "IPS130-12": a 1.3-inch 240×240 IPS module with an **ST7789** controller, SPI plus a D/C line | SCL `R19`, SDA `P20`, RES `N17`, DC `R18`, backlight BLK `T20` | **CS is tied to ground** on the board (no pin). The backlight is switched by an S8050 (BLK = 1 on). The vendor's init: SLPOUT, then COLMOD 0x05 (RGB565), MADCTL, porch and power tuning (B2, B7, BB, C0, C2, C3, C4, C6, D0, E0, E1), INVON, DISPON |
+| Keys | KEY1-KEY5, each with a 10 kΩ pull-up to 3.3 V | `T19`, `P19`, `U20`, `U19`, `V20` | **Active low** (pressed = 0). A cross: KEY3 in the middle, KEY1/KEY4 left and right, KEY2/KEY5 above and below |
+| Buzzer | A **passive** buzzer (a small speaker) on 3.3 V, switched by an S8050 | `D18` | 1 = current flows. It needs a square wave at the tone's frequency |
+| H4 header | Breaks out the unused pins | All of DATA2, and `M19 N20 P18 M17` of DATA3 | Free I/O for the learner's own parts |
 
-Header pins not used by the parts above, so the LCD, keys and buzzer must be among them: H1 `D18`; H2 `G20 J18 G19
-H20 J19 K18 K19 J20 L16 L19 M18 L20 M20 L17`; H3 `M19 N20 P18 M17 N17 P20 R18 R19 P19 T20 U20 T19 V20 U19`.
+The vendor's PL examples take their clock from `N18` at 50 MHz, from an oscillator fitted at X5 on their boards. A
+stock EBAZ4205 has no X5, so FPGA Lab clocks the PL from the PS (FCLK_CLK0 = 50 MHz); the frequency is the same, so
+their timings carry over.
 
 ### 5.2 EBAZEXT (Elrori): another extension board, not Ehsan's
 

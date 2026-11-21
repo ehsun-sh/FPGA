@@ -9,7 +9,8 @@ export type Device =
   | { kind: 'rgb'; index: number; color: 'r' | 'g' | 'b' }
   | { kind: 'seg'; seg: 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'dp' }
   | { kind: 'an'; index: number }
-  | { kind: 'btn'; name: string }
+  // push button or key; activeLow: the pin reads 0 while it is pressed (a pull-up and a key to ground)
+  | { kind: 'btn'; name: string; activeLow?: boolean }
   // active-low reset button
   | { kind: 'reset'; name: string }
   // a general-purpose header pin or signal line with no on-board indicator (Pmod, USB-UART, ...)
@@ -32,6 +33,8 @@ export interface BoardOutputs {
   rgb: [number, number, number][]; // per RGB LED
   seg: number[][]; // [digit][a,b,c,d,e,f,g,dp] brightness
   done: boolean; // FPGA configured
+  // the buzzer, if the board has one: the tone it plays (Hz, measured in board time; 0 = silent)
+  buzzer?: number;
 }
 
 // An add-on module as the board view shows it. values: its controls' current values (and numeric readouts).
@@ -84,6 +87,9 @@ export interface BoardView {
   highlight?(parts: string[]): void;
   // show or hide the board's extension board (EBAZ4205, Phase E3)
   setExtension?(attached: boolean): void;
+  // the extension board's LCD: its screen canvas (null: blank), and a repaint after the canvas changed
+  setLcd?(screen: HTMLCanvasElement | null): void;
+  refreshLcd?(): void;
 }
 
 export type XdcGroup = 'clk' | 'sw' | 'led' | 'rgb' | 'seg' | 'btn' | 'reset' | 'pmod' | 'uart' | 'vga' | 'tmp' | 'acl' | 'ps2'
@@ -101,6 +107,8 @@ export interface BoardDef {
   internalClock?: { port: string; source: string; hz: number };
   // one-line notes shown in the board picker
   note?: { fa: string; en: string };
+  // an extension board that can be attached or taken off (EBAZ4205); changing it reloads the page
+  extension?: { attached: boolean; label: { fa: string; en: string } };
   // the hardware-manager target ("localhost/xilinx_tcf/Digilent")
   jtag?: string;
   // what the simulator leaves out on this board (limits dialog), if anything beyond the usual

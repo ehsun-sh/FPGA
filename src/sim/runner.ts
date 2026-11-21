@@ -41,6 +41,11 @@ export class Runner {
   bus: PinBus;
 
   private outBindings: Binding[] = [];
+  // the buzzer pin: its level, the board cycle of its last change and the last measured half period
+  private buzz: Binding | null = null;
+  private buzzLevel = 0;
+  private buzzEdge = 0;
+  private buzzHalf = 0;
   private inBindings: Binding[] = [];
   // brightness slots: [leds][rgb * 3][digits * 8]
   private nLed: number;
@@ -73,6 +78,7 @@ export class Runner {
     this.probeSigs = this.bus.sigs();
     this.outBindings = mapping.bindings.filter((b) => !isBoardInput(b.device));
     this.inBindings = mapping.bindings.filter((b) => isBoardInput(b.device) && b.device.kind !== 'clk');
+    this.buzz = mapping.bindings.find((b) => b.device.kind === 'buzzer') ?? null;
     this.sim = this.compile();
     this.error = null;
     this.reset(inputs);
@@ -147,6 +153,9 @@ export class Runner {
     this.pending = [];
     this.serialLevel = 1;
     this.serialFree = 0;
+    this.buzzLevel = this.buzz ? (this.sim.v[this.buzz.sig] >>> this.buzz.bit) & 1 : 0;
+    this.buzzEdge = 0;
+    this.buzzHalf = 0;
     this.bus.reset(0);
     this.computeLit();
     for (const p of this.probes.values()) p.onRestart?.();
@@ -168,7 +177,7 @@ export class Runner {
   private inputValue(b: Binding, inputs: { switches: boolean[]; pressed: (b: string) => boolean }): number {
     const d = b.device;
     if (d.kind === 'sw') return inputs.switches[d.index] ? 1 : 0;
-    if (d.kind === 'btn') return inputs.pressed(d.name) ? 1 : 0;
+    if (d.kind === 'btn') return inputs.pressed(d.name) !== !!d.activeLow ? 1 : 0;
     if (d.kind === 'reset') return inputs.pressed(d.name) ? 0 : 1; // active-low
     if (d.kind === 'uart') return this.serialLevel;
     return 0;
@@ -206,7 +215,10 @@ export class Runner {
 
   private applyButton(name: string, pressed: boolean) {
     if (name === this.board.io.reset) this.setDevice((d) => d.kind === 'reset', pressed ? 0 : 1);
-    else this.setDevice((d) => d.kind === 'btn' && d.name === name, pressed ? 1 : 0);
+    else {
+      this.setDevice((d) => d.kind === 'btn' && d.name === name && !d.activeLow, pressed ? 1 : 0);
+      this.setDevice((d) => d.kind === 'btn' && d.name === name && !!d.activeLow, pressed ? 0 : 1);
+    }
   }
 
   // simulate contact bounce on push buttons
@@ -302,7 +314,27 @@ export class Runner {
     if (this.sim) {
       this.computeLit();
       this.sample(this.totalCycles + at);
+      this.watchBuzzer(this.totalCycles + at);
     }
+  }
+
+  // a change of the buzzer pin: the time since the last one is half a period of the tone
+  private watchBuzzer(t: number) {
+    const b = this.buzz;
+    if (!b || !this.sim) return;
+    const lv = (this.sim.v[b.sig] >>> b.bit) & 1;
+    if (lv === this.buzzLevel) return;
+    this.buzzLevel = lv;
+    this.buzzHalf = this.buzzEdge ? t - this.buzzEdge : 0;
+    this.buzzEdge = t;
+  }
+
+  // the tone on the buzzer pin (Hz in board time), 0 once the pin has stopped toggling
+  buzzerHz(): number {
+    if (!this.buzz || !this.sim || !this.running || this.buzzHalf <= 0) return 0;
+    const quiet = this.now - this.buzzEdge;
+    if (quiet > Math.max(3 * this.buzzHalf, this.board.clockHz * 0.03)) return 0;
+    return this.board.clockHz / (2 * this.buzzHalf);
   }
 
   private runBase = 0;
@@ -401,6 +433,6 @@ export class Runner {
       for (let s = 0; s < 8; s++) row.push(on ? f(b[seg0 + dg * 8 + s], 1.7) : 0);
       seg.push(row);
     }
-    return { led, rgb, seg, done: !!this.sim };
+    return { led, rgb, seg, done: !!this.sim, buzzer: this.buzzerHz() };
   }
 }

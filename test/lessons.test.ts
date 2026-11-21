@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { BOARDS, DEFAULT_BOARD, getBoard, type BoardDef } from '../src/boards';
+import { BOARDS, DEFAULT_BOARD, getBoard, type BoardDef, type XdcGroup } from '../src/boards';
 import { BoardHarness } from '../src/grade/harness';
 import { mapPorts } from '../src/boards/mapping';
 import { compileDesign, synthesize } from '../src/hdl';
+import { withLibrary } from '../src/boards/library';
 import { Acquisition, Recorder } from '../src/la/capture';
 import { decodeI2c, decodePs2, decodeSpi, decodeUart } from '../src/la/decode';
 import { ADVANCED } from '../src/lessons/advanced';
@@ -11,8 +12,12 @@ import { LESSONS, PLAYGROUND } from '../src/lessons/lessons';
 
 type Harness = ReturnType<typeof harness>;
 
+// the EBAZ4205 with its extension board, for the x- lessons
+const EBAZ = getBoard('ebaz4205');
+const ext = (h: Harness, xdc: Partial<Record<XdcGroup, boolean>>) => new BoardHarness(h.d, EBAZ.masterXdc(xdc), EBAZ);
+
 function harness(src: string, lang: 'verilog' | 'vhdl', xdc: string, params?: Record<string, number>, board: BoardDef = DEFAULT_BOARD) {
-  const d = synthesize(src, lang, undefined, params);
+  const d = synthesize(withLibrary(src, lang), lang, undefined, params);
   const map = mapPorts(d, xdc, board);
   const errors = map.messages.filter((m) => m.level === 'error');
   if (errors.length) throw new Error(errors.map((e) => e.msg).join('\n'));
@@ -525,6 +530,113 @@ const checks: Record<string, (h: Harness) => void> = {
       },
     ]),
   ),
+  // the extension board (EBAZ4205, Phase E3/E4): LED1-LED3 are LEDs 2-4, the keys are active low
+  'x-leds'(h) {
+    const b = ext(h, { ext_led: true });
+    const seen: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      seen.push(b.led() >> 2);
+      b.run(4);
+    }
+    expect(seen).toEqual([1, 2, 4, 1]);
+  },
+  'x-keys'(h) {
+    const b = ext(h, { key: true, ext_led: true });
+    b.run(200);
+    expect(b.led() >> 2).toBe(0);
+    for (const want of [1, 0, 1]) {
+      // a bouncy press: the level flips a few times before it settles
+      for (const v of [1, 0, 1, 0, 1]) {
+        b.btn('KEY1', v);
+        b.run(7);
+      }
+      b.run(200);
+      b.btn('KEY1', 0);
+      b.run(200);
+      expect(b.led() >> 2).toBe(want);
+    }
+  },
+  'x-uart'(h) {
+    const b = ext(h, { ext_uart: true, ext_led: true });
+    b.pin('H16', 1);
+    b.run(1000);
+    // send three bytes at 434 clocks a bit while recording TX, then decode TX (8N1)
+    const tx: number[] = [];
+    const step = (n: number) => {
+      for (let i = 0; i < n; i++) {
+        b.run(1);
+        tx.push(b.readPin('H17'));
+      }
+    };
+    for (const ch of 'Hi2')
+      for (const bit of [0, ...Array.from({ length: 8 }, (_, k) => (ch.charCodeAt(0) >> k) & 1), 1]) {
+        b.pin('H16', bit);
+        step(434);
+      }
+    step(434 * 12);
+    let text = '';
+    for (let i = 1; i < tx.length; i++)
+      if (tx[i - 1] === 1 && tx[i] === 0) {
+        let v = 0;
+        for (let k = 0; k < 8; k++) v |= tx[i + Math.round((k + 1.5) * 434)] << k;
+        text += String.fromCharCode(v);
+        i += 434 * 9.5;
+      }
+    expect(text).toBe('Hi2');
+    expect(b.led() >> 2).toBe(2);
+  },
+  'x-buzzer'(h) {
+    const b = ext(h, { key: true, buzzer: true });
+    const halfs = new Map<number, number>();
+    let last = b.readPin('D18');
+    let run = 0;
+    for (let i = 0; i < 4000 * 14; i++) {
+      b.run(1);
+      run++;
+      const v = b.readPin('D18');
+      if (v !== last) {
+        halfs.set(run, (halfs.get(run) ?? 0) + 1);
+        run = 0;
+        last = v;
+      }
+    }
+    // C4 (262 Hz) has a half period of 52400 / 524 = 100 clocks, C5 (523 Hz) 50
+    expect(halfs.get(100) ?? 0).toBeGreaterThan(10);
+    expect(halfs.get(50) ?? 0).toBeGreaterThan(10);
+    b.btn('KEY1', 1);
+    b.run(300);
+    expect(b.readPin('D18')).toBe(0);
+  },
+  'x-lcd'(h) {
+    const b = ext(h, { lcd: true });
+    const lcd = b.lcd(2_000_000)!;
+    expect(lcd.lit).toBe(true);
+    expect(lcd.warnings).toEqual([]);
+    // eight stripes of 30 columns: white, yellow, cyan, green, magenta, red, blue, black
+    expect([15, 45, 75, 105, 135, 165, 195, 225].map((x) => lcd.shown(x, 120))).toEqual([0xffff, 0xffe0, 0x07ff, 0x07e0, 0xf81f, 0xf800, 0x001f, 0x0000]);
+  },
+  'x-hdmi-tmds'(h) {
+    const b = ext(h, { ext_led: true });
+    // a new byte every DIV = 10 clocks; every fourth one is blanking: LED3 shows the control symbol
+    const leds = new Set<number>();
+    for (let i = 0; i < 400; i++) {
+      b.run(1);
+      leds.add(b.led() >> 2);
+    }
+    expect([...leds].some((v) => v & 4)).toBe(true);
+    expect([...leds].some((v) => !(v & 4))).toBe(true);
+  },
+  'x-hdmi-bars'(h) {
+    const b = ext(h, { hdmi: true });
+    const m = b.hdmi(1)!;
+    expect(m.state(b.cycles)).toBe('ok');
+    expect(m.mode.w).toBe(640);
+    const px = (x: number, y: number) => {
+      const i = (y * m.mode.w + x) * 4;
+      return (m.pixels[i] << 16) | (m.pixels[i + 1] << 8) | m.pixels[i + 2];
+    };
+    expect([40, 120, 200, 280, 360, 440, 520, 600].map((x) => px(x, 240))).toEqual([0xffffff, 0xffff00, 0x00ffff, 0x00ff00, 0xff00ff, 0xff0000, 0x0000ff, 0x000000]);
+  },
   realboard(h) {
     h.sw(0xff00);
     h.sim.run(5);
@@ -565,7 +677,13 @@ const checks: Record<string, (h: Harness) => void> = {
 };
 
 // lessons whose delays are shortened for the test
-const PARAMS: Record<string, Record<string, number>> = { softcore: { PERIOD: 1 << 19 }, clocking: { DIV: 10 }, realboard: { DIV: 10 }, 'proj-clock': { DIV: 40, SCAN: 1 } };
+const PARAMS: Record<string, Record<string, number>> = {
+  'x-leds': { DIV: 4 },
+  'x-keys': { DB: 50 },
+  'x-buzzer': { CLK_HZ: 52400, NOTE_TICKS: 4000 },
+  'x-lcd': { CLK_HZ: 50000 },
+  'x-hdmi-tmds': { DIV: 10 },
+  softcore: { PERIOD: 1 << 19 }, clocking: { DIV: 10 }, realboard: { DIV: 10 }, 'proj-clock': { DIV: 40, SCAN: 1 } };
 
 describe('lessons', () => {
   for (const l of ALL_LESSONS) {

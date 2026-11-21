@@ -3,6 +3,15 @@
 import type { Lang } from "../hdl";
 import { zip } from "../util/zip";
 import { buildBat, buildSh, programBat, programSh, programTcl } from "./scripts";
+import { libraryModules, TMDS_SERIALIZER_V } from "../boards/library";
+
+// FPGA Lab's board-library blocks a design uses (tmds_serializer for HDMI): the simulator has a stand-in, the
+// project gets the real Verilog (a VHDL design instantiates it as a component; Vivado mixes the two languages)
+const LIBRARY: Record<string, string> = { tmds_serializer: TMDS_SERIALIZER_V };
+function libraryFiles(p: ProjectSpec): { file: string; data: string }[] {
+  return libraryModules(p.src, p.lang).map((m) => ({ file: `src/${m}.v`, data: LIBRARY[m] }));
+}
+const libraryTcl = (p: ProjectSpec) => libraryFiles(p).map((f) => `add_files -norecurse $origin/${f.file}\n`).join("");
 
 export interface ProjectSpec {
   name: string; // project name (a lesson id)
@@ -70,7 +79,7 @@ ${p.boardPart ? `# needs the Digilent board files; harmless if they are missing\
 set_property simulator_language Mixed [current_project]
 
 add_files -norecurse $origin/${srcFile}
-${p.lang === "vhdl" ? `set_property file_type {VHDL 2008} [get_files $origin/${srcFile}]\n` : ""}set_property top ${p.top} [current_fileset]
+${libraryTcl(p)}${p.lang === "vhdl" ? `set_property file_type {VHDL 2008} [get_files $origin/${srcFile}]\n` : ""}set_property top ${p.top} [current_fileset]
 
 add_files -fileset constrs_1 -norecurse $origin/constrs/${p.xdcName}
 ${
@@ -96,7 +105,7 @@ if {[info exists argv] && [lsearch -exact $argv build] >= 0} {
 Board: ${p.board}   Part: ${p.part}   Language: ${p.lang === "verilog" ? "Verilog" : "VHDL"}
 
   ${srcFile.padEnd(28)} design source (top: ${p.top})
-  ${`constrs/${p.xdcName}`.padEnd(28)} pin constraints
+${libraryFiles(p).map((f) => `  ${f.file.padEnd(28)} FPGA Lab library block (MMCM, OSERDESE2, OBUFDS): the simulator uses a stand-in\n`).join("")}  ${`constrs/${p.xdcName}`.padEnd(28)} pin constraints
 ${tbFile ? `  ${tbFile.padEnd(28)} testbench (top: ${tbTop})\n` : ""}  create_project.tcl            re-creates the Vivado project
   build.bat / build.sh          build it with no command to type (double-click build.bat on Windows)
   program.bat / program.sh      program the board over USB with the last build
@@ -117,6 +126,7 @@ Or open it in Vivado yourself:
   ];
   if (tbFile && p.tb)
     files.splice(2, 0, { name: `${dir}/${tbFile}`, data: p.tb });
+  files.splice(1, 0, ...libraryFiles(p).map((f) => ({ name: `${dir}/${f.file}`, data: f.data })));
   return files;
 }
 
@@ -170,7 +180,7 @@ set proj_name ${dir}
 create_project $proj_name $origin/vivado -part ${p.part} -force
 set_property target_language ${p.lang === "verilog" ? "Verilog" : "VHDL"} [current_project]
 add_files -norecurse $origin/${srcFile}
-${p.lang === "vhdl" ? `set_property file_type {VHDL 2008} [get_files $origin/${srcFile}]\n` : ""}add_files -fileset constrs_1 -norecurse $origin/constrs/${p.xdcName}
+${libraryTcl(p)}${p.lang === "vhdl" ? `set_property file_type {VHDL 2008} [get_files $origin/${srcFile}]\n` : ""}add_files -fileset constrs_1 -norecurse $origin/constrs/${p.xdcName}
 update_compile_order -fileset sources_1
 
 create_bd_design system
@@ -229,7 +239,7 @@ int main(void)
 Board: ${p.board}   Part: ${p.part}   Language: ${p.lang === "verilog" ? "Verilog" : "VHDL"}
 
   ${srcFile.padEnd(28)} design source (top: ${p.top})
-  ${`constrs/${p.xdcName}`.padEnd(28)} pin constraints (no clock pin: ${ic.port} is internal)
+${libraryFiles(p).map((f) => `  ${f.file.padEnd(28)} FPGA Lab library block (MMCM, OSERDESE2, OBUFDS): the simulator uses a stand-in\n`).join("")}  ${`constrs/${p.xdcName}`.padEnd(28)} pin constraints (no clock pin: ${ic.port} is internal)
   create_project.tcl            re-creates the Vivado project with the PS block design
   build.bat / build.sh          runs step 1 below with no command to type (double-click build.bat on Windows)
   boot.bif                      BOOT.bin layout for an SD-card boot
@@ -274,6 +284,7 @@ PL برد EBAZ4205 نوسان‌ساز ندارد. کلاک ${ic.port} از بخ
 `;
   return [
     { name: `${dir}/${srcFile}`, data: p.src },
+    ...libraryFiles(p).map((f) => ({ name: `${dir}/${f.file}`, data: f.data })),
     { name: `${dir}/constrs/${p.xdcName}`, data: xdc },
     { name: `${dir}/create_project.tcl`, data: tcl },
     { name: `${dir}/boot.bif`, data: bif },

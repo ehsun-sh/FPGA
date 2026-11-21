@@ -58,6 +58,9 @@ function selfW(e: Expr, g: Gen): number {
   }
 }
 
+// an unsized number, also with a sign in front (-10): it takes the signedness of the other operand
+const unsized = (e: Expr): boolean => (e.k === 'const' && e.width === 0) || (e.k === 'un' && (e.op === '-' || e.op === '+') && unsized(e.a));
+
 function isSigned(e: Expr, g: Gen): boolean {
   switch (e.k) {
     case 'const':
@@ -72,7 +75,7 @@ function isSigned(e: Expr, g: Gen): boolean {
     case 'un':
       return (e.op === '-' || e.op === '~' || e.op === '+') && isSigned(e.a, g);
     case 'bin':
-      if (['+', '-', '*', '/', '%', '&', '|', '^', '~^'].includes(e.op)) return isSigned(e.a, g) && (isSigned(e.b, g) || (e.b.k === 'const' && e.b.width === 0));
+      if (['+', '-', '*', '/', '%', '&', '|', '^', '~^'].includes(e.op)) return isSigned(e.a, g) && (isSigned(e.b, g) || unsized(e.b));
       if (['<<', '>>', '<<<', '>>>'].includes(e.op)) return isSigned(e.a, g);
       return false;
     case 'cond':
@@ -188,8 +191,8 @@ function ex(e: Expr, W: number, g: Gen): string {
         if (cw <= 0) cw = 32;
         let a = ex(e.a, cw, g);
         let b = ex(e.b, cw, g);
-        const signed = isSigned(e.a, g) && (isSigned(e.b, g) || (e.b.k === 'const' && e.b.width === 0));
-        const signedB = isSigned(e.b, g) && (isSigned(e.a, g) || (e.a.k === 'const' && e.a.width === 0));
+        const signed = isSigned(e.a, g) && (isSigned(e.b, g) || unsized(e.b));
+        const signedB = isSigned(e.b, g) && (isSigned(e.a, g) || unsized(e.a));
         if (signed || signedB) {
           a = sx(a, cw);
           b = sx(b, cw);

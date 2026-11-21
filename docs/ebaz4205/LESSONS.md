@@ -87,7 +87,12 @@ guide page linked from `z-ethernet` if chapter length is a concern (no chapter h
 
 Shown when the EBAZ4205 is selected and the extension board is attached. Written for **Ehsan's extension board**
 (CONTENT.md §5.1); the port names are fixed in `ebaz4205-master.xdc` (`EXT_LED[2:0]`, `UART_RX`, `UART_TX`,
-`HDMI_*`, and once the rest of the schematic is read, `KEY*`, `BUZZER`, `LCD_*`).
+`HDMI_*`, `KEY1`-`KEY5`, `BUZZER`, `LCD_*`).
+
+**Status (2026-11-21, Phases E3 and E4):** all seven lessons below have shipped in `src/lessons/ext.ts` (text),
+`src/boards/ebaz4205/extcode.ts` (code) and `src/grade/ext.ts` (exercises), in two chapters: «برد توسعه: LED، کلید،
+سریال، بازر و LCD» (`x-leds`, `x-keys`, `x-uart`, `x-buzzer`, `x-lcd`) and «HDMI» (`x-hdmi-tmds`, `x-hdmi-bars`). The
+"needs the … pins" notes below are settled by the vendor schematic. The briefs are kept as the design record.
 
 ### 1. `x-leds` (sim, intro)
 
@@ -172,3 +177,22 @@ These need hardware the EBAZ4205 + Ehsan's extension board has (5 LEDs, keys, a 
 so they get per-board variants (code, XDC, try-it text) instead of new lessons: `counter` (LED blink rate),
 `debounce` (→ `x-keys`), `fsm` (LEDs + keys), `pwm` (LED brightness), `uart`, `uart_rx`, `spi` (→ `x-lcd`), `vga`
 (→ `x-hdmi-bars`), `ram`, `timing`, `clocking` (FCLK and MMCM), `cdc`, `bram`. Lessons that need switches or the seven-segment display stay Nexys-only.
+
+**Shipped (2026-11-21):** `counter`, `fsm`, `debounce`, `pwm`, `uart` and `uart_rx`, listed on the EBAZ4205 in the
+chapter «درس‌های پایه روی EBAZ4205» / "Core lessons on the EBAZ4205" (between the extension-board chapter and HDMI).
+Text: `src/lessons/ebaz-variants.ts`; code: `src/boards/ebaz4205/varcode.ts` (the helper modules are taken from the
+Nexys lessons and moved to 50 MHz); exercises: `src/grade/variants.ts`; tests: `test/variants.test.ts`. The board
+mapping is the same in all six: KEY1 is the reset (active low, like CPU_RESETN), KEY3, the middle of the key cross,
+stands in for BTNC and KEY2 for BTNU, and the five LEDs are LED_R, LED_G, LED1, LED2, LED3.
+
+| Lesson | EBAZ4205 version | Exercise (checker) |
+|---|---|---|
+| `counter` | 1 Hz on LED_R, a 4-bit count on LED_G + LED1-LED3, KEY1 resets | Knight Rider over the five LEDs, `DIV` |
+| `fsm` | traffic light on LED1 (red), LED2 (yellow), LED3 (green); KEY3 = pedestrian | night mode toggled by KEY2, `ONE_SECOND` |
+| `debounce` | raw vs. debounced counts of KEY3 (LED_R/LED_G vs. LED1-LED3), KEY2 clears | rotate the five LEDs once per bouncy KEY2 press |
+| `pwm` | LED1-LED3 at 6 %, 25 %, 100 %; KEY3 + KEY2/KEY4 adjust | LED1 breathes, `DIV` |
+| `uart` | KEY3 sends "Hello FPGA!" on UART_TX at 115200 | the same at 9600 baud (5208 clocks per bit) |
+| `uart_rx` | upper-case echo on UART_RX/UART_TX | the same at 9600 baud |
+
+Still to do: `ram`, `timing`, `clocking`, `cdc`, `bram`. A solve on one board does not count on the other: the
+EBAZ4205 version's progress is stored as `<id>:ebaz4205`.

@@ -619,7 +619,9 @@ export class Elaborator {
   expr(e: AExpr, ctx: Ctx, clocked: boolean): Expr {
     switch (e.k) {
       case 'num':
-        return { k: 'const', value: e.value >>> 0, width: e.width ?? (ctx.lang === 'vhdl' ? 0 : 32), dc: e.dc };
+        // a plain Verilog decimal (10, not 4'd10) is a signed 32-bit integer
+        if (e.width === null && ctx.lang !== 'vhdl') return { k: 'const', value: e.value >>> 0, width: 32, signed: true, dc: e.dc };
+        return { k: 'const', value: e.value >>> 0, width: e.width ?? 0, dc: e.dc };
       case 'id': {
         const en = this.lookup(e.name, ctx);
         if (!en) throw new HdlError(`'${e.name}' is not declared`, e.loc, 'Synth 8-1031');

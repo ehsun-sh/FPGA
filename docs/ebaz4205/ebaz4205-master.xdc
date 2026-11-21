@@ -119,11 +119,28 @@
 #set_property -dict { PACKAGE_PIN K17 IOSTANDARD LVCMOS33 } [get_ports { EXT_LED[1] }]
 #set_property -dict { PACKAGE_PIN H18 IOSTANDARD LVCMOS33 } [get_ports { EXT_LED[2] }]
 
-## TO FILL IN from the rest of the schematic (the sheet Ehsan sent is cut below the HDMI part):
-##   LCD   "IPS130-12" (a 1.3-inch IPS module, 12 pins, likely 240x240 ST7789 on SPI): a net named LCD_T20 is visible,
-##         so T20 is one of its pins. Expected ports: LCD_SCL, LCD_SDA, LCD_RES, LCD_DC, LCD_CS, LCD_BLK.
-##   Keys  KEY0..KEYn (pull-up or pull-down?), Buzzer BUZZER (active or passive, transistor?).
-## Pins of the headers not used by the parts above, so the LCD, keys and buzzer must be among them:
-##   H1: D18
-##   H2: G20 J18 G19 H20 J19 K18 K19 J20 L16 L19 M18 L20 M20 L17
-##   H3: M19 N20 P18 M17 N17 P20 R18 R19 P19 T20 U20 T19 V20 U19
+## The rest of the board, from the vendor's full schematic ("adapter board_SCH.pdf", REV 1.0, 2022-03-20) and their
+## example XDC files, which Ehsan sent on 2026-11-21.
+
+## Keys KEY1-KEY5: active low (10 kOhm pull-up to 3.3 V, the key shorts the pin to GND: pressed = 0).
+## They sit in a cross: KEY3 in the middle, KEY1 and KEY4 left and right, KEY2 and KEY5 above and below.
+#set_property -dict { PACKAGE_PIN T19 IOSTANDARD LVCMOS33 } [get_ports { KEY1 }]
+#set_property -dict { PACKAGE_PIN P19 IOSTANDARD LVCMOS33 } [get_ports { KEY2 }]
+#set_property -dict { PACKAGE_PIN U20 IOSTANDARD LVCMOS33 } [get_ports { KEY3 }]
+#set_property -dict { PACKAGE_PIN U19 IOSTANDARD LVCMOS33 } [get_ports { KEY4 }]
+#set_property -dict { PACKAGE_PIN V20 IOSTANDARD LVCMOS33 } [get_ports { KEY5 }]
+
+## Buzzer: passive (a small speaker), switched by an S8050 transistor. 1 = current flows; it needs a square wave.
+#set_property -dict { PACKAGE_PIN D18 IOSTANDARD LVCMOS33 } [get_ports { BUZZER }]
+
+## LCD "IPS130-12": 1.3-inch 240x240 IPS, ST7789 controller, SPI with a D/C line. CS is tied to ground on the board,
+## so there is no CS pin. The backlight is switched by an S8050: LCD_BLK = 1 turns it on.
+#set_property -dict { PACKAGE_PIN R19 IOSTANDARD LVCMOS33 } [get_ports { LCD_SCL }]
+#set_property -dict { PACKAGE_PIN P20 IOSTANDARD LVCMOS33 } [get_ports { LCD_SDA }]
+#set_property -dict { PACKAGE_PIN N17 IOSTANDARD LVCMOS33 } [get_ports { LCD_RES }]
+#set_property -dict { PACKAGE_PIN R18 IOSTANDARD LVCMOS33 } [get_ports { LCD_DC }]
+#set_property -dict { PACKAGE_PIN T20 IOSTANDARD LVCMOS33 } [get_ports { LCD_BLK }]
+
+## Header H4 breaks out the header pins no part uses (all of DATA2, and M19 N20 P18 M17 of DATA3).
+## The vendor's PL examples clock from N18 (an oscillator fitted at X5 on their boards); a stock EBAZ4205 has none,
+## so FPGA Lab clocks the PL from the PS (FCLK_CLK0 = 50 MHz).

@@ -16,9 +16,12 @@ import "@fontsource/vazirmatn/latin-800.css";
 import "@fontsource/jetbrains-mono/latin-400.css";
 import "@fontsource/jetbrains-mono/latin-600.css";
 import "./style.css";
-import { BOARDS, DEFAULT_BOARD, deviceLabel, getBoard } from "./boards";
+import { BOARDS, DEFAULT_BOARD, deviceLabel, getBoard, setEbazExtension, type BoardDef } from "./boards";
+import { LcdScreen } from "./lcd/screen";
+import { BuzzerSound } from "./audio/buzzer";
 import { mapPorts, type Mapping } from "./boards/mapping";
 import { PS_HELLO_C } from "./boards/ebaz4205/code";
+import { withLibrary } from "./boards/library";
 import {
   HdlError,
   synthesize,
@@ -40,6 +43,7 @@ import { VgaScreen } from "./vga/screen";
 import { ModulePanel, type SavedModule } from "./modules/panel";
 import { EXERCISES, type CheckItem } from "./grade/exercises";
 import { gradeExercise } from "./grade/grade";
+import { BOARD_EXERCISES } from "./grade/variants";
 import { buildNetlist, type Netlist } from "./synth/netlist";
 import { SchematicPanel } from "./synth/panel";
 import { canProgram, projectDir, projectFiles, type ProjectSpec } from "./synth/project";
@@ -108,6 +112,8 @@ const noBreakParts = (h: string) => h.replace(/\b(Nexys|Artix|Digilent) (A7|7|Ne
 
 // ---------------------------------------------------------------- board
 // the learner's board (store key "board"); a lesson URL for another board switches it for this visit only
+// the EBAZ4205's extension board is plugged in unless the learner took it off (store key "ebaz-ext")
+setEbazExtension(store.get("ebaz-ext") !== "0");
 const savedBoard = getBoard(store.get("board"));
 const boardDef = (() => {
   const r = parse(location.pathname);
@@ -200,6 +206,7 @@ ${BOARDS.map((b) => `    <button data-board="${b.id}" role="menuitemradio" aria-
   <button class="tb tool" data-act="la" id="la-btn" title="Logic Analyzer (Ctrl+L)">${icon("logic", 14)}<span class="lbl">Logic Analyzer</span></button>
   <button class="tb tool" data-act="serial" id="serial-btn" title="Serial Console on the USB-UART (Ctrl+M)">${icon("terminal", 14)}<span class="lbl">Serial Console</span></button>
   <button class="tb tool" data-act="vga" id="vga-btn" title="VGA Monitor">${icon("monitor", 14)}<span class="lbl">VGA Monitor</span></button>
+  <button class="tb tool" data-act="buzzer" id="buzz-btn" title="Play the buzzer through your speakers" aria-pressed="false">${icon("wave", 14)}<span class="lbl" id="buzz-l">Buzzer sound</span></button>
   <span class="sep lang-sep"></span>
   <div class="seg-ctl tb-lang" role="group" aria-label="HDL language">
     <button data-lang="verilog" aria-pressed="false">Verilog</button><button data-lang="vhdl" aria-pressed="false">VHDL</button>
@@ -296,6 +303,7 @@ ${BOARDS.map((b) => `    <button data-board="${b.id}" role="menuitemradio" aria-
           <option value="1">1 Hz</option>
         </select></label>
         <label class="bouncy" title="Simulate mechanical contact bounce on the push buttons"><input type="checkbox" id="bouncy"> <span id="bouncy-l"></span></label>
+        <label class="bouncy" id="ext-l" hidden><input type="checkbox" id="ext-on"> <span id="ext-t"></span></label>
       </div>
       <div class="board-hint" id="board-hint"></div>
     </div>
@@ -374,6 +382,12 @@ const text = (l: Lesson): LessonText =>
 
 // a lesson's own version for this board keeps its code apart from the Nexys version (src:<id>:<lang>:<board>)
 const variantKey = (l: Lesson, k: string) => (boardDef !== DEFAULT_BOARD && hasVariant(l.id, boardDef.id) ? `${k}:${boardDef.id}` : k);
+// the exercise of a lesson on this board (a board's version of a lesson has its own task and checker), and the id
+// its progress is stored under (lesson:board for a board's version, so a Nexys solve does not count on the EBAZ4205)
+const ownVersion = (l: Lesson, b: BoardDef) => b !== DEFAULT_BOARD && hasVariant(l.id, b.id);
+const exOf = (l: Lesson, b = boardDef) => (ownVersion(l, b) ? BOARD_EXERCISES[b.id]?.[l.id] : EXERCISES[l.id]);
+const exId = (l: Lesson, b = boardDef) => (ownVersion(l, b) ? `${l.id}:${b.id}` : l.id);
+const knownEx = (x: string) => !!(EXERCISES[x] ?? Object.values(BOARD_EXERCISES).find((b) => b[x.split(":")[0]]));
 const srcKey = (l: Lesson, lg: Lang) => variantKey(l, `src:${l.id}:${lg}`);
 const xdcKey = (l: Lesson) => `xdc:${boardDef.id}:${l.id}`;
 const sourceFor = (l: Lesson, lg: Lang) =>
@@ -390,7 +404,7 @@ function tbFor(l: Lesson, lg: Lang): string {
 }
 function newTestbench(src: string, lg: Lang): string {
   try {
-    return generateTestbench(synthesize(src, lg), lg);
+    return generateTestbench(synthesize(withLibrary(src, lg), lg), lg);
   } catch {
     return lg === "verilog"
       ? "`timescale 1ns / 1ps\n// Fix the design first (it does not compile), then use Flow > Regenerate testbench.\nmodule tb;\n    initial begin\n        #100 $finish;\n    end\nendmodule\n"
@@ -443,6 +457,13 @@ try {
 }
 serial.onSettings = (st) => store.set("serial", JSON.stringify(st));
 const vga = new VgaScreen(document.body, boardDef, board, runner);
+// the extension board's LCD (EBAZ4205): the display model's warnings go to the Messages panel
+const lcd = new LcdScreen(boardDef.clockHz, board, runner);
+lcd.onWarn = (w) => {
+  msg({ level: "warning", code: w.code, text: w.text, file: "src" });
+  renderMessages();
+};
+const buzzer = new BuzzerSound();
 const modules = new ModulePanel(
   $("#board"),
   boardDef,
@@ -611,7 +632,7 @@ function doSynth(): Design | null {
   log(`# launch_runs synth_1 -jobs 8   (${stamp()})`, "cmd");
   log(`INFO: [Synth 8-7079] Multithreading enabled for synth_design`, "info");
   try {
-    const d = synthesize(srcEditor.text, lang);
+    const d = synthesize(withLibrary(srcEditor.text, lang), lang);
     for (const m of d.modules)
       log(`INFO: [Synth 8-6157] synthesizing module '${m}'`, "info");
     for (const w of d.warnings)
@@ -764,8 +785,10 @@ function doProgram(d: Design, map: Mapping) {
   }
   la.setDesign(d, map);
   serial.setDesign(map);
-  vga.setDesign(map);
-  if (vga.connected) log("INFO: VGA monitor connected to the VGA port", "info");
+  vga.setDesign(map, d);
+  if (vga.connected) log(vga.hdmi ? "INFO: HDMI monitor connected to the HDMI socket" : "INFO: VGA monitor connected to the VGA port", "info");
+  lcd.setDesign(map);
+  if (lcd.connected) log("INFO: the extension board's LCD (ST7789) is driven by the design", "info");
   log(
     `INFO: [Labtools 27-3164] End of startup status: HIGH — device is running`,
     "ok",
@@ -809,7 +832,7 @@ function doSim() {
   try {
     d = synthesizeFiles(
       [
-        { name: fileName(), src: srcEditor.text },
+        { name: fileName(), src: withLibrary(srcEditor.text, lang) },
         { name: tbName(), src: tbEditor.text },
       ],
       lang,
@@ -927,6 +950,7 @@ function stop() {
   la.setDesign(null, null);
   serial.setDesign(null);
   vga.setDesign(null);
+  lcd.setDesign(null);
   board.setOutputs({ led: [], rgb: [], seg: [], done: false });
   $("#hw-dev").textContent = `${hwDev} (not programmed)`;
   $("#hw-dev").classList.remove("ok");
@@ -1066,7 +1090,7 @@ function renderLessonList() {
     const open = chapterOpen(ci);
     const lab = c.lessons.includes(PLAYGROUND);
     const unnumbered = lab || !!c.projects;
-    const done = c.lessons.filter(isDone).length;
+    const done = c.lessons.filter((l) => isDone(l)).length;
     const count = lab
       ? ""
       : `<span class="ch-prog${done === c.lessons.length ? " full" : ""}" title="${ui.chapterDone(num(done, uiLang), num(c.lessons.length, uiLang))}">${num(done, uiLang)}/${num(c.lessons.length, uiLang)}</span>`;
@@ -1103,14 +1127,14 @@ function toggleFlowSection(key: string) {
 
 // ---------------------------------------------------------------- exercises and progress
 const solved = new Set<string>(
-  (store.get("solved") ?? "").split(",").filter((x) => EXERCISES[x]),
+  (store.get("solved") ?? "").split(",").filter(knownEx),
 );
-const exerciseCount = () => ALL_LESSONS.filter((l) => EXERCISES[l.id]).length;
+const exerciseCount = () => ALL_LESSONS.filter((l) => exOf(l)).length;
 
 // lessons solved after the solution was shown: they count as done, with a hollow check
-const solvedHelp = new Set<string>((store.get("solved-help") ?? "").split(",").filter((x) => EXERCISES[x]));
+const solvedHelp = new Set<string>((store.get("solved-help") ?? "").split(",").filter(knownEx));
 const doneMark = (l: Lesson, cls = "done") => {
-  const id = l.id;
+  const id = exId(l);
   if (l === PLAYGROUND || !isDone(l)) return "";
   const help = solvedHelp.has(id);
   const t = help ? LEARN_UI[uiLang].solvedHelp : LESSON_UI[uiLang].solved;
@@ -1128,18 +1152,18 @@ function renderHelp() {
   if (box) box.outerHTML = exerciseHelpHtml();
 }
 function exerciseHelpHtml(): string {
-  const ex = EXERCISES[lesson.id];
+  const ex = exOf(lesson);
   if (!ex) return "";
-  return helpHtml(ex.hints, ex.solution?.[lang], helpState(lesson.id), uiLang, (n) => num(n, uiLang), (c) => codeBlock(c, lang));
+  return helpHtml(ex.hints, ex.solution?.[lang], helpState(exId(lesson)), uiLang, (n) => num(n, uiLang), (c) => codeBlock(c, lang));
 }
 
 function exerciseHtml(): string {
   const ui = LESSON_UI[uiLang];
-  const ex = EXERCISES[lesson.id];
+  const ex = exOf(lesson);
   const body = ex ? ex[uiLang] : text(lesson).exercise;
   if (!body) return "";
-  const done = solved.has(lesson.id)
-    ? ` <span class="ex-done${solvedHelp.has(lesson.id) ? " help" : ""}">✓ ${solvedHelp.has(lesson.id) ? LEARN_UI[uiLang].solvedHelp : ui.solved}</span>`
+  const done = solved.has(exId(lesson))
+    ? ` <span class="ex-done${solvedHelp.has(exId(lesson)) ? " help" : ""}">✓ ${solvedHelp.has(exId(lesson)) ? LEARN_UI[uiLang].solvedHelp : ui.solved}</span>`
     : "";
   const btn = ex
     ? `<button class="big-run check" data-act="check">${icon("check", 15)}${ui.check}</button><div id="ex-result"></div>`
@@ -1208,7 +1232,7 @@ function showScene(scene: { sw?: number; btn?: string }) {
 }
 
 function checkExercise() {
-  if (!EXERCISES[lesson.id]) return;
+  if (!exOf(lesson)) return;
   const ui = LESSON_UI[uiLang];
   if (tab !== "lesson") showTab("lesson");
   const box = document.getElementById("ex-result");
@@ -1238,15 +1262,15 @@ function checkExercise() {
       r.passed ? ui.passed : ui.failed.replace(/:$/, ""),
       r.passed ? "ok" : "warning",
     );
-    if (!r.passed && !solved.has(l.id)) {
-      store.set(`attempts:${l.id}`, String(helpState(l.id).attempts + 1));
+    if (!r.passed && !solved.has(exId(l))) {
+      store.set(`attempts:${exId(l)}`, String(helpState(exId(l)).attempts + 1));
       if (l === lesson) renderHelp();
     }
-    if (r.passed && !solved.has(l.id)) {
-      solved.add(l.id);
+    if (r.passed && !solved.has(exId(l))) {
+      solved.add(exId(l));
       store.set("solved", [...solved].join(","));
-      if (helpState(l.id).solution) {
-        solvedHelp.add(l.id);
+      if (helpState(exId(l)).solution) {
+        solvedHelp.add(exId(l));
         store.set("solved-help", [...solvedHelp].join(","));
       }
       renderLessonList();
@@ -1280,7 +1304,7 @@ function codeBlock(code: string, lg: "verilog" | "vhdl") {
 
 // reading and practice minutes of a lesson, in the site language
 const timeOf = (l: Lesson) =>
-  lessonTime({ ...text(l), time: l.time }, !!(EXERCISES[l.id] || text(l).exercise), courseChapterOf(l) + 1);
+  lessonTime({ ...text(l), time: l.time }, !!(exOf(l) || text(l).exercise), courseChapterOf(l) + 1);
 
 // fills the cross-reference links (ref() in lessons/helpers.ts): "lesson 5: Seven-segment display", numbered by
 // the course order, with data-lesson so the click delegation opens the lesson
@@ -1314,7 +1338,7 @@ function renderLesson() {
     pos < 0
       ? ""
       : `<span class="of">${u.lessonOf(num(pos + 1, uiLang), num(course.length, uiLang))}</span>`;
-  const hasEx = !!(EXERCISES[lesson.id] || tx.exercise);
+  const hasEx = !!(exOf(lesson) || tx.exercise);
   const tm = timeOf(lesson);
   const read =
     pos < 0
@@ -1625,6 +1649,7 @@ function applyUiLang() {
   setRunState();
   $("#learn-h").innerHTML = `LEARN · ${LESSON_UI[uiLang].learn} <span class="progress" title="${LESSON_UI[uiLang].progress(solved.size, exerciseCount())}">${num(solved.size, uiLang)}/${num(exerciseCount(), uiLang)}</span>`;
   $("#bouncy-l").textContent = LESSON_UI[uiLang].bouncy;
+  $("#ext-t").textContent = boardDef.extension?.label[uiLang === "fa" ? "fa" : "en"] ?? "";
 }
 
 function selectTab(b: HTMLElement, on: boolean) {
@@ -1699,7 +1724,7 @@ function download(
 function projectSpec(): ProjectSpec {
   let top = "top";
   try {
-    top = synthesize(srcEditor.text, lang).top;
+    top = synthesize(withLibrary(srcEditor.text, lang), lang).top;
   } catch {
     /* export the sources anyway */
   }
@@ -1810,6 +1835,12 @@ function act(name: string) {
     case "vga":
       if (vga.open) vga.hide();
       else vga.show();
+      break;
+    case "buzzer":
+      buzzer.enable(!buzzer.on);
+      buzzBtn.classList.toggle("active", buzzer.on);
+      buzzBtn.setAttribute("aria-pressed", String(buzzer.on));
+      log(`# set_property SOUND ${buzzer.on ? "on" : "off"} [get_hw_buzzer]`, "cmd");
       break;
     case "modules":
       if (modules.open) modules.hide();
@@ -1945,22 +1976,22 @@ function act(name: string) {
       renderPredict();
       break;
     case "hint": {
-      const n = helpState(lesson.id).hints;
-      store.set(`hints:${lesson.id}`, String(Math.min(2, n + 1)));
+      const n = helpState(exId(lesson)).hints;
+      store.set(`hints:${exId(lesson)}`, String(Math.min(2, n + 1)));
       renderHelp();
       break;
     }
     case "show-solution": {
-      const st = helpState(lesson.id);
+      const st = helpState(exId(lesson));
       if (!(st.attempts >= 2 || st.hints >= 2)) break;
-      store.set(`solution:${lesson.id}`, "1");
+      store.set(`solution:${exId(lesson)}`, "1");
       renderHelp();
       break;
     }
     case "copy-solution": {
-      const sol = EXERCISES[lesson.id]?.solution?.[lang];
+      const sol = exOf(lesson)?.solution?.[lang];
       if (!sol || !confirm(LEARN_UI[uiLang].copyConfirm)) break;
-      if (EXERCISES[lesson.id].testbench) {
+      if (exOf(lesson)!.testbench) {
         tbEditor.setText(sol, lang);
         showTab("tb");
       } else {
@@ -1978,8 +2009,8 @@ function act(name: string) {
         store.del(srcKey(lesson, lang));
         store.del(xdcKey(lesson));
         store.del(tbKey(lesson, lang));
-        store.del(`attempts:${lesson.id}`);
-        store.del(`hints:${lesson.id}`);
+        store.del(`attempts:${exId(lesson)}`);
+        store.del(`hints:${exId(lesson)}`);
         renderHelp();
         srcEditor.setText(sourceFor(lesson, lang), lang);
         xdcEditor.setText(xdcFor(lesson), "xdc");
@@ -2270,6 +2301,7 @@ let statTimer = 0;
 const laBtn = $("#la-btn");
 const serialBtn = $("#serial-btn");
 const vgaBtn = $("#vga-btn");
+const buzzBtn = $("#buzz-btn");
 const modBtn = $("#mod-btn");
 board.onFrame = (dt) => {
   const out = runner.frame(dt);
@@ -2278,6 +2310,8 @@ board.onFrame = (dt) => {
   serial.frame();
   vga.frame();
   vgaBtn.classList.toggle("active", vga.open);
+  lcd.frame();
+  buzzer.set(runner.running ? (out.buzzer ?? 0) : 0);
   modules.frame();
   modBtn.classList.toggle("active", modules.open);
   laBtn.classList.toggle("active", la.open);
@@ -2465,11 +2499,11 @@ function markSeen(l: Lesson) {
 }
 // a lesson is done when its exercise is solved (if it has one) and its quiz is passed (if it has one); a lesson
 // with neither is done once opened
-const isDone = (l: Lesson) => {
-  const ex = !!EXERCISES[l.id];
+const isDone = (l: Lesson, b = boardDef) => {
+  const ex = !!exOf(l, b);
   const qz = !!l.quiz?.length;
   if (!ex && !qz) return seen.has(l.id);
-  return (!ex || solved.has(l.id)) && (!qz || quizPassed(l));
+  return (!ex || solved.has(exId(l, b))) && (!qz || quizPassed(l));
 };
 
 const homeEl = $("#home");
@@ -2508,8 +2542,8 @@ function renderHomePage() {
     title: (l) => text(l).title,
     summary: (l) => text(l).summary,
     done: isDone,
-    help: (l) => solvedHelp.has(l.id),
-    marks: (l) => progressMarks(!!l.quiz?.length, quizPassed(l), !!EXERCISES[l.id], solved.has(l.id), uiLang),
+    help: (l) => solvedHelp.has(exId(l)),
+    marks: (l) => progressMarks(!!l.quiz?.length, quizPassed(l), !!exOf(l), solved.has(exId(l)), uiLang),
     resume: seen.size ? lesson : null,
     minutes: (l) => {
       const t = timeOf(l);
@@ -2521,7 +2555,7 @@ function renderHomePage() {
     boardLines: (() => {
       const lines = BOARDS.map((b) => {
         const all = courseLessonsFor(b.id);
-        return { b, all: all.length, done: all.filter(isDone).length };
+        return { b, all: all.length, done: all.filter((l) => isDone(l, b)).length };
       }).filter((x) => x.b === boardDef || x.done > 0);
       return lines.length > 1 ? lines.map((x) => progressLine(uiLang, x.b, x.done, x.all)) : [];
     })(),
@@ -2544,7 +2578,7 @@ function showHome(on: boolean) {
     if (!heroRan && !runner.running && lesson === BOARD_LESSONS[0]) {
       heroRan = true;
       try {
-        synthesize(srcEditor.text, lang);
+        synthesize(withLibrary(srcEditor.text, lang), lang);
         runFlow();
       } catch {
         /* the lesson code was edited and does not compile: leave the board idle */
@@ -2873,7 +2907,22 @@ phone.addEventListener("change", applyMode);
 // tools for hardware this board does not have stay hidden (EBAZ4205: no VGA, buttons or USB-UART before E3)
 {
   const has = (k: string) => Object.values(boardDef.pins).some((d) => d.kind === k);
-  if (!has("vga")) vgaBtn.style.display = "none";
+  if (!has("vga") && !has("hdmi")) vgaBtn.style.display = "none";
+  if (has("hdmi")) {
+    vgaBtn.title = "HDMI Monitor";
+    vgaBtn.querySelector(".lbl")!.textContent = "HDMI Monitor";
+  }
+  if (!has("buzzer")) buzzBtn.style.display = "none";
+  // the EBAZ4205's extension board can be taken off (and put back): the page reloads with the other pin map
+  if (boardDef.extension) {
+    const box = $<HTMLInputElement>("#ext-on");
+    box.checked = boardDef.extension.attached;
+    $("#ext-l").hidden = false;
+    box.addEventListener("change", () => {
+      store.set("ebaz-ext", box.checked ? "1" : "0");
+      location.reload();
+    });
+  }
   if (!has("uart")) serialBtn.style.display = "none";
   if (!boardDef.io.buttons.length) ($("#bouncy").closest("label") as HTMLElement).style.display = "none";
 }

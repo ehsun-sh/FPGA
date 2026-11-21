@@ -9,8 +9,8 @@ const plain = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&[a-z]+;/g, 'x')
 const course = ALL_LESSONS.filter((l) => l !== PLAYGROUND);
 
 describe('objectives, takeaways, level and prerequisites', () => {
-  it('there are 32 Nexys lessons, 5 EBAZ4205 lessons, and the projects are apart', () => {
-    expect(COURSE_LESSONS.length).toBe(37);
+  it('there are 32 Nexys lessons, 12 EBAZ4205 lessons, and the projects are apart', () => {
+    expect(COURSE_LESSONS.length).toBe(44);
     expect(PROJECTS.lessons.map((l) => l.id)).toEqual(['proj-clock']);
     expect(PROJECTS.soon?.length).toBe(2);
     for (const l of PROJECTS.lessons) expect(COURSE_LESSONS).not.toContain(l);

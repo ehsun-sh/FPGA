@@ -613,6 +613,37 @@ pre.code code {
   pointer-events: none;
 }
 
+/* the EBAZ4205 extension board's keys, for the keyboard (and as a second way to press them) */
+.key-pad {
+  position: absolute;
+  left: 8px;
+  bottom: 30px;
+  display: flex;
+  gap: 4px;
+  z-index: 2;
+}
+.key-pad button {
+  min-width: 34px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 14px;
+  border: 1px solid rgba(230, 236, 243, 0.35);
+  background: rgba(20, 22, 26, 0.72);
+  color: #e6ecf3;
+  font: 600 11px/1 var(--mono, monospace);
+  cursor: pointer;
+  touch-action: none;
+}
+.key-pad button[aria-pressed="true"] {
+  background: #f0803a;
+  border-color: #f0803a;
+  color: #111;
+}
+.key-pad button:focus-visible {
+  outline: 2px solid #5ad1f0;
+  outline-offset: 1px;
+}
+
 /* bottom panel */
 .bottom {
   height: 170px;

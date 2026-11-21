@@ -7,7 +7,9 @@ import { Recorder, type Trace } from '../la/capture';
 import { decodeUart } from '../la/decode';
 import { PinBus, type ModuleInst } from '../modules/bus';
 import { moduleDef, type ModuleDef } from '../modules/library';
-import { hTotal, vgaTap, vTotal, VgaMonitor } from '../vga/monitor';
+import { lcdTap, St7789 } from '../lcd/st7789';
+import { hdmiTap } from '../vga/hdmi';
+import { hTotal, vgaTap, vTotal, VgaMonitor, type VgaTap } from '../vga/monitor';
 
 // active-low segment patterns {g..a} for 0..F
 export const HEX7 = [0x40, 0x79, 0x24, 0x30, 0x19, 0x12, 0x02, 0x78, 0x00, 0x10, 0x08, 0x03, 0x46, 0x21, 0x06, 0x0e];
@@ -40,8 +42,8 @@ export class BoardHarness {
     this.sim.reset();
     this.bus = new PinBus(board.clockHz, () => this.sim);
     this.bus.setDesign(design, this.map);
-    // board inputs start released / off; the reset button is not pressed (high)
-    this.set((b) => b.device.kind === 'reset', 1);
+    // board inputs start released / off; the reset button and active-low keys are not pressed (high)
+    this.set((b) => b.device.kind === 'reset' || (b.device.kind === 'btn' && !!b.device.activeLow), 1);
   }
 
   // attaches a module (by type) to package pins; on-board modules use their own pins
@@ -126,8 +128,10 @@ export class BoardHarness {
   sw(v: number) {
     for (let i = 0; i < Math.max(16, this.board.io.switches); i++) this.set((b) => b.device.kind === 'sw' && b.device.index === i, (v >> i) & 1);
   }
+  // 1 = pressed (an active-low key's pin then reads 0)
   btn(name: string, v: number) {
-    this.set((b) => b.device.kind === 'btn' && b.device.name === name, v);
+    this.set((b) => b.device.kind === 'btn' && b.device.name === name && !b.device.activeLow, v);
+    this.set((b) => b.device.kind === 'btn' && b.device.name === name && !!b.device.activeLow, v ? 0 : 1);
   }
   // 1 = released (CPU_RESETN high), 0 = pressed
   reset(v: number) {
@@ -221,9 +225,34 @@ export class BoardHarness {
 
   // watches the VGA connector for `frames` whole frames (after one frame to lock on) and returns the monitor
   vga(frames = 1): VgaMonitor | null {
-    const tap = vgaTap(this.map.bindings);
+    return this.watchMonitor(vgaTap(this.map.bindings), 4, frames);
+  }
+
+  // the same through the HDMI socket (EBAZ4205 extension board): the symbols of tmds_serializer, decoded
+  hdmi(frames = 1): VgaMonitor | null {
+    return this.watchMonitor(hdmiTap(this.design), 8, frames);
+  }
+
+  // runs the design with the LCD model on its LCD lines until `pixels` pixels have been written after a RAMWR
+  // (or `cycles` pass) and returns the model (lenient about waits: checkers shrink them)
+  lcd(cycles: number, pixels = 240 * 240): St7789 | null {
+    const tap = lcdTap(this.map.bindings);
     if (!tap || !this.clocked) return null;
-    const mon = new VgaMonitor(this.board.clockHz);
+    const lcd = new St7789(this.board.clockHz, false);
+    const probe = { sigs: tap.sigs, fn: (t: number) => lcd.feed(t, tap.read(this.sim.v)) };
+    this.extra.push(probe);
+    this.recompile();
+    lcd.restart(this.cycles, tap.read(this.sim.v));
+    const limit = this.cycles + cycles;
+    while (this.cycles < limit && !(lcd.pixels >= pixels && lcd.lit)) this.run(1 << 14);
+    this.extra = this.extra.filter((e) => e !== probe);
+    this.recompile();
+    return lcd;
+  }
+
+  private watchMonitor(tap: VgaTap | null, depth: 4 | 8, frames: number): VgaMonitor | null {
+    if (!tap || !this.clocked) return null;
+    const mon = new VgaMonitor(this.board.clockHz, depth);
     const probe = {
       sigs: tap.sigs,
       fn: (t: number) => {

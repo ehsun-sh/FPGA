@@ -327,6 +327,34 @@ export const GLOSSARY: GlossaryTerm[] = [
     fa: 'گذرگاه دوسیمه‌ی مدیریت (MDC و MDIO) که MAC با آن رجیسترهای PHY را می‌خواند و می‌نویسد.',
     en: 'The two-wire management bus (MDC and MDIO) the MAC uses to read and write PHY registers.',
   }, 'z-ethernet'),
+  g('tmds', { fa: 'TMDS', en: 'TMDS' }, {
+    fa: 'روش ارسال HDMI و DVI: هر بایت رنگ به یک نماد ۱۰ بیتی با تغییرات کم و تعادل DC تبدیل می‌شود و روی یک زوج تفاضلی با ده برابر کلاک پیکسل می‌رود.',
+    en: 'How HDMI and DVI send pixels: each colour byte becomes a 10-bit symbol with few transitions and DC balance, sent on a differential pair at ten times the pixel clock.',
+  }, 'x-hdmi-tmds'),
+  g('dc-balance', { fa: 'تعادل DC', en: 'DC balance' }, {
+    fa: 'برابر ماندن تعداد یک‌ها و صفرها در یک جریان بیت در طول زمان، تا خط از طریق خازن هم کار کند. TMDS برای آن گاهی بایت را برعکس می‌فرستد.',
+    en: 'Keeping the numbers of ones and zeros in a bit stream equal over time, so the line also works through a capacitor. TMDS inverts some bytes to get it.',
+  }, 'x-hdmi-tmds'),
+  g('oserdes', { fa: 'OSERDES', en: 'OSERDES' }, {
+    fa: 'سریال‌کننده‌ی سخت کنار هر پایه‌ی خروجی 7-series که چند بیت موازی را با کلاک سریع، یکی‌یکی روی پایه می‌فرستد. برای HDMI ده بیت در هر پیکسل.',
+    en: 'The hard serializer next to every 7-series output pin: it sends several parallel bits out one by one on a fast clock. HDMI needs ten bits per pixel.',
+  }, 'x-hdmi-bars'),
+  g('differential', { fa: 'زوج تفاضلی', en: 'Differential pair' }, {
+    fa: 'دو سیم که همیشه مقدار مخالف دارند (P و N). گیرنده فقط اختلاف آن‌ها را می‌خواند، پس نویز مشترک حذف می‌شود و سرعت بالا ممکن است.',
+    en: 'Two wires that always carry opposite levels (P and N). The receiver reads only their difference, so common noise cancels and high speeds work.',
+  }, 'x-hdmi-bars'),
+  g('st7789', { fa: 'ST7789', en: 'ST7789' }, {
+    fa: 'کنترلر رایج نمایشگرهای کوچک رنگی ۲۴۰×۲۴۰. با SPI فرمان و داده می‌گیرد؛ پایه‌ی DC می‌گوید بایت فرمان است یا داده.',
+    en: 'A common controller for small 240 × 240 colour displays. It takes commands and data over SPI; the DC pin says whether a byte is a command or data.',
+  }, 'x-lcd'),
+  g('rgb565', { fa: 'RGB565', en: 'RGB565' }, {
+    fa: 'قالب رنگ ۱۶ بیتی: ۵ بیت قرمز، ۶ بیت سبز و ۵ بیت آبی. هر پیکسل دو بایت است.',
+    en: 'A 16-bit colour format: 5 bits red, 6 bits green and 5 bits blue. Each pixel is two bytes.',
+  }, 'x-lcd'),
+  g('passive-buzzer', { fa: 'بازر پسیو', en: 'Passive buzzer' }, {
+    fa: 'بلندگوی کوچکی که خودش نوسان‌ساز ندارد. صدای آن همان فرکانس موج مربعی است که به پایه‌اش می‌دهید.',
+    en: 'A small speaker with no oscillator of its own. It plays the frequency of the square wave you drive into it.',
+  }, 'x-buzzer'),
 ];
 
 export const glossaryTerm = (id: string) => GLOSSARY.find((t) => t.id === id);

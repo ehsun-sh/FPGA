@@ -10,7 +10,7 @@ entity top is
     );
     port (
         clk    : in  std_logic;
-        KEY0   : in  std_logic;   -- hold to mute; assumes an active-low key (pressed = 0): to verify
+        KEY1   : in  std_logic;   -- hold to mute; the keys are active low (pressed = 0)
         BUZZER : out std_logic
     );
 end entity;
@@ -40,7 +40,7 @@ begin
         if rising_edge(clk) then
             if pcnt >= half - 1 then
                 pcnt <= 0;
-                if KEY0 = '1' then bz <= not bz; else bz <= '0'; end if;
+                if KEY1 = '1' then bz <= not bz; else bz <= '0'; end if;
             else
                 pcnt <= pcnt + 1;
             end if;

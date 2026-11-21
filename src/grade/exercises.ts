@@ -9,6 +9,7 @@ import { techMap } from '../synth/techmap';
 import { ref, part } from '../lessons/helpers';
 import { HINTS } from './hints';
 import { solutionOf } from './solutions';
+import { EXT_EXERCISES } from './ext';
 import { Z_BLINK_EXERCISE } from './zynq';
 
 export interface CheckItem {
@@ -884,16 +885,16 @@ export const EXERCISES: Record<string, Exercise> = {
   },
 };
 
-// types "text" into UART_TXD_IN (C4) and decodes what comes back on UART_RXD_OUT (D4) at the same time
-function uartEcho(h: BoardHarness, text: string, baud: number): { text: string; errors: number } {
+// sends `text` to the design's UART input pin (default: the Nexys USB-UART) and decodes what comes back
+export function uartEcho(h: BoardHarness, text: string, baud: number, rx = 'C4', tx = 'D4'): { text: string; errors: number } {
   const T = h.board.clockHz / baud;
   const bitsOut: number[] = [];
-  const sample = () => bitsOut.push(h.readPin('D4'));
+  const sample = () => bitsOut.push(h.readPin(tx));
   let acc = 0;
   for (const ch of text) {
     const byte = ch.charCodeAt(0);
     for (const bit of [0, ...Array.from({ length: 8 }, (_, k) => (byte >> k) & 1), 1]) {
-      h.pin('C4', bit);
+      h.pin(rx, bit);
       acc += T;
       const n = Math.round(acc);
       acc -= n;
@@ -926,6 +927,7 @@ function uartEcho(h: BoardHarness, text: string, baud: number): { text: string; 
 
 
 EXERCISES['z-blink'] = Z_BLINK_EXERCISE;
+Object.assign(EXERCISES, EXT_EXERCISES);
 
 // hints and reference solutions live in their own files; attach them once, at load
 for (const [id, ex] of Object.entries(EXERCISES)) {
