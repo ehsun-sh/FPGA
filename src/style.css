@@ -5235,3 +5235,188 @@ abbr.term:focus-visible {
 .vv-dlg .small {
   font-size: 12.5px;
 }
+
+/* ---------------------------------------------------------------- simulated Linux terminal (src/linux/term.ts) */
+.lesson .lxterm {
+  margin: 18px 0;
+  padding: 4px 16px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-inline-start: 4px solid var(--accent);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+.lesson .lxterm h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lx-lead {
+  margin: 0 0 10px;
+  color: var(--text-2);
+}
+.lx-win {
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--term-line);
+  background: var(--term-bg);
+  text-align: left;
+}
+.lx-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px;
+  background: var(--term-bar);
+  border-bottom: 1px solid var(--term-line);
+}
+.lx-bar .grow {
+  flex: 1;
+}
+.lx-tab,
+.lx-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 3px 10px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: none;
+  color: var(--term-dim);
+  font: 600 12.5px/1 var(--ui);
+  cursor: pointer;
+}
+.lx-tab.active {
+  color: var(--term-text);
+  background: var(--term-bg);
+  border-color: var(--term-line);
+}
+.lx-btn {
+  padding: 3px 8px;
+  font-family: var(--mono);
+}
+.lx-tab:hover,
+.lx-btn:hover {
+  color: var(--term-text);
+}
+.lx-tab:focus-visible,
+.lx-btn:focus-visible {
+  outline: 2px solid var(--term-prompt);
+  outline-offset: 1px;
+}
+.lx-pwr.on {
+  color: var(--term-ok);
+}
+.lx-screen {
+  height: 320px;
+  overflow: auto;
+  padding: 8px 10px;
+  color: var(--term-text);
+  font: 12.5px/1.5 var(--mono);
+  cursor: text;
+}
+.lx-out {
+  margin: 0;
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: none;
+  color: inherit;
+  padding: 0;
+  border: 0;
+}
+.lx-out .dim {
+  color: var(--term-dim);
+}
+.lx-out .err {
+  color: var(--term-err);
+}
+.lx-out .ok {
+  color: var(--term-ok);
+}
+.lx-out .note {
+  color: var(--term-note);
+  font-style: italic;
+}
+.lx-line {
+  display: flex;
+  align-items: baseline;
+}
+.lx-line.hidden {
+  display: none;
+}
+.lx-prompt {
+  white-space: pre;
+  color: var(--term-prompt);
+}
+.lx-in {
+  flex: 1;
+  min-width: 40px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--term-text);
+  font: inherit;
+  caret-color: var(--term-ok);
+}
+.lx-note {
+  margin: 8px 0 4px;
+  font-size: 12.5px;
+}
+.lx-tasks .lx-th {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 6px;
+}
+.lx-tasks .lx-th .link-btn {
+  margin-inline-start: auto;
+}
+.lx-tasks ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.lx-tasks li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 4px 0;
+  font-size: 14px;
+}
+.lx-tasks li i {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+  color: var(--on-ok);
+}
+.lx-tasks li.done i {
+  background: var(--ok);
+  border-color: var(--ok);
+}
+.lx-tasks li.done span {
+  color: var(--muted);
+}
+.lx-tasks code {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .lesson .lxterm {
+    padding: 2px 10px 10px;
+  }
+  .lx-screen {
+    height: 260px;
+    font-size: 11.5px;
+  }
+  .lx-tab {
+    padding: 3px 7px;
+  }
+}

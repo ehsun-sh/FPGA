@@ -23,6 +23,9 @@ const all: [string, string][] = [
   ['figZynq', F.figZynq()],
   ['figBootFlow', F.figBootFlow()],
   ['figMii', F.figMii()],
+  ['figLinuxBoot', F.figLinuxBoot()],
+  ['figAxiMap', F.figAxiMap()],
+  ['figLinuxBoot fa', F.figLinuxBoot({ p1: 'پارتیشن ۱ · FAT' })],
   ['figZynq fa', F.figZynq({ ps: 'بخش PS', pl: 'بخش PL' })],
   // Persian labels go through the same code
   ['figUartFrame fa', F.figUartFrame({ idle: 'بیکار', start: 'شروع', stop: 'پایان' })],

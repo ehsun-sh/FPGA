@@ -141,6 +141,17 @@
   --la-badge: #2f4a33;
   --la-badge-text: #9fe0a8;
 
+  /* simulated Linux terminal (src/linux/term.ts, dark in both themes) */
+  --term-bg: #14171c;
+  --term-bar: #1e232a;
+  --term-line: #2e353f;
+  --term-text: #e3e7ec;
+  --term-dim: #8f9aa7;
+  --term-ok: #8fdc9a;
+  --term-err: #ff9b8f;
+  --term-note: #f2c66d;
+  --term-prompt: #8cc4ff;
+
   /* waveform viewer (dark in both themes) */
   --wave-bg: #0b0d10;
   --wave-text: #d7dde5;

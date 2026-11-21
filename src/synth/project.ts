@@ -4,6 +4,7 @@ import type { Lang } from "../hdl";
 import { zip } from "../util/zip";
 import { buildBat, buildSh, programBat, programSh, programTcl } from "./scripts";
 import { libraryModules, TMDS_SERIALIZER_V } from "../boards/library";
+import { isLinuxMode, linuxProjectFiles, type LinuxMode } from "./linux";
 
 // FPGA Lab's board-library blocks a design uses (tmds_serializer for HDMI): the simulator has a stand-in, the
 // project gets the real Verilog (a VHDL design instantiates it as a component; Vivado mixes the two languages)
@@ -29,7 +30,8 @@ export interface ProjectSpec {
   internalClock?: { port: string; source: string; hz: number };
   // Zynq real-board lessons (EBAZ4205 chapter): a PS-only block design instead of the learner's module.
   // 'hello': EMIO GPIO[1:0] drives the LEDs and vitis/ps_hello.c is included; 'ethernet' adds ENET0 over EMIO.
-  ps?: { mode: "hello" | "ethernet"; app?: string };
+  // The chapter "Linux on Zynq" (src/synth/linux.ts): 'linux', 'axigpio' and 'linux-pl'.
+  ps?: { mode: "hello" | "ethernet" | LinuxMode; app?: string };
 }
 
 const firstUnit = (src: string, lang: Lang): string | undefined => {
@@ -47,7 +49,7 @@ export const projectDir = (p: Pick<ProjectSpec, "name">) => p.name.replace(/[^\w
 // the PS to start first (ps7_init), so the EBAZ4205 projects get no program script.
 export function projectFiles(p: ProjectSpec): { name: string; data: string }[] {
   const dir = projectDir(p);
-  const files = p.ps ? zynqPsProjectFiles(p) : p.internalClock ? zynqProjectFiles(p) : nexysProjectFiles(p);
+  const files = p.ps ? (isLinuxMode(p.ps.mode) ? linuxProjectFiles(p) : zynqPsProjectFiles(p)) : p.internalClock ? zynqProjectFiles(p) : nexysProjectFiles(p);
   files.push({ name: `${dir}/build.bat`, data: buildBat(dir) }, { name: `${dir}/build.sh`, data: buildSh(dir) });
   if (canProgram(p))
     files.push(
@@ -132,7 +134,7 @@ Or open it in Vivado yourself:
 
 // the PS7 settings of the EBAZ4205 (docs/ebaz4205/CONTENT.md section 3; KeitetsuWorks/EBAZ4205, MIT, and
 // hhuysqt.github.io/zynq1)
-const EBAZ_PS7 = `  CONFIG.PCW_UIPARAM_DDR_PARTNO {MT41K128M16 JT-125} \\
+export const EBAZ_PS7 = `  CONFIG.PCW_UIPARAM_DDR_PARTNO {MT41K128M16 JT-125} \\
   CONFIG.PCW_UIPARAM_DDR_BUS_WIDTH {16 Bit} \\
   CONFIG.PCW_NAND_PERIPHERAL_ENABLE {1} \\
   CONFIG.PCW_NAND_GRP_D8_ENABLE {0} \\
@@ -294,7 +296,7 @@ PL برد EBAZ4205 نوسان‌ساز ندارد. کلاک ${ic.port} از بخ
 }
 
 // ENET0 over EMIO with the MII glue (docs/ebaz4205/CONTENT.md section 3; KeitetsuWorks/EBAZ4205, MIT)
-const EBAZ_ENET = `  CONFIG.PCW_ENET0_PERIPHERAL_ENABLE {1} \\
+export const EBAZ_ENET = `  CONFIG.PCW_ENET0_PERIPHERAL_ENABLE {1} \\
   CONFIG.PCW_ENET0_ENET0_IO {EMIO} \\
   CONFIG.PCW_ENET0_GRP_MDIO_ENABLE {1} \\
   CONFIG.PCW_ENET0_GRP_MDIO_IO {EMIO} \\
@@ -303,11 +305,11 @@ const EBAZ_ENET = `  CONFIG.PCW_ENET0_PERIPHERAL_ENABLE {1} \\
   CONFIG.PCW_EN_CLK3_PORT {1} \\
   CONFIG.PCW_FPGA3_PERIPHERAL_FREQMHZ {25} \\`;
 
-const EBAZ_LED_XDC = `## LEDs on the core board, driven by EMIO GPIO 54 (LED_R) and 55 (LED_G)
+export const EBAZ_LED_XDC = `## LEDs on the core board, driven by EMIO GPIO 54 (LED_R) and 55 (LED_G)
 set_property -dict { PACKAGE_PIN W14 IOSTANDARD LVCMOS33 } [get_ports { LED_R }]
 set_property -dict { PACKAGE_PIN W13 IOSTANDARD LVCMOS33 } [get_ports { LED_G }]
 `;
-const EBAZ_ENET_XDC = `
+export const EBAZ_ENET_XDC = `
 ## Ethernet: PS GEM0 through EMIO, MII to the IP101GA PHY (pins: xjtuecho/EBAZ4205, MIT)
 set_property -dict { PACKAGE_PIN U14 IOSTANDARD LVCMOS33 } [get_ports { ENET0_GMII_RX_CLK_0 }]
 set_property -dict { PACKAGE_PIN U15 IOSTANDARD LVCMOS33 } [get_ports { ENET0_GMII_TX_CLK_0 }]
@@ -326,6 +328,39 @@ set_property -dict { PACKAGE_PIN Y14 IOSTANDARD LVCMOS33 } [get_ports { MDIO_ETH
 ## Boards without the 25 MHz crystal Y3: the PHY clock comes from the PS (FCLK_CLK3 = 25 MHz) on U18.
 ## If your board has Y3, delete this line and the FCLK_CLK3_0 port in the block design.
 set_property -dict { PACKAGE_PIN U18 IOSTANDARD LVCMOS33 } [get_ports { FCLK_CLK3_0 }]
+`;
+
+// the block-design Tcl for the LEDs on EMIO GPIO 54/55 and for GEM0 over EMIO with the MII glue
+export const EBAZ_LED_BD = `# LEDs: EMIO GPIO 54 = GPIO_O[0] -> LED_R, 55 = GPIO_O[1] -> LED_G
+foreach {name bit} {LED_R 0 LED_G 1} {
+  set s [create_bd_cell -type ip -vlnv xilinx.com:ip:xlslice:1.0 slice_$name]
+  set_property -dict [list CONFIG.DIN_WIDTH {2} CONFIG.DIN_FROM $bit CONFIG.DIN_TO $bit] $s
+  connect_bd_net [get_bd_pins ps7/GPIO_O] [get_bd_pins slice_$name/Din]
+  create_bd_port -dir O $name
+  connect_bd_net [get_bd_pins slice_$name/Dout] [get_bd_ports $name]
+}
+`;
+export const EBAZ_ENET_BD = `
+# Ethernet: the PS GMII buses are 8 bits, the IP101GA PHY is 4-bit MII
+set txs [create_bd_cell -type ip -vlnv xilinx.com:ip:xlslice:1.0 slice_txd]
+set_property -dict [list CONFIG.DIN_WIDTH {8} CONFIG.DIN_FROM {3} CONFIG.DIN_TO {0}] $txs
+connect_bd_net [get_bd_pins ps7/ENET0_GMII_TXD] [get_bd_pins slice_txd/Din]
+create_bd_port -dir O -from 3 -to 0 enet0_gmii_txd
+connect_bd_net [get_bd_pins slice_txd/Dout] [get_bd_ports enet0_gmii_txd]
+
+set rxc [create_bd_cell -type ip -vlnv xilinx.com:ip:xlconcat:2.1 concat_rxd]
+set_property -dict [list CONFIG.NUM_PORTS {2} CONFIG.IN0_WIDTH {4} CONFIG.IN1_WIDTH {4}] $rxc
+create_bd_port -dir I -from 3 -to 0 enet0_gmii_rxd
+connect_bd_net [get_bd_ports enet0_gmii_rxd] [get_bd_pins concat_rxd/In0]
+set zero [create_bd_cell -type ip -vlnv xilinx.com:ip:xlconstant:1.1 rxd_hi]
+set_property -dict [list CONFIG.CONST_WIDTH {4} CONFIG.CONST_VAL {0}] $zero
+connect_bd_net [get_bd_pins rxd_hi/dout] [get_bd_pins concat_rxd/In1]
+connect_bd_net [get_bd_pins concat_rxd/dout] [get_bd_pins ps7/ENET0_GMII_RXD]
+
+foreach pin {ENET0_GMII_RX_CLK ENET0_GMII_TX_CLK ENET0_GMII_TX_EN ENET0_GMII_RX_DV FCLK_CLK3} {
+  make_bd_pins_external [get_bd_pins ps7/$pin]
+}
+make_bd_intf_pins_external [get_bd_intf_pins ps7/MDIO_ETHERNET_0]
 `;
 
 // A PS-only project for the EBAZ4205 real-board lessons: no learner module; EMIO GPIO drives the LEDs and, for
@@ -359,40 +394,7 @@ ${eth ? EBAZ_ENET + "\n" : ""}] $ps
 apply_bd_automation -rule xilinx.com:bd_rule:processing_system7 \\
   -config {make_external "FIXED_IO, DDR" apply_board_preset "0" Master "Disable" Slave "Disable"} $ps
 
-# LEDs: EMIO GPIO 54 = GPIO_O[0] -> LED_R, 55 = GPIO_O[1] -> LED_G
-foreach {name bit} {LED_R 0 LED_G 1} {
-  set s [create_bd_cell -type ip -vlnv xilinx.com:ip:xlslice:1.0 slice_$name]
-  set_property -dict [list CONFIG.DIN_WIDTH {2} CONFIG.DIN_FROM $bit CONFIG.DIN_TO $bit] $s
-  connect_bd_net [get_bd_pins ps7/GPIO_O] [get_bd_pins slice_$name/Din]
-  create_bd_port -dir O $name
-  connect_bd_net [get_bd_pins slice_$name/Dout] [get_bd_ports $name]
-}
-${
-  eth
-    ? `
-# Ethernet: the PS GMII buses are 8 bits, the IP101GA PHY is 4-bit MII
-set txs [create_bd_cell -type ip -vlnv xilinx.com:ip:xlslice:1.0 slice_txd]
-set_property -dict [list CONFIG.DIN_WIDTH {8} CONFIG.DIN_FROM {3} CONFIG.DIN_TO {0}] $txs
-connect_bd_net [get_bd_pins ps7/ENET0_GMII_TXD] [get_bd_pins slice_txd/Din]
-create_bd_port -dir O -from 3 -to 0 enet0_gmii_txd
-connect_bd_net [get_bd_pins slice_txd/Dout] [get_bd_ports enet0_gmii_txd]
-
-set rxc [create_bd_cell -type ip -vlnv xilinx.com:ip:xlconcat:2.1 concat_rxd]
-set_property -dict [list CONFIG.NUM_PORTS {2} CONFIG.IN0_WIDTH {4} CONFIG.IN1_WIDTH {4}] $rxc
-create_bd_port -dir I -from 3 -to 0 enet0_gmii_rxd
-connect_bd_net [get_bd_ports enet0_gmii_rxd] [get_bd_pins concat_rxd/In0]
-set zero [create_bd_cell -type ip -vlnv xilinx.com:ip:xlconstant:1.1 rxd_hi]
-set_property -dict [list CONFIG.CONST_WIDTH {4} CONFIG.CONST_VAL {0}] $zero
-connect_bd_net [get_bd_pins rxd_hi/dout] [get_bd_pins concat_rxd/In1]
-connect_bd_net [get_bd_pins concat_rxd/dout] [get_bd_pins ps7/ENET0_GMII_RXD]
-
-foreach pin {ENET0_GMII_RX_CLK ENET0_GMII_TX_CLK ENET0_GMII_TX_EN ENET0_GMII_RX_DV FCLK_CLK3} {
-  make_bd_pins_external [get_bd_pins ps7/$pin]
-}
-make_bd_intf_pins_external [get_bd_intf_pins ps7/MDIO_ETHERNET_0]
-`
-    : ""
-}
+${EBAZ_LED_BD}${eth ? EBAZ_ENET_BD : ""}
 validate_bd_design
 save_bd_design
 set wrapper [make_wrapper -files [get_files system.bd] -top]

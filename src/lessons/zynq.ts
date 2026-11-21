@@ -15,7 +15,7 @@ type Goals = { objectives: string[]; takeaways: string[] };
 const q = (text: string, options: string[], answer: number, why: string): Question => ({ q: text, options, answer, why });
 
 // ---------------------------------------------------------------- shared pieces
-export type Src = 'codeasm' | 'zynq1' | 'zynq2' | 'xjtuecho' | 'keitetsu' | 'elrori' | 'blkf' | 'extsch' | 'vendorlcd' | 'dvi' | 'st7789';
+export type Src = 'codeasm' | 'zynq1' | 'zynq2' | 'xjtuecho' | 'keitetsu' | 'elrori' | 'blkf' | 'extsch' | 'vendorlcd' | 'dvi' | 'st7789' | 'buildroot' | 'uboot' | 'pg144' | 'fpgamgr' | 'dtspec' | 'ldd';
 const CREDITS: Record<Src, [string, string]> = {
   codeasm: ['https://gist.github.com/CodeAsm/57d5856370546adbc41941ca716988f8', 'Board notes: CodeAsm, gist EBAZ4205'],
   zynq1: ['https://hhuysqt.github.io/zynq1/', 'Vivado/SDK walkthrough after hhuysqt, zynq[1] (CC BY-NC-SA 4.0)'],
@@ -29,6 +29,12 @@ const CREDITS: Record<Src, [string, string]> = {
   vendorlcd: ['', 'Display start-up: the vendor\u2019s example project 04_PS_LCD_test (ST7789 driven over EMIO)'],
   dvi: ['', 'TMDS encoding: Digital Visual Interface (DVI) 1.0 specification, DDWG, 1999, section 3.2'],
   st7789: ['', 'Display commands and reset timing: Sitronix ST7789V datasheet'],
+  buildroot: ['https://buildroot.org/downloads/manual/manual.html', 'The Buildroot user manual'],
+  uboot: ['https://docs.u-boot.org/en/latest/', 'The U-Boot documentation (commands, distro boot, script images)'],
+  pg144: ['https://docs.amd.com/v/u/en-US/pg144-axi-gpio', 'AXI GPIO registers: AMD LogiCORE IP AXI GPIO product guide (PG144)'],
+  fpgamgr: ['https://docs.kernel.org/driver-api/fpga/fpga-mgr.html', 'The Linux kernel documentation: FPGA Manager'],
+  dtspec: ['https://www.devicetree.org/specifications/', 'The Devicetree Specification'],
+  ldd: ['https://docs.kernel.org/driver-api/driver-model/platform.html', 'The Linux kernel documentation: platform devices and drivers'],
 };
 // the "Sources" box at the end of every EBAZ4205 lesson; the credit lines stay in English in both languages
 export function sourcesBox(lang: 'fa' | 'en', ...ids: Src[]): string {
@@ -219,7 +225,7 @@ ${truth(
   <li>BOOT.bin را بسازید و بوت کنید. برد آدرس IP را روی ${part('J7')} چاپ می‌کند. PHY روی آدرس MDIO صفر است.</li>
   <li>از کامپیوتر: <code>telnet &lt;board-ip&gt; 7</code>. هر خطی که بنویسید برمی‌گردد.</li>
 </ol>
-<p class="note">💡 قدم بعدی لینوکس است: U-Boot، کرنل و device tree مخصوص این برد. راهنمای کامل آن در منبع zynq[2] آمده است.</p>
+<p class="note">💡 قدم بعدی لینوکس است: U-Boot، کرنل و device tree مخصوص این برد. فصل «لینوکس روی Zynq» از ${ref('lx-boot')} شروع می‌شود و همین طرح شبکه را نگه می‌دارد.</p>
 ${sourcesBox('fa', 'zynq1', 'zynq2', 'keitetsu', 'xjtuecho')}`,
     ...BLINK,
     tryIt: `<p>شبیه‌ساز شبکه ندارد. روی برد واقعی با <code>telnet</code> به پورت ۷ وصل شوید؛ هر چه تایپ کنید برمی‌گردد.</p>`,
@@ -375,7 +381,7 @@ ${truth(
   <li>Make BOOT.bin and boot. The board prints its IP address on ${part('J7')}. The PHY sits at MDIO address 0.</li>
   <li>On your computer: <code>telnet &lt;board-ip&gt; 7</code>. Every line you type comes back.</li>
 </ol>
-<p class="note">💡 The next step is Linux: U-Boot, a kernel and a device tree for this board. The zynq[2] source has the full walkthrough.</p>
+<p class="note">💡 The next step is Linux: U-Boot, a kernel and a device tree for this board. The chapter "Linux on Zynq" starts at ${ref('lx-boot')} and keeps this Ethernet design.</p>
 ${sourcesBox('en', 'zynq1', 'zynq2', 'keitetsu', 'xjtuecho')}`,
     tryIt: `<p>The simulator has no network. On the real board, <code>telnet</code> to port 7; whatever you type comes back.</p>`,
   },

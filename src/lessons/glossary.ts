@@ -355,6 +355,30 @@ export const GLOSSARY: GlossaryTerm[] = [
     fa: 'بلندگوی کوچکی که خودش نوسان‌ساز ندارد. صدای آن همان فرکانس موج مربعی است که به پایه‌اش می‌دهید.',
     en: 'A small speaker with no oscillator of its own. It plays the frequency of the square wave you drive into it.',
   }, 'x-buzzer'),
+  g('uboot', { fa: 'U-Boot', en: 'U-Boot' }, {
+    fa: 'بوت‌لودری که بعد از FSBL اجرا می‌شود، کرنل و device tree را از کارت SD یا شبکه در DDR بار می‌کند و لینوکس را راه می‌اندازد. خط فرمان خودش را هم دارد.',
+    en: 'The boot loader that runs after the FSBL, loads the kernel and the device tree from the SD card or the network into DDR and starts Linux. It has its own command line.',
+  }, 'lx-boot'),
+  g('devicetree', { fa: 'Device tree', en: 'Device tree' }, {
+    fa: 'فایلی (dtb) که به کرنل می‌گوید چه سخت‌افزاری در کدام آدرس است. کرنل برای هر گره‌ی آن درایوری با همان compatible پیدا می‌کند.',
+    en: 'A file (the dtb) that tells the kernel which hardware sits at which address. For each node the kernel finds a driver with the same compatible string.',
+  }, 'lx-boot'),
+  g('rootfs', { fa: 'Root file system', en: 'Root file system' }, {
+    fa: 'پوشه‌ی / لینوکس، با برنامه‌ها، کتابخانه‌ها و تنظیمات. در تصویر EBAZ4205 روی پارتیشن ext4 کارت SD است و Buildroot آن را می‌سازد.',
+    en: 'The / folder of Linux, with the programs, libraries and settings. On the EBAZ4205 image it is the ext4 partition of the SD card, built by Buildroot.',
+  }, 'lx-boot'),
+  g('sysfs', { fa: 'sysfs', en: 'sysfs' }, {
+    fa: 'فایل‌سیستم مجازی /sys که کرنل دستگاه‌ها و درایورها را در آن به شکل پوشه و فایل نشان می‌دهد. با cat و echo خوانده و نوشته می‌شود.',
+    en: 'The virtual /sys file system where the kernel shows devices and drivers as folders and files. You read and write them with cat and echo.',
+  }, 'lx-console'),
+  g('kmod', { fa: 'ماژول کرنل', en: 'Kernel module' }, {
+    fa: 'کدی (فایل .ko) که در حال کار به کرنل اضافه می‌شود، با insmod بار و با rmmod برداشته می‌شود. درایورها معمولاً ماژول‌اند.',
+    en: 'Code (a .ko file) added to the running kernel, loaded with insmod and removed with rmmod. Drivers are usually modules.',
+  }, 'lx-driver'),
+  g('fpgamgr', { fa: 'FPGA manager', en: 'FPGA manager' }, {
+    fa: 'زیرسیستم کرنل لینوکس برای برنامه‌ریزی PL در حال کار. روی Zynq از درگاه devcfg یک bitstream بدون هدر (.bin) را بار می‌کند.',
+    en: 'The Linux kernel subsystem that programs the PL while the system runs. On a Zynq it loads a header-less bitstream (.bin) through the devcfg port.',
+  }, 'lx-fpgamgr'),
 ];
 
 export const glossaryTerm = (id: string) => GLOSSARY.find((t) => t.id === id);
