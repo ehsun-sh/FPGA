@@ -210,6 +210,11 @@ describe("project export", () => {
       "fpga_lab_counter/sim/tb_top.v",
       "fpga_lab_counter/create_project.tcl",
       "fpga_lab_counter/README.txt",
+      "fpga_lab_counter/build.bat",
+      "fpga_lab_counter/build.sh",
+      "fpga_lab_counter/program_board.tcl",
+      "fpga_lab_counter/program.bat",
+      "fpga_lab_counter/program.sh",
     ]);
     const tcl = v.find((f) => f.name.endsWith(".tcl"))!.data;
     expect(tcl).toContain(

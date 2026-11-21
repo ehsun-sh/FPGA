@@ -132,7 +132,8 @@ ${truth(
 </ul>
 <h3>3. From FPGA Lab to a Vivado project</h3>
 <ol>
-  <li>In FPGA Lab use <b>File → Download Vivado project (.zip)</b>. The zip holds the design source, the XDC, the testbench and a <code>create_project.tcl</code> script.</li>
+  <li>At the end of every lesson, the box <b>Build it on a real board with Vivado</b> saves the project into a folder you pick (or as a .zip). It holds the design source, the XDC, the testbench, a <code>create_project.tcl</code> script and <code>build.bat</code>.</li>
+  <li>Quickest: double-click <code>build.bat</code> (on Linux <code>sh build.sh</code>) and Vivado builds the bitstream with no command to type. With the FPGA Lab helper running, the <b>Build in Vivado</b> button does it from the website.</li>
   <li>Unzip it, start Vivado and run <code>create_project.tcl</code> from <b>Tools → Run Tcl Script</b>. The project is created with the same chip and files.</li>
   <li>In the Flow Navigator press <b>Run Synthesis</b>, <b>Run Implementation</b> and <b>Generate Bitstream</b> in turn.</li>
 </ol>
@@ -154,7 +155,7 @@ ${truth(
   ],
 )}
 <p class="note">💡 FPGA Lab is not affiliated with AMD/Xilinx or Digilent; their names appear only as guidance.</p>`,
-    tryIt: `<p>Press Run: ${part('LD0')} blinks once a second and ${part('SW15..SW1')} light the other LEDs. Take the same design with <b>File → Download Vivado project</b> and try it on a real board.</p>`,
+    tryIt: `<p>Press Run: ${part('LD0')} blinks once a second and ${part('SW15..SW1')} light the other LEDs. Take the same design with <b>Build it on a real board with Vivado</b> below and try it on a real board.</p>`,
   },
   'proj-clock': {
     title: 'Project 1: Digital clock',

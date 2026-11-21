@@ -42,7 +42,9 @@ import { EXERCISES, type CheckItem } from "./grade/exercises";
 import { gradeExercise } from "./grade/grade";
 import { buildNetlist, type Netlist } from "./synth/netlist";
 import { SchematicPanel } from "./synth/panel";
-import { projectZip } from "./synth/project";
+import { canProgram, projectDir, projectFiles, type ProjectSpec } from "./synth/project";
+import { zip } from "./util/zip";
+import { createVivado } from "./ui/vivado";
 import { techMap, utilizationText, type SynthResult } from "./synth/techmap";
 import { CodeEditor } from "./ui/editor";
 import { highlight } from "./ui/highlight";
@@ -1323,6 +1325,7 @@ function renderLesson() {
     ["sec-overview", "book", u.overview],
     ["sec-code", "code", u.code],
     ["sec-try", "zap", u.tryIt],
+    ["sec-vivado", "cpu", "Vivado"],
     ...(tx.takeaways?.length ? [["sec-takeaways", "list", LEARN_UI[uiLang].takeaways]] : []),
     ...(tx.quiz?.length ? [["sec-quiz", "list", LEARN_UI[uiLang].quiz]] : []),
     ...(hasEx ? [["sec-exercise", "target", u.exercise]] : []),
@@ -1362,6 +1365,7 @@ ${toolsBox(lesson, uiLang)}
     <button class="big-run sim" data-act="sim">${icon("wave", 15)}${ui.simulate}</button>
   </div>
 </section>
+${vivado.card()}
 ${takeawaysHtml(tx, uiLang)}
 ${quizBox()}
 ${exerciseHtml()}
@@ -1374,6 +1378,7 @@ ${exerciseHtml()}
   restorePrep(el);
   el.scrollTop = 0;
   setRunState();
+  void vivado.mount();
 }
 
 // "Prepare your board" checklists (z-intro): the ticked steps are a bitmask in prep:<board>
@@ -1690,19 +1695,16 @@ function download(
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-function downloadProject() {
+// the editor's design as a Vivado project (the EBAZ4205 PS lessons export a PS-only project instead)
+function projectSpec(): ProjectSpec {
   let top = "top";
   try {
     top = synthesize(srcEditor.text, lang).top;
   } catch {
     /* export the sources anyway */
   }
-  const name =
-    lesson.id === PLAYGROUND.id
-      ? "fpga_lab_playground"
-      : `fpga_lab_${lesson.id}`;
-  const data = projectZip({
-    name,
+  return {
+    name: lesson.id === PLAYGROUND.id ? "fpga_lab_playground" : `fpga_lab_${lesson.id}`,
     lang,
     top,
     src: srcEditor.text,
@@ -1713,17 +1715,36 @@ function downloadProject() {
     board: `${boardDef.vendor} ${boardDef.name}`,
     boardPart: boardDef.boardPart,
     internalClock: boardDef.internalClock,
-    // the EBAZ4205 PS lessons download a PS-only project instead of the editor's design
     ps:
       lesson.id === "z-ps-hello"
         ? { mode: "hello", app: PS_HELLO_C }
         : lesson.id === "z-ethernet"
           ? { mode: "ethernet" }
           : undefined,
-  });
-  download(`${name}.zip`, data, "application/zip");
+  };
+}
+
+function currentProject() {
+  const spec = projectSpec();
+  const files = projectFiles(spec);
+  return { dir: projectDir(spec), files, zip: zip(files), board: boardDef.name, canProgram: canProgram(spec) };
+}
+
+// "Build it in Vivado" in every lesson (src/ui/vivado.ts)
+const vivado = createVivado({
+  lang: () => uiLang,
+  project: currentProject,
+  log: (t, l) => log(t, l),
+  download: (name, data, type) => download(name, data, type),
+  get: (k) => store.get(k),
+  set: (k, v) => store.set(k, v),
+});
+
+function downloadProject() {
+  const p = currentProject();
+  download(`${p.dir}.zip`, p.zip, "application/zip");
   log(
-    `# write_project ${name}.zip — open create_project.tcl in Vivado (Tools > Run Tcl Script)`,
+    `# write_project ${p.dir}.zip — unzip it and double-click build.bat, or open create_project.tcl in Vivado (Tools > Run Tcl Script)`,
     "cmd",
   );
 }
@@ -1756,6 +1777,10 @@ function timingText(sr: SynthResult): string {
 
 // ---------------------------------------------------------------- actions
 function act(name: string) {
+  if (name.startsWith("vv-")) {
+    void vivado.act(name);
+    return;
+  }
   switch (name) {
     case "run":
       runFlow();

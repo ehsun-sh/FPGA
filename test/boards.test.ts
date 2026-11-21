@@ -136,6 +136,8 @@ describe('EBAZ4205 Vivado project', () => {
       'fpga_lab_playground/boot.bif',
       'fpga_lab_playground/vitis/app.c',
       'fpga_lab_playground/README.txt',
+      'fpga_lab_playground/build.bat',
+      'fpga_lab_playground/build.sh',
     ]);
     const tcl = get(fs, 'create_project.tcl');
     expect(tcl).toContain('create_project $proj_name $origin/vivado -part xc7z010clg400-1 -force');
