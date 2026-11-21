@@ -3,6 +3,7 @@
 // show on the 3D board, and the 3D board's keys are what the AXI GPIO reads. The task list below the screen ticks off
 // what the lesson asks for; ticked tasks are kept as a bitmask in lxterm:<lesson>.
 import { icon } from '../ui/icons';
+import { num } from '../ui/strings';
 import { SCENARIOS, type Scenario } from './scenarios';
 import { ZynqSim, type Con, type Out } from './sim';
 
@@ -28,7 +29,7 @@ const T = {
     restart: 'شروع دوباره',
     tasks: 'کارهای این درس',
     optional: 'اختیاری',
-    done: (n: number, m: number) => `${n} از ${m}`,
+    done: (n: number, m: number) => `${num(n, 'fa')} از ${num(m, 'fa')}`,
     off: 'برد خاموش است. دکمه‌ی ⏻ را بزنید.',
     note: 'شبیه‌سازی است: دستورها و خروجی‌ها از روی ایمیج Buildroot پروژه‌ی blkf2016/ebaz4205 ساخته شده‌اند و برد واقعی جزئیات بیشتری چاپ می‌کند.',
     hint: 'روی صفحه کلیک کنید و بنویسید. help فهرست دستورها را می‌دهد.',
@@ -170,8 +171,8 @@ export class LinuxTerm {
   private paint() {
     const out = this.el.querySelector('.lx-out')!;
     const ls = this.lines[this.con];
-    out.innerHTML = ls.map((o) => (o.cls ? `<span class="${o.cls}">${esc(o.text)}</span>` : esc(o.text))).join('\n') + (ls.length ? '\n' : '');
-    if (this.con === 'serial' && !this.sim.on() && !ls.length) out.innerHTML = `<span class="note">${esc(T[this.d.lang()].off)}</span>\n`;
+    out.innerHTML = ls.map((o) => (o.cls ? `<span class="lx-t-${o.cls}">${esc(o.text)}</span>` : esc(o.text))).join('\n') + (ls.length ? '\n' : '');
+    if (this.con === 'serial' && !this.sim.on() && !ls.length) out.innerHTML = `<span class="lx-t-note" dir="auto">${esc(T[this.d.lang()].off)}</span>\n`;
     this.dirty[this.con] = false;
     this.screen.scrollTop = this.screen.scrollHeight;
   }

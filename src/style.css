@@ -5326,16 +5326,16 @@ abbr.term:focus-visible {
   padding: 0;
   border: 0;
 }
-.lx-out .dim {
+.lx-out .lx-t-dim {
   color: var(--term-dim);
 }
-.lx-out .err {
+.lx-out .lx-t-err {
   color: var(--term-err);
 }
-.lx-out .ok {
+.lx-out .lx-t-ok {
   color: var(--term-ok);
 }
-.lx-out .note {
+.lx-out .lx-t-note {
   color: var(--term-note);
   font-style: italic;
 }
