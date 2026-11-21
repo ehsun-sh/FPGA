@@ -1,4 +1,4 @@
-# FPGA Lab — EBAZ4205 roadmap (second board: Zynq-7010 plus the EBAZEXT extension board)
+# FPGA Lab — EBAZ4205 roadmap (second board: Zynq-7010 plus an extension board)
 
 Like [ROADMAP.md](ROADMAP.md), this is a set of **implementation briefs**: hand over the *Global rules* of
 ROADMAP.md, the *Rules for this roadmap* below, and one phase. One draft PR per phase, one commit per numbered task.
@@ -11,10 +11,11 @@ Prepared material lives in [`docs/ebaz4205/`](ebaz4205/):
 | [SOURCES.md](ebaz4205/SOURCES.md) | Every source, its license, what was taken, and the credit line each lesson must show |
 | [CONTENT.md](ebaz4205/CONTENT.md) | The extracted facts, organised by lesson: board spec, hardware prep, Zynq and boot, PS settings, Vivado/Vitis/Linux flows |
 | [LESSONS.md](ebaz4205/LESSONS.md) | Lesson briefs: ids, fa/en titles and summaries, objectives, outline, exercises, checkers, quizzes |
-| [ebaz4205-master.xdc](ebaz4205/ebaz4205-master.xdc) | Master constraints: LEDs, DATA1-3, fans, Ethernet, optional X5 clock, and every pin of the EBAZEXT-V2 extension board (keys, LEDs, USB serial, audio, HDMI, GPIO, camera) |
+| [ebaz4205-master.xdc](ebaz4205/ebaz4205-master.xdc) | Master constraints: LEDs, DATA1-3, fans, Ethernet, optional X5 clock, and Ehsan's extension board (HDMI, USB serial, LEDs; LCD, keys and buzzer to fill in) |
+| [ebazext-v2.xdc](ebaz4205/ebazext-v2.xdc) | Elrori's EBAZEXT-V1/V2 extension board, a different design, kept for later |
 | [create_ebaz_project.tcl](ebaz4205/create_ebaz_project.tcl) | Draft Vivado script: PS7 block design + the learner's `top` as a module reference |
 | [boot.bif](ebaz4205/boot.bif) | BOOT.bin layout |
-| [code/](ebaz4205/code/) | Ready lesson code: `z_blink`, `x_tone` (audio jack), `x_tmds` (Verilog and VHDL), `ps_hello.c` |
+| [code/](ebaz4205/code/) | Ready lesson code: `z_blink`, `x_tone` (buzzer), `x_tmds` (Verilog and VHDL), `ps_hello.c` |
 
 `test/ebaz-drafts.test.ts` compiles the ready HDL in the site's simulator and checks its behaviour (the TMDS
 encoders against a reference model over 3,000 symbols). It runs in CI today.
@@ -42,20 +43,21 @@ encoders against a reference model over 3,000 symbols). It runs in CI today.
 
 ## Phase E0 — Facts from Ehsan's own boards (not code)
 
-Mostly answered on 2026-11-21: the extension board design is **Elrori's EBAZEXT** (pins read from the V2 KiCad
-netlist and the V1 XDC, all in `ebaz4205-master.xdc` and CONTENT.md §5). What is left:
+Mostly answered. On 2026-11-21 Ehsan sent the schematic of their extension board (CONTENT.md §5.1): HDMI, USB-C serial
+(CH340C) and three LEDs are read and in `ebaz4205-master.xdc`. Elrori's EBAZEXT turned out to be a different board
+(kept in `ebazext-v2.xdc`). What is left:
 
-1. Photos of Ehsan's extension board (both sides). Compare with `EBAZEXT-V2/ebazext-v2.png` in Elrori's repository.
-   EBAZEXT-V2 has HDMI, USB-C serial, keys, LEDs, an audio jack, a GPIO header and a camera header, but **no LCD and
-   no buzzer**, which Ehsan mentioned. If the board is different, its schematic is needed for E3/E4.
+1. **The rest of the extension board schematic** (the sheet sent so far stops below the HDMI part): the LCD
+   ("IPS130-12", one pin on `T20`), the keys and the buzzer, with their pins, pull-ups and drive circuits.
 2. On the core board, confirm: the LED colours (W14 red and W13 green, as three sources say, or the other way round,
    as EBAZEXT-V1's XDC says) and their active level; whether J7, J8, U7 (SD slot), X5, Y3, S3 are fitted; which boot
    resistor is in place; the PS crystal (33.333 MHz?).
 3. Dimensions for the 3D models: the core board from `Elrori/EBAZ4205/ebit.pcb` or the KiCad files in
-   `xjtuecho/EBAZ4205/HW/ebaz4205/kicad`; the extension board from `EBAZEXT-V2.kicad_pcb` (outline, connector and
-   key positions are all in it).
+   `xjtuecho/EBAZ4205/HW/ebaz4205/kicad`; the extension board from a photo with a ruler next to it, or its PCB file if
+   the seller has one (outline, positions of the HDMI and USB-C sockets, the LCD, keys, buzzer and LEDs).
 
-Output: a commit that removes the confirmed **(verify)** marks and, if the board is not EBAZEXT-V2, adds its pins.
+Output: a commit that fills in the LCD, key and buzzer lines of the XDC and CONTENT.md §5.1, and removes the
+confirmed **(verify)** marks.
 
 ---
 
@@ -96,11 +98,10 @@ it. The board plug-in interface exists (`src/boards/types.ts`) but parts of the 
   - `BoardDef.internalClock?: { port: string; source: string; hz: number }` — here `{ port: 'clk', source:
     'FCLK_CLK0', hz: 50e6 }`. `mapPorts()` binds an unconstrained input with that name as the clock and logs
     `INFO: [FPGA Lab] clk is driven by FCLK_CLK0 (50 MHz) from the PS`. If the XDC constrains it to N18, that wins.
-  - `Device` kinds: `{ kind: 'audio'; ch: 'l' | 'r' }`, `{ kind: 'hdmi'; ch: 0 | 1 | 2 | 'clk'; pol: 'p' | 'n' }`,
-    `{ kind: 'ddc'; line: 'scl' | 'sda' }` (open-drain, like the I²C sensor pins), `{ kind: 'fan'; name; line: 'pwm' |
-    'speed' }`; later `{ kind: 'cam'; name }` and, only if E0 finds one, `{ kind: 'lcd'; line }`. `isBoardInput()`
-    treats `fan.speed` as an input.
-  - `XdcGroup` gains `'data' | 'fan' | 'enet' | 'key' | 'ext_led' | 'audio' | 'hdmi' | 'ext_uart' | 'gpio' | 'cam'`.
+  - `Device` kinds: `{ kind: 'buzzer'; name }`, `{ kind: 'lcd'; line: string }`, `{ kind: 'hdmi'; ch: 0 | 1 | 2 |
+    'clk'; pol: 'p' | 'n' }`, `{ kind: 'fan'; name; line: 'pwm' | 'speed' }` (and `audio`, `ddc`, `cam` only if
+    EBAZEXT-V2 is added later). `isBoardInput()` treats `fan.speed` as an input.
+  - `XdcGroup` gains `'data' | 'fan' | 'enet' | 'ext_led' | 'ext_uart' | 'key' | 'buzzer' | 'lcd' | 'hdmi'`.
   - `BoardView.setExtension?(attached: boolean)` (E3).
 - `pins.ts` from `docs/ebaz4205/ebaz4205-master.xdc`: `W14` → `led 0` (`LED_R`), `W13` → `led 1` (`LED_G`),
   `N18` → `clk`, the four fan pins, DATA1-3 as `pin` devices named `DATA1_5` …, and `HEADERS` = DATA1, DATA2, DATA3
@@ -108,7 +109,7 @@ it. The board plug-in interface exists (`src/boards/types.ts`) but parts of the 
   `LED[1]`, and every `DATAx_n`. `masterXdc(groups)` emits the file with only the asked groups uncommented. Keep
   the MIT copyright lines in the header comment.
 - `parts.ts`: board-aware part names for `highlight()` (`LED_R`, `LED_G`, `J7`, `J8`, `DATA1..3`, `R2577`, `R2584`,
-  `X5`, `U7`, and with the extension board `KEY0`, `KEY1`, `EXT_LED0`, `EXT_LED1`, `HDMI`, `USB-C`, `AUDIO`, `J4`, `J3`); move today's Nexys rules into the Nexys folder and dispatch on the board id.
+  `X5`, `U7`, and with the extension board `LED1..LED3`, `HDMI`, `USB-C`, `LCD`, the keys and the buzzer); move today's Nexys rules into the Nexys folder and dispatch on the board id.
 - Audit every Nexys assumption outside `src/boards/` and route it through `BoardDef`: hardware-manager strings in
   `src/main.ts` (≈ lines 255, 336: "Digilent", "xilinx_tcf"), `hwDev`, the 16-switch loops in `src/grade/harness.ts`
   and the tests, the clock label, `defaultConfig()` of the logic analyzer, the modules library's Pmod pin lists
@@ -180,71 +181,76 @@ Five lessons, briefs in [LESSONS.md](ebaz4205/LESSONS.md) chapter Z: `z-intro`, 
 
 ---
 
-## Phase E3 — Extension board: keys, LEDs, serial, sound (EBAZEXT-V2)
+## Phase E3 — Extension board: LEDs, serial, keys, buzzer
 
-- E3.1 3D model of EBAZEXT-V2 (`src/boards/ebaz4205/ext3d.ts`), plugged onto the DATA headers, laid out from
-  `EBAZEXT-V2.kicad_pcb`: PCB, HDMI socket, USB-C socket with the CH340G, 3.5 mm jack, keys SW1/SW2 (clickable like
-  the Nexys buttons, touch-friendly), LEDs D2/D3 (glow) and the power LED D4, GPIO header J4, camera header J3,
-  power header J5. Toggle in the Modules drawer: fa «برد توسعه وصل است» en "Extension board attached", stored as
-  `ebaz-ext` (default on). `BoardView.setExtension()`; when off, the extension pins are plain DATA pins again.
-- E3.2 Pins from `ebaz4205-master.xdc` into `pins.ts` behind the extension flag: `btn` devices `KEY0`/`KEY1`
-  (active low: the view reports pressed as 0), two more `led` devices (`EXT_LED0`/`EXT_LED1`, so `io.leds` is 4 with
-  the extension), `uart` devices `UART_RX` (`J20`, in) and `UART_TX` (`K19`, out) so the Serial Console works
-  unchanged, `audio` on `J19`/`K18`, `pin` devices `IO[0..5]` and a header `J4` for probes and Add Module,
-  `hdmi` and `ddc` lines (used in E4). XDC groups `key`, `ext_led`, `ext_uart`, `audio`, `gpio`.
-- E3.3 Sound: `src/audio/tone.ts` watches the audio pins in the runner, measures the toggle rate (or the PWM duty
-  for PWM audio) per animation frame, and drives a Web Audio oscillator or a sample buffer at that rate, low-passed
-  at about 480 Hz like the board's 3.3 kΩ / 100 nF filter. Off by default with a speaker toggle on the board
-  toolbar (fa «صدای خروجی صوتی» en "Audio out"); at a slowed clock it shows the frequency instead of playing it.
-- E3.4 Lessons `x-keys`, `x-tone`, `x-uart`, `x-gpio` (LESSONS.md chapter X) and per-board **variants** of existing
-  lessons: `Lesson.variants?: Record<boardId, Partial<Pick<Lesson, 'verilog' | 'vhdl' | 'xdc' | 'tryIt' | 'la' |
-  'tb' | 'exercise'>>>` and `EXERCISES[id].boards?`. Start with `counter`, `debounce`, `fsm`, `pwm`, `uart`,
-  `uart_rx`, `ram`, `timing`, `clocking`, `cdc`, `bram`, `sensors` (list in LESSONS.md); a lesson shows on a board
-  when it has a variant for it. Stored code keys gain the board for variants: `src:<id>:<lang>:<board>` (keep the
-  old key for the Nexys).
+- E3.1 3D model of Ehsan's extension board (`src/boards/ebaz4205/ext3d.ts`), plugged onto the DATA headers, laid
+  out from E0.3: PCB, HDMI socket, USB-C socket with the CH340C, the 4-pin UART header, LED1-LED3 (glow) and the
+  power LED, the keys (clickable like the Nexys buttons, touch-friendly), the buzzer (pulses visibly while sounding),
+  and the 1.3" LCD (a canvas texture, blank until E4). Toggle in the Modules drawer: fa «برد توسعه وصل است» en
+  "Extension board attached", stored as `ebaz-ext` (default on). `BoardView.setExtension()`; when off, the extension
+  pins are plain DATA pins again.
+- E3.2 Pins from `ebaz4205-master.xdc` into `pins.ts` behind the extension flag: three more `led` devices
+  (`EXT_LED[0..2]` on `E19`, `K17`, `H18`, so `io.leds` is 5 with the extension), `uart` devices `UART_RX` (`H16`,
+  in) and `UART_TX` (`H17`, out) so the Serial Console works unchanged, `btn` devices for the keys and `buzzer` (from
+  E0.1), and the `hdmi` and `lcd` lines (used in E4). XDC groups `ext_led`, `ext_uart`, `key`, `buzzer`.
+- E3.3 Buzzer sound: `src/audio/buzzer.ts` watches the buzzer pin in the runner, measures the toggle rate per
+  animation frame, and drives a Web Audio square oscillator at that frequency (gain 0 when the pin is steady). An
+  *active* buzzer (E0) plays a fixed tone while the pin is at its active level. Off by default with a speaker toggle
+  on the board toolbar (fa «صدای بازر» en "Buzzer sound"); at a slowed clock it shows the frequency instead.
+- E3.4 Lessons `x-leds`, `x-keys`, `x-uart`, `x-buzzer` (LESSONS.md chapter X) and per-board **variants** of
+  existing lessons: `Lesson.variants?: Record<boardId, Partial<Pick<Lesson, 'verilog' | 'vhdl' | 'xdc' | 'tryIt' |
+  'la' | 'tb' | 'exercise'>>>` and `EXERCISES[id].boards?`. Start with `counter`, `debounce`, `fsm`, `pwm`, `uart`,
+  `uart_rx`, `ram`, `timing`, `clocking`, `cdc`, `bram` (list in LESSONS.md); a lesson shows on a board when it has a
+  variant for it. Stored code keys gain the board for variants: `src:<id>:<lang>:<board>` (keep the old key for the
+  Nexys).
+- `x-leds` and `x-uart` need nothing from E0 and can ship first.
 
 ### Acceptance checklist — Phase E3
 
 - [ ] The extension board appears on the 3D model, can be detached and reattached; keys work by mouse, touch and
-      keyboard focus, and read 0 while pressed.
-- [ ] `x-tone` plays the scale through the speakers when audio is on; the checker passes the solution.
+      keyboard focus.
+- [ ] `x-buzzer` plays the scale through the speakers when sound is on; the checker passes the solution.
 - [ ] `x-uart` echoes typed bytes in the Serial Console on `UART_RX`/`UART_TX`.
 - [ ] At least six variants of existing lessons run and pass their checkers on the EBAZ4205.
 
 ---
 
-## Phase E4 — HDMI (and an LCD only if Ehsan's board has one)
+## Phase E4 — LCD and HDMI
 
-- E4.1 **HDMI monitor.** EBAZEXT-V2 drives HDMI straight from the FPGA (TMDS_33 on `H16/H17`, `F19/F20`, `C20/B20`,
-  `B19/A20`; no transmitter chip). Serial TMDS at 250 Mbit/s per lane is too fast to simulate bit by bit in the
-  browser, so the simulator taps the 10-bit symbols: the lesson provides a `tmds_serializer` module (inputs `pclk`,
-  `d0`, `d1`, `d2` [9:0]; outputs the four HDMI pairs). In the simulator it is a black box recognised by name;
-  `src/vga/hdmi.ts` reads its three symbol inputs on every `pclk` edge, decodes them (control symbols →
-  DE/HSYNC/VSYNC; video symbols → bytes, the exact inverse of `x_tmds.v`) and feeds `VgaMonitor` (mode detection,
-  "No signal", screen) through the same path as `vgaTap`. The monitor is drawn plugged into the HDMI socket. The
-  Vivado download contains a real `tmds_serializer.v` (two cascaded `OSERDESE2` per lane in 10:1 DDR mode, `OBUFDS`
-  with `TMDS_33`, an MMCM making 25 and 125 MHz from `FCLK_CLK0`).
-- E4.2 **EDID over DDC (optional):** a monitor model answers on `HDMI_SCL`/`HDMI_SDA` at I²C address 0x50 with a
-  128-byte EDID block for a 640×480 / 800×600 / 1024×768 monitor, so the `i2c` lesson's master can read it.
+- E4.1 **LCD model** `src/modules/lcd.ts` for the 1.3" IPS module (ST7789, 240×240, 4-wire SPI, assumed until E0.1
+  says otherwise): decodes SCL/SDA/DC/CS/RES (works without CS, as many 1.3" modules have none), implements SWRESET,
+  SLPOUT, COLMOD, MADCTL, INVON, CASET, RASET, RAMWR, DISPON into an RGB565 framebuffer, warns in Messages when the
+  init order or delays are wrong, and paints the 3D screen canvas. The logic analyzer's SPI decoder labels command vs
+  data by DC. Then lesson `x-lcd`.
+- E4.2 **HDMI monitor.** The extension board drives HDMI straight from the FPGA (TMDS_33 on CLK `F19/F20`, D0
+  `D19/D20`, D1 `C20/B20`, D2 `B19/A20`; no transmitter chip). Serial TMDS at 250 Mbit/s per lane is too fast to
+  simulate bit by bit in the browser, so the simulator taps the 10-bit symbols: the lesson provides a
+  `tmds_serializer` module (inputs `pclk`, `d0`, `d1`, `d2` [9:0]; outputs the four HDMI pairs). In the simulator it
+  is a black box recognised by name; `src/vga/hdmi.ts` reads its three symbol inputs on every `pclk` edge, decodes
+  them (control symbols → DE/HSYNC/VSYNC; video symbols → bytes, the exact inverse of `x_tmds.v`) and feeds
+  `VgaMonitor` (mode detection, "No signal", screen) through the same path as `vgaTap`. The monitor is drawn plugged
+  into the HDMI socket. The Vivado download contains a real `tmds_serializer.v` (two cascaded `OSERDESE2` per lane in
+  10:1 DDR mode, `OBUFDS` with `TMDS_33`, an MMCM making 25 and 125 MHz from `FCLK_CLK0`). The board has no DDC, so
+  there is no EDID model.
 - E4.3 Lessons `x-hdmi-tmds` (ready code, testbench against the reference table) and `x-hdmi-bars` (reuses the
   `vga` timing generator).
-- E4.4 Only if E0 shows an LCD: an LCD model (`src/modules/lcd.ts`, SPI TFT or HD44780 as its schematic says) and
-  lesson `x-lcd`.
-- E4.5 Optional project `proj-ebaz-alarm` (LESSONS.md) in the Projects chapter for the EBAZ4205.
+- E4.4 Optional project `proj-ebaz-alarm` (LESSONS.md) in the Projects chapter for the EBAZ4205.
 
 ### Acceptance checklist — Phase E4
 
+- [ ] The LCD shows the lesson's picture on the 3D board; a wrong init sequence gives a readable message.
 - [ ] `x-hdmi-bars` shows colour bars on the monitor at 640×480; corrupting one symbol shows "No signal" or a
       wrong colour, not a crash.
 - [ ] The HDMI decoder round-trips 10,000 random symbols through `x_tmds.v` in a unit test.
-- [ ] On the real board (Ehsan): the downloaded `x-hdmi-bars` project shows the bars on a monitor.
+- [ ] On the real board (Ehsan): the downloaded `x-lcd` and `x-hdmi-bars` projects show their pictures.
 
 ---
 
 ## Later (not planned in detail)
 
 - `z-linux` as a full lesson; a PetaLinux variant; the Buildroot route of blkf2016/ebaz4205.
-- `x-camera`: an OV7670 on J3, captured into BRAM and shown on HDMI (needs a camera model).
+- Elrori's EBAZEXT-V2 as a second extension-board option (`ebazext-v2.xdc`): audio jack, GPIO header, and an
+  `x-camera` lesson (OV7670 on its camera header, shown on HDMI).
 - A small PS model in the simulator (EMIO GPIO and an AXI-GPIO register panel driven by a tiny C-like script) so
   that PS-PL lessons can be checked automatically.
 - More recycled Zynq boards through the same plug-in: the EBAZ4203, and the Antminer S9 control board (a different

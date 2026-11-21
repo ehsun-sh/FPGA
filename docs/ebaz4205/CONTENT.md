@@ -26,7 +26,7 @@ second-hand for a few dollars, which makes them the cheapest Zynq board around. 
 | PHY clock | 25 MHz from crystal **Y3** when fitted. Cost-reduced boards have no Y3: the PS then makes 25 MHz on `FCLK_CLK3` and drives it out on PL pin `U18` | KeitetsuWorks |
 | Expansion | Three 2x10 headers **DATA1, DATA2, DATA3**, **2.0 mm pitch** (not 2.54 mm). 14 FPGA pins each (pins 5-9, 11, 13-20); see `ebaz4205-master.xdc` | xjtuecho |
 | Fans | J3 and J5 (originally fan power) with PWM and tach lines on PL pins: J3 PWM `U12`, J3 speed `V13`, J5 PWM `V12`, J5 speed `V15` | xjtuecho, gameltb |
-| Power | With the EBAZEXT extension board: 5 V from its USB-C socket through the DATA headers (§5). Stock: 5-12 V (at least 400 mA) into DATA1, DATA2 or DATA3, which have diodes to the board supply. 5 V works. With diode **D24** fitted (or shorted) the board can be powered from J3, J4 or J5; J3 or J5 is recommended. The 6-pin Mini-Fit Jr. header has ground on the top row and 12 V on the bottom row | xjtuecho, CodeAsm, zynq[1] |
+| Power | With Ehsan's extension board (or EBAZEXT): 5 V from its USB-C socket through the DATA headers (§5). Stock: 5-12 V (at least 400 mA) into DATA1, DATA2 or DATA3, which have diodes to the board supply. 5 V works. With diode **D24** fitted (or shorted) the board can be powered from J3, J4 or J5; J3 or J5 is recommended. The 6-pin Mini-Fit Jr. header has ground on the top row and 12 V on the bottom row | xjtuecho, CodeAsm, zynq[1] |
 
 ### Hardware preparation (for lesson `z-intro`, "Prepare your board")
 
@@ -153,18 +153,41 @@ reserve 0x7E00000/0x200000. (zynq[2], CodeAsm boot log)
 A PetaLinux alternative (Vivado + PetaLinux 2021.2) is in the KeitetsuWorks repository; the lesson links to it
 rather than repeating it.
 
-## 5. Extension board: EBAZEXT (Elrori)
+## 5. Extension boards
+
+### 5.1 Ehsan's extension board (the target)
+
+Source: the schematic sheet Ehsan sent on 2026-11-21 (title «与主控板的连接», "connection to the main board"). The
+pins are in `ebaz4205-master.xdc`. The sheet is cut below the HDMI part: **the LCD, keys and buzzer are still to be
+read from the rest of it.**
+
+- **Headers H1, H2, H3** (2x10, part 2543U-210CNG1SNT02) meet DATA1, DATA2, DATA3. Every signal pin is labelled with
+  its FPGA pin, and the numbering is the same as the core board's (pin 10 not connected, pin 12 GND, pins 1-2 +5 V,
+  3-4 GND), so no mirroring is involved: H1 pin 5 = DATA1 pin 5 = `A20`, and so on, exactly as in xjtuecho's XDC.
+- **Power:** a USB-C socket («USB供电», USB power) gives +5 V; an HK1117C3.3 regulator makes 3.3 V; a red power LED
+  (MHT192CRCT, 2 kΩ). The +5 V also reaches the core board through the header power pins.
+
+| Feature | Parts | FPGA pins | Notes |
+|---|---|---|---|
+| HDMI out | HDMI socket, 49.9 Ω pull-ups to 3.3 V on all 8 TMDS lines (R1-R8) | CLK `F19`/`F20`, D0 `D19`/`D20`, D1 `C20`/`B20`, D2 `B19`/`A20` | TMDS straight from bank 35 (`TMDS_33`), no transmitter chip. Every pair is an `_P`/`_N` pair (L15, L4, L1, L2). DDC, CEC and HPD are **not connected**: no EDID reading. +5 V to the socket through D1 |
+| USB serial | CH340C (no crystal needed), USB-C data lines; also a 4-pin header UART_USB_TTL (5V, H16, H17, GND) | UART_RX `H16` (from the PC), UART_TX `H17` (to the PC) | A PL UART at any baud rate the design picks. The PC sees a CH340 COM port |
+| 3 LEDs | LED1-LED3 (E6C0603QBAC1UDA), 2 kΩ each | `E19`, `K17`, `H18` | Active high (cathode to GND) |
+| LCD | "IPS130-12": a 1.3-inch IPS module with a 12-pin connector **(verify)**; usually a 240×240 ST7789 on SPI | `T20` is one of its pins (net `LCD_T20`); the rest **to read** | The lesson model is an ST7789 SPI LCD unless the rest of the sheet says otherwise |
+| Keys | **to read** | **to read** | |
+| Buzzer | **to read** | **to read** | Active (fixed tone) or passive (needs a tone)? |
+
+Header pins not used by the parts above, so the LCD, keys and buzzer must be among them: H1 `D18`; H2 `G20 J18 G19
+H20 J19 K18 K19 J20 L16 L19 M18 L20 M20 L17`; H3 `M19 N20 P18 M17 N17 P20 R18 R19 P19 T20 U20 T19 V20 U19`.
+
+### 5.2 EBAZEXT (Elrori): another extension board, not Ehsan's
 
 Source: [Elrori/EBAZ4205](https://github.com/Elrori/EBAZ4205), folders `EBAZEXT-V1` (Altium, PDF schematic, XDC) and
 `EBAZEXT-V2` (KiCad 6 project, photo `ebazext-v2.png`). The V2 facts below were read from the KiCad PCB's netlist
-(every pad and its net); V1 facts from `ebazextv1.xdc`. The FPGA pins are in `ebaz4205-master.xdc`.
+(every pad and its net); V1 facts from `ebazextv1.xdc`. Its pins are in `ebazext-v2.xdc`. It has an audio jack and a
+camera header but no LCD or buzzer, and its HDMI and UART use different pins from Ehsan's board. Kept as a possible
+second extension board option.
 
-**Which version is Ehsan's? (verify)** Ehsan described HDMI, USB, LCD, IO keys, buzzer and a serial port. V2 has
-HDMI, USB-C serial, an IO header, two keys and two LEDs, an audio jack and a camera header, but **no LCD and no
-buzzer**. V1 has VGA instead of HDMI. If Ehsan's board has an LCD and a buzzer it is a third design, and its
-schematic or a photo is still needed; everything else below may still match it.
-
-### How the extension board meets the core board
+#### How EBAZEXT meets the core board
 
 - It plugs onto DATA1, DATA2 and DATA3 with three 2x10 2.0 mm sockets (J8, J7, J6 on the V2 PCB).
 - The sockets are numbered mirror-wise to the headers: socket pin 2k-1 meets header pin 2k. Proof: socket pins 9
@@ -175,20 +198,20 @@ schematic or a photo is still needed; everything else below may still match it.
   cable powers both boards** (through the DATA headers' power pins) and gives the serial port. An AMS1117 makes 3.3 V
   for the extension board; header J5 brings out 3V3, 5V and GND. Power LED D4.
 
-### What is on EBAZEXT-V2
+#### What is on EBAZEXT-V2
 
 | Feature | Parts | FPGA pins | Notes for the simulator and lessons |
 |---|---|---|---|
 | 2 keys | SW1, SW2 | KEY0 `U19`, KEY1 `P19` | 10 kΩ pull-up, pressed = 0 (active low). Both are clock-capable pins (MRCC) |
 | 2 LEDs | D2, D3 | EXT_LED0 `T19`, EXT_LED1 `V20` | 1 kΩ to the LED, cathode to GND: 1 = on |
 | USB serial | CH340G (12 MHz crystal), USB-C (5.1 kΩ CC pull-downs) | UART_RX `J20` (PC → FPGA), UART_TX `K19` (FPGA → PC) | A PL UART: the learner's own UART design talks to the PC. Shows up as a CH340 COM port |
-| Audio out | 3.5 mm jack J2, 3.3 kΩ + 100 nF per channel | AUDIO_L `J19`, AUDIO_R `K18` | RC low-pass: PWM or a square wave becomes sound. This is where the "buzzer" lesson plays |
+| Audio out | 3.5 mm jack J2, 3.3 kΩ + 100 nF per channel | AUDIO_L `J19`, AUDIO_R `K18` | RC low-pass: PWM or a square wave becomes sound |
 | HDMI out | HDMI socket J1, 49.9 Ω pull-ups to 3.3 V on all 8 TMDS lines | CLK `H16`/`H17`, D0 `F19`/`F20`, D1 `C20`/`B20`, D2 `B19`/`A20` | TMDS straight from the FPGA (bank 35, `TMDS_33`): no transmitter chip. Needs the TMDS encoder + 10:1 serializer |
 | HDMI DDC | two AO3400 level shifters, 2.2 kΩ pull-ups both sides | HDMI_SCL `D19`, HDMI_SDA `D18` | Open-drain I²C to the monitor's EDID (5 V side). HPD has a 10 kΩ pull-down and is not wired to the FPGA; CEC has a 27 kΩ pull-up |
 | GPIO header | J4, 2.54 mm, 8 pins | IO[0..5] = `G19 H20 G20 J18 K17 E19` | Pin order on J4: IO_5, IO_4, IO_3, IO_2, IO_1, IO_0, 3V3, GND. Takes the existing Add Module parts (HC-SR04, servo …) |
 | Camera header | J3, 2.54 mm 2x9 | 16 lines, see the XDC | For OV7670/OV7725 modules; the pair on J3 pins 3-4 has 4.7 kΩ pull-ups (SCCB). Later lesson |
 
-### EBAZEXT-V1, for comparison
+#### EBAZEXT-V1, for comparison
 
 VGA (`vga_hs` G19, `vga_vs` H20, RGB565 `vgad[15:0]` on 16 DATA1/DATA2 pins) instead of HDMI; the camera signals
 are named in its XDC (pclk P19, xclk P20, href R19, vsync N17, SCCB sclk R18 / sdat T20, pwdn L16, rst L19, 8 data
@@ -214,4 +237,4 @@ Two ideas worth teaching from it:
   `0x04000000`, and hands off there. U-Boot can then be replaced by copying a file, without rebuilding BOOT.bin.
   Good material for `z-bootflow` ("the FSBL can load anything").
 - **A second UART on the header:** its block design routes the PS UART0 through EMIO to `F19` (RX) and `F20` (TX),
-  DATA1 pins 19 and 17. On EBAZEXT-V2 those pins are HDMI D0, so this only applies without the extension board.
+  DATA1 pins 19 and 17. On both extension boards those pins carry HDMI, so this only applies without one.
