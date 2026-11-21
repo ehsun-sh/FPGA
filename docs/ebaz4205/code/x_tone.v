@@ -1,4 +1,5 @@
-// x-buzzer: a square-wave tone generator that plays a C-major scale up and down.
+// x-tone: a square-wave tone generator that plays a C-major scale up and down on the extension board's buzzer.
+// A passive buzzer plays the notes; an active buzzer only beeps while BUZZER is 1 (see the lesson).
 // The note table is computed from CLK_HZ; NOTE_TICKS sets how long each note lasts.
 // Checkers and tests shrink CLK_HZ and NOTE_TICKS so a whole scale fits in a short run.
 module top #(
@@ -6,7 +7,7 @@ module top #(
     parameter NOTE_TICKS = 12_500_000      // 0.25 s per note at 50 MHz
 ) (
     input  wire clk,
-    input  wire KEY1,                      // hold to mute (active low on the extension board: to verify)
+    input  wire KEY0,                      // hold to mute; assumes an active-low key (pressed = 0): to verify on the board
     output reg  BUZZER = 0
 );
     // half periods for C4 D4 E4 F4 G4 A4 B4 C5 (262 294 330 349 392 440 494 523 Hz)
@@ -35,7 +36,7 @@ module top #(
     always @(posedge clk) begin
         if (pcnt >= half - 1) begin
             pcnt   <= 0;
-            BUZZER <= KEY1 ? ~BUZZER : 1'b0;
+            BUZZER <= KEY0 ? ~BUZZER : 1'b0;
         end else
             pcnt <= pcnt + 1;
 

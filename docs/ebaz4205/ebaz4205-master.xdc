@@ -14,6 +14,8 @@
 #create_clock -add -name clk_pin -period 10.00 -waveform {0 5} [get_ports { clk }]
 
 ## ---------------------------------------------------------------- LEDs (on the core board)
+## Three sources (xjtuecho, KeitetsuWorks, gameltb) put red on W14 and green on W13; Elrori's EBAZEXT-V1 XDC has them the
+## other way round. Check on the board.
 #set_property -dict { PACKAGE_PIN W14 IOSTANDARD LVCMOS33 } [get_ports { LED_R }]
 #set_property -dict { PACKAGE_PIN W13 IOSTANDARD LVCMOS33 } [get_ports { LED_G }]
 
@@ -91,11 +93,37 @@
 ## Boards without the 25 MHz crystal Y3: the PHY clock comes from the PS (FCLK_CLK3 = 25 MHz) on U18.
 #set_property -dict { PACKAGE_PIN U18 IOSTANDARD LVCMOS33 } [get_ports { FCLK_CLK3_0 }]
 
-## ---------------------------------------------------------------- Extension board (HDMI, USB, LCD, keys, buzzer, serial)
-## TO FILL IN from the extension board's schematic: which DATAx pin each signal uses. See EBAZ4205-ROADMAP.md, E0.
-## Expected port names (keep them; lessons and the simulator use them):
-##   KEY1..KEYn            push keys (level when pressed: to verify)
-##   BUZZER                buzzer drive (active level, passive or active buzzer: to verify)
-##   UART_TX, UART_RX      extension serial port, seen from the FPGA (USB-serial chip: to verify)
-##   LCD_*                 LCD interface (SPI TFT or parallel character LCD: to verify)
-##   HDMI_CLK_P/N, HDMI_D0_P/N .. HDMI_D2_P/N   TMDS pairs (TMDS_33 standard on real hardware)
+## ---------------------------------------------------------------- Extension board (Ehsan's: HDMI, USB serial, LEDs, LCD, keys, buzzer)
+## From the schematic Ehsan sent on 2026-11-21 (sheet title "与主控板的连接", connection to the main board). Its headers
+## H1, H2, H3 (2x10) carry FPGA pin names and use the same numbering as the core board's DATA1, DATA2, DATA3
+## (pin 10 not connected and pin 12 GND, as on the core board). Port names are the ones lessons and the simulator use.
+
+## HDMI out: TMDS straight from bank 35, 49.9 Ohm pull-ups to 3.3 V on all eight lines (R1-R8).
+## DDC (SCL/SDA), CEC and Hot Plug Detect are not connected; +5 V reaches the socket through D1 (1N4148WS).
+#set_property -dict { PACKAGE_PIN F19 IOSTANDARD TMDS_33 } [get_ports { HDMI_CLK_P }]
+#set_property -dict { PACKAGE_PIN F20 IOSTANDARD TMDS_33 } [get_ports { HDMI_CLK_N }]
+#set_property -dict { PACKAGE_PIN D19 IOSTANDARD TMDS_33 } [get_ports { HDMI_D0_P }]
+#set_property -dict { PACKAGE_PIN D20 IOSTANDARD TMDS_33 } [get_ports { HDMI_D0_N }]
+#set_property -dict { PACKAGE_PIN C20 IOSTANDARD TMDS_33 } [get_ports { HDMI_D1_P }]
+#set_property -dict { PACKAGE_PIN B20 IOSTANDARD TMDS_33 } [get_ports { HDMI_D1_N }]
+#set_property -dict { PACKAGE_PIN B19 IOSTANDARD TMDS_33 } [get_ports { HDMI_D2_P }]
+#set_property -dict { PACKAGE_PIN A20 IOSTANDARD TMDS_33 } [get_ports { HDMI_D2_N }]
+
+## USB-C (power and serial) through a CH340C, also on the 4-pin header "UART_USB_TTL" (5V, H16, H17, GND).
+## Seen from the FPGA: UART_RX = data from the PC (CH340C TXD), UART_TX = data to the PC (CH340C RXD).
+#set_property -dict { PACKAGE_PIN H16 IOSTANDARD LVCMOS33 } [get_ports { UART_RX }]
+#set_property -dict { PACKAGE_PIN H17 IOSTANDARD LVCMOS33 } [get_ports { UART_TX }]
+
+## LEDs LED1-LED3: 2 kOhm to the LED, cathode to GND, 1 = on (active high)
+#set_property -dict { PACKAGE_PIN E19 IOSTANDARD LVCMOS33 } [get_ports { EXT_LED[0] }]
+#set_property -dict { PACKAGE_PIN K17 IOSTANDARD LVCMOS33 } [get_ports { EXT_LED[1] }]
+#set_property -dict { PACKAGE_PIN H18 IOSTANDARD LVCMOS33 } [get_ports { EXT_LED[2] }]
+
+## TO FILL IN from the rest of the schematic (the sheet Ehsan sent is cut below the HDMI part):
+##   LCD   "IPS130-12" (a 1.3-inch IPS module, 12 pins, likely 240x240 ST7789 on SPI): a net named LCD_T20 is visible,
+##         so T20 is one of its pins. Expected ports: LCD_SCL, LCD_SDA, LCD_RES, LCD_DC, LCD_CS, LCD_BLK.
+##   Keys  KEY0..KEYn (pull-up or pull-down?), Buzzer BUZZER (active or passive, transistor?).
+## Pins of the headers not used by the parts above, so the LCD, keys and buzzer must be among them:
+##   H1: D18
+##   H2: G20 J18 G19 H20 J19 K18 K19 J20 L16 L19 M18 L20 M20 L17
+##   H3: M19 N20 P18 M17 N17 P20 R18 R19 P19 T20 U20 T19 V20 U19

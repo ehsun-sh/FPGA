@@ -54,7 +54,8 @@ Shown when the EBAZ4205 board is selected. Five lessons, in this order.
 - Objectives: name the three boot stages and what each loads; read a `.bif` file; choose NAND, SD or JTAG boot on
   the EBAZ4205.
 - Body: CONTENT §2 boot bullets; the boot-flow figure (interactive: clicking a stage highlights it and shows what
-  sits in OCM/DDR/PL at that moment); [boot.bif](boot.bif); the four boot sources of this board.
+  sits in OCM/DDR/PL at that moment); [boot.bif](boot.bif); the four boot sources of this board; "the FSBL can load anything": blkf2016's FSBL hook
+  that reads `u-boot.bin` from the SD card into DDR (CONTENT §7).
 - Quiz: what the FSBL does that the BootROM cannot (DDR init, PL config); the order inside BOOT.bin; why the SD
   card must be FAT.
 
@@ -82,76 +83,92 @@ guide page linked from `z-ethernet` if chapter length is a concern (no chapter h
 
 ---
 
-## Chapter X: «برد توسعه: کلید، بازر، سریال، LCD و HDMI» / "Extension board: keys, buzzer, serial, LCD and HDMI"
+## Chapter X: «برد توسعه: LED، سریال، کلید، بازر، LCD و HDMI» / "Extension board: LEDs, serial, keys, buzzer, LCD and HDMI"
 
-Shown when the EBAZ4205 is selected and the extension board is attached. **Pin names depend on Phase E0.** The code
-below uses the port names fixed in `ebaz4205-master.xdc` (`KEY1`, `BUZZER`, `UART_TX`, `UART_RX`, `LCD_*`, `HDMI_*`).
+Shown when the EBAZ4205 is selected and the extension board is attached. Written for **Ehsan's extension board**
+(CONTENT.md §5.1); the port names are fixed in `ebaz4205-master.xdc` (`EXT_LED[2:0]`, `UART_RX`, `UART_TX`,
+`HDMI_*`, and once the rest of the schematic is read, `KEY*`, `BUZZER`, `LCD_*`).
 
-### 1. `x-keys` (sim, intro)
+### 1. `x-leds` (sim, intro)
 
-- fa: «کلیدهای برد توسعه و حذف لرزش» · «با هر فشار کلید، LED را تغییر وضعیت دهید؛ بدون لرزش.»
+- fa: «سه LED برد توسعه: شمارنده و چراغ دونده» · «با کلاک ۵۰ مگاهرتزی یک چراغ دونده روی LED1 تا LED3 بسازید.»
+- en: "The three extension LEDs: a counter and a chaser" · "Build a running light on LED1-LED3 from the 50 MHz clock."
+- Port of `counter` / `shiftreg`: `EXT_LED[2:0]` on `E19`, `K17`, `H18`, active high. Checker with a small `DIV`.
+
+### 2. `x-keys` (sim, intro) — needs the key pins
+
+- fa: «کلیدهای برد توسعه و حذف لرزش» · «با هر فشار کلید، یک LED را روشن و خاموش کنید؛ بدون لرزش.»
 - en: "Extension-board keys and debouncing" · "Toggle an LED on each key press, without bounce."
-- Port of `debounce` to this board: 50 MHz clock, `KEY1` (level to verify), `LED_G`. Reuse the debounce checker
-  with the bouncy-button option; `params: { MS: 1 }`-style small constant.
-
-### 2. `x-buzzer` (sim, core) — code ready: `x_tone.v`, `x_tone.vhd`
-
-- fa: «بازر: ساختن صدا با تقسیم کلاک» · «یک گام دو ماژور بالا و پایین بنوازید و با کلید قطعش کنید.»
-- en: "Buzzer: making sound with a clock divider" · "Play a C-major scale up and down, and mute it with a key."
-- Objectives: turn a frequency into a half-period count; sequence notes from a table; tell an active buzzer from a
-  passive one.
-- Body: f → half period = CLK_HZ / (2f); the note table C4..C5; a note counter; the mute key. The 3D buzzer plays
-  the pin through Web Audio (Phase E3). Only original or public-domain melodies in lessons and exercises (a scale,
-  or a folk tune that is out of copyright).
-- Exercise: add a rest (silence) between notes. `params: { CLK_HZ: 52400, NOTE_TICKS: 4000 }` (the test uses the same
-  values: C4 is then 100 cycles per half period). Checker: measures half periods on `BUZZER`, expects 100 → 50 and
-  back, and a silent gap after each note.
+- Port of `debounce`: 50 MHz clock, the keys' active level from the schematic (the code inverts an active-low key and
+  says why), `EXT_LED`. Reuse the debounce checker with the bouncy-button option and a small debounce-time parameter.
 
 ### 3. `x-uart` (sim, core)
 
-- fa: «پورت سریال برد توسعه» · «پیام بفرستید و فرمان بگیرید، روی پورت سریال برد توسعه.»
-- en: "The extension board's serial port" · "Send a message and take commands on the extension serial port."
-- Port of `uart` + `uart_rx` with `CLK_HZ = 50_000_000` and the extension pins; Serial Console and logic analyzer
-  as on the Nexys. If the serial port turns out to be wired to the PS UART1 (Phase E0), turn this into a real
-  lesson on the PS UART instead and drop the sim version.
+- fa: «پورت سریال USB-C برد توسعه» · «پیام بفرستید و فرمان بگیرید؛ روی کامپیوتر به‌صورت پورت CH340 دیده می‌شود.»
+- en: "The extension board's USB-C serial port" · "Send a message and take commands; the PC sees a CH340 COM port."
+- Port of `uart` + `uart_rx` with `CLK_HZ = 50_000_000`, `UART_TX` `H17`, `UART_RX` `H16`; the Serial Console and
+  logic analyzer work as on the Nexys. "Try it on the board" names the CH340 driver and a terminal at 115200 8N1, says
+  that the same USB-C cable powers both boards, and that the 4-pin UART_USB_TTL header carries the same two lines.
 
-### 4. `x-lcd` (sim, advanced) — depends on the LCD type
+### 4. `x-buzzer` (sim, core) — code ready: `x_tone.v`, `x_tone.vhd`; needs the buzzer and key pins
 
-- fa: «راه‌اندازی LCD» · en: "Driving the LCD".
-- SPI TFT (ST7735/ST7789): an init-sequence ROM (sleep out, colour mode 16-bit, display on), then a full-screen fill
-  and colour stripes via `CASET`/`RASET`/`RAMWR`; the simulator's LCD model keeps a framebuffer and draws it on the
-  3D screen. Builds on `spi`.
-- Character LCD (HD44780): the 4-bit init sequence with its delays, then "FPGA Lab" on line 1. Builds on `fsm`.
+- fa: «بازر: ساختن صدا با تقسیم کلاک» · «یک گام دو ماژور بالا و پایین بنوازید و با کلید قطعش کنید.»
+- en: "Buzzer: making sound with a clock divider" · "Play a C-major scale up and down, and mute it with a key."
+- Objectives: turn a frequency into a half-period count; sequence notes from a table; tell an active buzzer (beeps
+  at its own pitch while driven) from a passive one (plays the frequency you give it).
+- Body: f → half period = CLK_HZ / (2f); the note table C4..C5; a note counter; the mute key. The 3D buzzer plays
+  the pin through Web Audio (Phase E3). Only original or public-domain melodies (a scale, or an out-of-copyright folk
+  tune). If the buzzer turns out to be active, the lesson becomes "beep patterns" (on/off rhythms) and the tone part
+  moves to the exercise as theory.
+- Exercise: add a short silence between notes. `params: { CLK_HZ: 52400, NOTE_TICKS: 4000 }` (as in the test: C4 is
+  then 100 cycles per half period). Checker: measures half periods on `BUZZER`, expects 100 → 50 and back, and a
+  silent gap after each note.
 
-### 5. `x-hdmi-tmds` (sim, advanced) — code ready: `x_tmds.v`, `x_tmds.vhd`
+### 5. `x-lcd` (sim, advanced) — needs the LCD pins
+
+- fa: «راه‌اندازی نمایشگر IPS یک‌وسه‌دهم اینچی» · «نمایشگر SPI را با یک دنباله‌ی راه‌اندازی بیدار کنید و نوارهای رنگی بکشید.»
+- en: "Driving the 1.3-inch IPS display" · "Wake the SPI display with an init sequence and draw colour stripes."
+- Assumes an ST7789 240×240 on 4-wire SPI (SCL, SDA, RES, DC, CS?, BLK) until the schematic says otherwise. Builds on
+  `spi` and `fsm`: an init-sequence ROM (software reset, sleep out, colour mode 16-bit RGB565, inversion on, display
+  on), then CASET/RASET/RAMWR and a pixel stream. Many 1.3" modules have no CS pin and need SPI mode 3; the lesson
+  says to check. The simulator's LCD model keeps a framebuffer and paints the 3D screen.
+- Exercise: draw a different-coloured square in the centre (the checker reads the model's framebuffer).
+
+### 6. `x-hdmi-tmds` (sim, advanced) — code ready: `x_tmds.v`, `x_tmds.vhd`
 
 - fa: «HDMI از درون: رمزگذاری TMDS» · «بایت پیکسل را به نماد ۱۰ بیتی با کمترین تغییر و تعادل DC تبدیل کنید.»
 - en: "HDMI from the inside: TMDS encoding" · "Turn a pixel byte into a 10-bit symbol with few transitions and DC balance."
 - Objectives: explain the two TMDS stages (transition minimising, DC balance); tell video symbols from control
   symbols; test an encoder against a reference with a testbench.
 - Body: DVI/HDMI = three TMDS data channels + a clock; 8b/10b per channel; stage 1 XOR/XNOR choice; stage 2 running
-  disparity; the four control symbols for HSYNC/VSYNC during blanking. Testbench tab feeds bytes and compares with a
-  table.
+  disparity; the four control symbols for HSYNC/VSYNC during blanking. The extension board drives the HDMI socket
+  straight from the FPGA (no transmitter chip), which is why this lesson matters on this board.
 - Exercise: given the stage-1 half, write stage 2 (the disparity logic). Checker: 3,000 random symbols against the
   reference model in `test/ebaz-drafts.test.ts` (move it to `src/grade` as a shared helper).
+- Chapter X has seven lessons with `x-hdmi-bars`; since no chapter may have more than six, `x-hdmi-tmds` and
+  `x-hdmi-bars` form their own chapter «HDMI» / "HDMI" if the LCD and keys lessons all ship.
 
-### 6. `x-hdmi-bars` (sim, advanced)
+### 7. `x-hdmi-bars` (sim, advanced)
 
 - fa: «تصویر روی HDMI: نوارهای رنگی ۶۴۰×۴۸۰» · en: "A picture over HDMI: 640×480 colour bars".
-- Reuses the `vga` lesson's timing generator (25 MHz pixel clock from `FCLK_CLK1`), three `tmds_encoder`s and a
-  serializer. On real hardware the serializer is `OSERDESE2` (10:1, DDR, with a 5× clock from an MMCM) and
-  `OBUFDS` with `TMDS_33`; in the simulator the provided `tmds_serializer` block is a black box that hands the
-  10-bit symbols to the HDMI monitor (see the roadmap, E4.2). Only if the extension board drives TMDS directly
-  from the FPGA (Phase E0).
+- Reuses the `vga` lesson's timing generator (25 MHz pixel clock), three `tmds_encoder`s and a serializer. On real
+  hardware the serializer is `OSERDESE2` (10:1, DDR, with a 125 MHz clock from an MMCM fed by `FCLK_CLK0`) and
+  `OBUFDS` with `TMDS_33` on CLK `F19/F20`, D0 `D19/D20`, D1 `C20/B20`, D2 `B19/A20`; in the simulator the provided
+  `tmds_serializer` block is a black box that hands the 10-bit symbols to the HDMI monitor (roadmap E4.1).
+- No EDID: the board does not wire DDC, so the design must pick a mode every monitor takes (640×480 at 60 Hz).
 
-Project (optional, in the Projects chapter): `proj-ebaz-alarm`: an alarm clock with keys to set, the LCD as the
-display, the buzzer as the alarm, and the time sent on the serial port each minute.
+Project (optional, in the Projects chapter): `proj-ebaz-alarm`: an alarm clock with the keys to set it, the time on
+the LCD and over HDMI, sent on the serial port each minute, and the alarm on the buzzer.
+
+If the site later offers Elrori's EBAZEXT-V2 as a second extension board (`ebazext-v2.xdc`), its audio jack takes
+`x-buzzer` (same code, `AUDIO_L`/`AUDIO_R` instead of `BUZZER`) and its GPIO and camera headers add `x-gpio` and
+`x-camera`.
 
 ---
 
 ## Existing lessons that get an EBAZ4205 variant (Phase E3)
 
-These need hardware the EBAZ4205 + extension board has, so they get per-board variants (code, XDC, try-it text)
-instead of new lessons: `counter` (LED blink rate), `debounce` (→ `x-keys`), `fsm` (two LEDs + keys), `pwm` (LED
-brightness), `uart`, `uart_rx`, `spi` (if the LCD is SPI), `vga` (→ HDMI on this board), `ram`, `timing`,
-`clocking` (FCLK and MMCM), `cdc`, `bram`. Lessons that need switches or the seven-segment display stay Nexys-only.
+These need hardware the EBAZ4205 + Ehsan's extension board has (5 LEDs, keys, a PL UART, a buzzer, an SPI LCD, HDMI),
+so they get per-board variants (code, XDC, try-it text) instead of new lessons: `counter` (LED blink rate),
+`debounce` (→ `x-keys`), `fsm` (LEDs + keys), `pwm` (LED brightness), `uart`, `uart_rx`, `spi` (→ `x-lcd`), `vga`
+(→ `x-hdmi-bars`), `ram`, `timing`, `clocking` (FCLK and MMCM), `cdc`, `bram`. Lessons that need switches or the seven-segment display stay Nexys-only.

@@ -1,4 +1,4 @@
--- x-buzzer: a square-wave tone generator that plays a C-major scale up and down.
+-- x-tone: a square-wave tone generator that plays a C-major scale up and down on the extension board's buzzer.
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -10,7 +10,7 @@ entity top is
     );
     port (
         clk    : in  std_logic;
-        KEY1   : in  std_logic;   -- hold to mute (active low: to verify on the extension board)
+        KEY0   : in  std_logic;   -- hold to mute; assumes an active-low key (pressed = 0): to verify
         BUZZER : out std_logic
     );
 end entity;
@@ -40,7 +40,7 @@ begin
         if rising_edge(clk) then
             if pcnt >= half - 1 then
                 pcnt <= 0;
-                if KEY1 = '1' then bz <= not bz; else bz <= '0'; end if;
+                if KEY0 = '1' then bz <= not bz; else bz <= '0'; end if;
             else
                 pcnt <= pcnt + 1;
             end if;
