@@ -17,6 +17,9 @@ export interface ProjectSpec {
   boardPart?: string;
   // Zynq boards: the PL clock comes from the PS (FCLK_CLK0), so the project is a block design around the PS
   internalClock?: { port: string; source: string; hz: number };
+  // Zynq real-board lessons (EBAZ4205 chapter): a PS-only block design instead of the learner's module.
+  // 'hello': EMIO GPIO[1:0] drives the LEDs and vitis/ps_hello.c is included; 'ethernet' adds ENET0 over EMIO.
+  ps?: { mode: "hello" | "ethernet"; app?: string };
 }
 
 const firstUnit = (src: string, lang: Lang): string | undefined => {
@@ -27,6 +30,7 @@ const firstUnit = (src: string, lang: Lang): string | undefined => {
 };
 
 export function projectFiles(p: ProjectSpec): { name: string; data: string }[] {
+  if (p.ps) return zynqPsProjectFiles(p);
   if (p.internalClock) return zynqProjectFiles(p);
   const ext = p.lang === "verilog" ? "v" : "vhd";
   const dir = p.name.replace(/[^\w-]/g, "_") || "fpga_lab";
@@ -249,6 +253,163 @@ PL برد EBAZ4205 نوسان‌ساز ندارد. کلاک ${ic.port} از بخ
     { name: `${dir}/vitis/app.c`, data: app },
     { name: `${dir}/README.txt`, data: readme },
   ];
+}
+
+// ENET0 over EMIO with the MII glue (docs/ebaz4205/CONTENT.md section 3; KeitetsuWorks/EBAZ4205, MIT)
+const EBAZ_ENET = `  CONFIG.PCW_ENET0_PERIPHERAL_ENABLE {1} \\
+  CONFIG.PCW_ENET0_ENET0_IO {EMIO} \\
+  CONFIG.PCW_ENET0_GRP_MDIO_ENABLE {1} \\
+  CONFIG.PCW_ENET0_GRP_MDIO_IO {EMIO} \\
+  CONFIG.PCW_ENET0_PERIPHERAL_CLKSRC {External} \\
+  CONFIG.PCW_ENET0_PERIPHERAL_FREQMHZ {100 Mbps} \\
+  CONFIG.PCW_EN_CLK3_PORT {1} \\
+  CONFIG.PCW_FPGA3_PERIPHERAL_FREQMHZ {25} \\`;
+
+const EBAZ_LED_XDC = `## LEDs on the core board, driven by EMIO GPIO 54 (LED_R) and 55 (LED_G)
+set_property -dict { PACKAGE_PIN W14 IOSTANDARD LVCMOS33 } [get_ports { LED_R }]
+set_property -dict { PACKAGE_PIN W13 IOSTANDARD LVCMOS33 } [get_ports { LED_G }]
+`;
+const EBAZ_ENET_XDC = `
+## Ethernet: PS GEM0 through EMIO, MII to the IP101GA PHY (pins: xjtuecho/EBAZ4205, MIT)
+set_property -dict { PACKAGE_PIN U14 IOSTANDARD LVCMOS33 } [get_ports { ENET0_GMII_RX_CLK_0 }]
+set_property -dict { PACKAGE_PIN U15 IOSTANDARD LVCMOS33 } [get_ports { ENET0_GMII_TX_CLK_0 }]
+set_property -dict { PACKAGE_PIN W19 IOSTANDARD LVCMOS33 } [get_ports { ENET0_GMII_TX_EN_0[0] }]
+set_property -dict { PACKAGE_PIN W16 IOSTANDARD LVCMOS33 } [get_ports { ENET0_GMII_RX_DV_0 }]
+set_property -dict { PACKAGE_PIN Y17 IOSTANDARD LVCMOS33 } [get_ports { enet0_gmii_rxd[3] }]
+set_property -dict { PACKAGE_PIN V17 IOSTANDARD LVCMOS33 } [get_ports { enet0_gmii_rxd[2] }]
+set_property -dict { PACKAGE_PIN V16 IOSTANDARD LVCMOS33 } [get_ports { enet0_gmii_rxd[1] }]
+set_property -dict { PACKAGE_PIN Y16 IOSTANDARD LVCMOS33 } [get_ports { enet0_gmii_rxd[0] }]
+set_property -dict { PACKAGE_PIN Y19 IOSTANDARD LVCMOS33 } [get_ports { enet0_gmii_txd[3] }]
+set_property -dict { PACKAGE_PIN V18 IOSTANDARD LVCMOS33 } [get_ports { enet0_gmii_txd[2] }]
+set_property -dict { PACKAGE_PIN Y18 IOSTANDARD LVCMOS33 } [get_ports { enet0_gmii_txd[1] }]
+set_property -dict { PACKAGE_PIN W18 IOSTANDARD LVCMOS33 } [get_ports { enet0_gmii_txd[0] }]
+set_property -dict { PACKAGE_PIN W15 IOSTANDARD LVCMOS33 } [get_ports { MDIO_ETHERNET_0_0_mdc }]
+set_property -dict { PACKAGE_PIN Y14 IOSTANDARD LVCMOS33 } [get_ports { MDIO_ETHERNET_0_0_mdio_io }]
+## Boards without the 25 MHz crystal Y3: the PHY clock comes from the PS (FCLK_CLK3 = 25 MHz) on U18.
+## If your board has Y3, delete this line and the FCLK_CLK3_0 port in the block design.
+set_property -dict { PACKAGE_PIN U18 IOSTANDARD LVCMOS33 } [get_ports { FCLK_CLK3_0 }]
+`;
+
+// A PS-only project for the EBAZ4205 real-board lessons: no learner module; EMIO GPIO drives the LEDs and, for
+// 'ethernet', GEM0 reaches the PHY over EMIO with an xlslice on TXD and an xlconcat on RXD.
+function zynqPsProjectFiles(p: ProjectSpec): { name: string; data: string }[] {
+  const ps = p.ps!;
+  const eth = ps.mode === "ethernet";
+  const dir = p.name.replace(/[^\w-]/g, "_") || "fpga_lab";
+  const mhz = (p.internalClock?.hz ?? 50e6) / 1e6;
+  const xdc = EBAZ_LED_XDC + (eth ? EBAZ_ENET_XDC : "");
+  const tcl = `# Re-creates the FPGA Lab ${eth ? "Ethernet (lwIP echo)" : "Hello World"} project for the ${p.board} in Vivado.
+#   Vivado Tcl Shell:  cd C:/fpga/${dir}
+#                      vivado -mode batch -source create_project.tcl -tclargs build
+#   (pick a folder without spaces or parentheses)
+# A PS-only block design: the ZYNQ7 Processing System configured for the board, EMIO GPIO[1:0] sliced out to
+# LED_R and LED_G${eth ? ",\n# and ENET0 over EMIO with the GMII-to-MII glue (xlslice on TXD, xlconcat on RXD) and FCLK_CLK3 for the PHY" : ""}.
+set origin [file dirname [file normalize [info script]]]
+set proj_name ${dir}
+
+create_project $proj_name $origin/vivado -part ${p.part} -force
+set_property target_language Verilog [current_project]
+add_files -fileset constrs_1 -norecurse $origin/constrs/${p.xdcName}
+
+create_bd_design system
+set ps [create_bd_cell -type ip -vlnv xilinx.com:ip:processing_system7:5.5 ps7]
+set_property -dict [list \\
+${EBAZ_PS7.replace("@MHZ@", String(mhz))}
+  CONFIG.PCW_GPIO_EMIO_GPIO_ENABLE {1} \\
+  CONFIG.PCW_GPIO_EMIO_GPIO_IO {2} \\
+${eth ? EBAZ_ENET + "\n" : ""}] $ps
+apply_bd_automation -rule xilinx.com:bd_rule:processing_system7 \\
+  -config {make_external "FIXED_IO, DDR" apply_board_preset "0" Master "Disable" Slave "Disable"} $ps
+
+# LEDs: EMIO GPIO 54 = GPIO_O[0] -> LED_R, 55 = GPIO_O[1] -> LED_G
+foreach {name bit} {LED_R 0 LED_G 1} {
+  set s [create_bd_cell -type ip -vlnv xilinx.com:ip:xlslice:1.0 slice_$name]
+  set_property -dict [list CONFIG.DIN_WIDTH {2} CONFIG.DIN_FROM $bit CONFIG.DIN_TO $bit] $s
+  connect_bd_net [get_bd_pins ps7/GPIO_O] [get_bd_pins slice_$name/Din]
+  create_bd_port -dir O $name
+  connect_bd_net [get_bd_pins slice_$name/Dout] [get_bd_ports $name]
+}
+${
+  eth
+    ? `
+# Ethernet: the PS GMII buses are 8 bits, the IP101GA PHY is 4-bit MII
+set txs [create_bd_cell -type ip -vlnv xilinx.com:ip:xlslice:1.0 slice_txd]
+set_property -dict [list CONFIG.DIN_WIDTH {8} CONFIG.DIN_FROM {3} CONFIG.DIN_TO {0}] $txs
+connect_bd_net [get_bd_pins ps7/ENET0_GMII_TXD] [get_bd_pins slice_txd/Din]
+create_bd_port -dir O -from 3 -to 0 enet0_gmii_txd
+connect_bd_net [get_bd_pins slice_txd/Dout] [get_bd_ports enet0_gmii_txd]
+
+set rxc [create_bd_cell -type ip -vlnv xilinx.com:ip:xlconcat:2.1 concat_rxd]
+set_property -dict [list CONFIG.NUM_PORTS {2} CONFIG.IN0_WIDTH {4} CONFIG.IN1_WIDTH {4}] $rxc
+create_bd_port -dir I -from 3 -to 0 enet0_gmii_rxd
+connect_bd_net [get_bd_ports enet0_gmii_rxd] [get_bd_pins concat_rxd/In0]
+set zero [create_bd_cell -type ip -vlnv xilinx.com:ip:xlconstant:1.1 rxd_hi]
+set_property -dict [list CONFIG.CONST_WIDTH {4} CONFIG.CONST_VAL {0}] $zero
+connect_bd_net [get_bd_pins rxd_hi/dout] [get_bd_pins concat_rxd/In1]
+connect_bd_net [get_bd_pins concat_rxd/dout] [get_bd_pins ps7/ENET0_GMII_RXD]
+
+foreach pin {ENET0_GMII_RX_CLK ENET0_GMII_TX_CLK ENET0_GMII_TX_EN ENET0_GMII_RX_DV FCLK_CLK3} {
+  make_bd_pins_external [get_bd_pins ps7/$pin]
+}
+make_bd_intf_pins_external [get_bd_intf_pins ps7/MDIO_ETHERNET_0]
+`
+    : ""
+}
+validate_bd_design
+save_bd_design
+set wrapper [make_wrapper -files [get_files system.bd] -top]
+add_files -norecurse $wrapper
+set_property top system_wrapper [current_fileset]
+update_compile_order -fileset sources_1
+
+if {[info exists argv] && [lsearch -exact $argv build] >= 0} {
+  launch_runs impl_1 -to_step write_bitstream -jobs 4
+  wait_on_run impl_1
+  if {[get_property PROGRESS [get_runs impl_1]] ne "100%"} { error "implementation failed: see vivado/$proj_name.runs/impl_1" }
+  write_hw_platform -fixed -include_bit -force $origin/system.xsa
+  puts "XSA: $origin/system.xsa"
+}
+`;
+  const bif = `// BOOT.bin layout for an SD-card boot (bootgen -image boot.bif -arch zynq -o BOOT.bin -w)
+the_ROM_image:
+{
+    [bootloader] fsbl.elf
+    system_wrapper.bit
+    ${eth ? "echo.elf" : "ps_hello.elf"}
+}
+`;
+  const readme = `${dir} — exported from FPGA Lab
+Board: ${p.board}   Part: ${p.part}
+
+  constrs/${p.xdcName.padEnd(21)} LED pins${eth ? " and the Ethernet pins (MII, MDIO, FCLK_CLK3 on U18)" : ""}
+  create_project.tcl            re-creates the Vivado project (PS-only block design)
+  boot.bif                      BOOT.bin layout for an SD-card boot
+${eth ? "" : "  vitis/ps_hello.c              the application: prints on UART1 (J7) and blinks the LEDs\n"}
+1. Build, in the Vivado Tcl Shell (a folder without spaces or parentheses, such as C:/fpga):
+   vivado -mode batch -source create_project.tcl -tclargs build
+   This writes the bitstream and system.xsa (bitstream included).
+2. Vitis: create a platform from system.xsa (it builds the FSBL), then an application:
+   ${eth ? 'the "lwIP Echo Server" template.' : 'the "Empty Application (C)" template, with vitis/ps_hello.c as its source.'}
+3. Create Boot Image with boot.bif: FSBL, bitstream, application -> BOOT.bin. Copy it to a FAT-formatted SD card
+   (slot U7 soldered, boot resistor moved from R2584 to R2577) and power on. UART1 is on J7 at 115200 8N1.
+${eth ? "4. The board prints its IP address. On your PC: telnet <board-ip> 7 - every line comes back.\n   No Y3 crystal on your board? Keep FCLK_CLK3 on U18 (the default). With Y3, remove that port and its XDC line.\n" : ""}
+Status: follows KeitetsuWorks/EBAZ4205 (MIT) and hhuysqt.github.io/zynq1; ${eth ? "not yet run in real Vivado by FPGA Lab" : "the PS settings are the ones verified in real Vivado for the PL lessons"}.
+Please report problems.
+
+-------------------------------------------------------------------------------------------------- فارسی
+۱. ساخت در Vivado Tcl Shell (پوشه‌ای بدون فاصله و پرانتز، مثل C:/fpga):
+   vivado -mode batch -source create_project.tcl -tclargs build
+۲. در Vitis از system.xsa یک platform بسازید و یک برنامه ${eth ? "با قالب lwIP Echo Server" : "با قالب Empty Application (C) و فایل vitis/ps_hello.c"}.
+۳. با Create Boot Image و boot.bif فایل BOOT.bin بسازید، روی کارت FAT بریزید و برد را روشن کنید. UART1 روی J7 با 115200 است.
+${eth ? "۴. برد آدرس IP را چاپ می‌کند. از کامپیوتر: telnet <board-ip> 7\n" : ""}`;
+  const files = [
+    { name: `${dir}/constrs/${p.xdcName}`, data: xdc },
+    { name: `${dir}/create_project.tcl`, data: tcl },
+    { name: `${dir}/boot.bif`, data: bif },
+    { name: `${dir}/README.txt`, data: readme },
+  ];
+  if (ps.app) files.push({ name: `${dir}/vitis/ps_hello.c`, data: ps.app });
+  return files;
 }
 
 export function projectZip(p: ProjectSpec): Uint8Array {

@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { BOARDS, deviceLabel, getBoard } from '../src/boards';
 import { mapPorts, parseXdc } from '../src/boards/mapping';
 import { expandParts } from '../src/boards/parts';
-import { Z_BLINK_V, Z_BLINK_VHD } from '../src/boards/ebaz4205/code';
+import { PS_HELLO_C, Z_BLINK_V, Z_BLINK_VHD } from '../src/boards/ebaz4205/code';
 import { synthesize } from '../src/hdl';
 import { BoardHarness as Harness } from '../src/grade/harness';
 import { projectFiles } from '../src/synth/project';
@@ -81,6 +81,7 @@ describe('EBAZ4205 board', () => {
   it('keeps the playground code equal to the prepared drafts', () => {
     expect(Z_BLINK_V).toBe(doc('code/z_blink.v'));
     expect(Z_BLINK_VHD).toBe(doc('code/z_blink.vhd'));
+    expect(PS_HELLO_C).toBe(doc('code/ps_hello.c'));
   });
 
   it('parts: EBAZ names on the EBAZ, Nexys names unchanged', () => {
@@ -103,6 +104,28 @@ describe('EBAZ4205 Vivado project', () => {
       internalClock: ebaz.internalClock,
     });
   const get = (fs: { name: string; data: string }[], n: string) => fs.find((f) => f.name.endsWith(n))!.data;
+
+  it('builds the PS-only projects of z-ps-hello and z-ethernet', () => {
+    const ps = (mode: 'hello' | 'ethernet') =>
+      projectFiles({ name: `fpga_lab_z-${mode}`, lang: 'verilog', top: 'top', src: '', xdc: '', xdcName: 'ebaz4205.xdc', part: ebaz.part, board: 'EBAZ4205', internalClock: ebaz.internalClock, ps: mode === 'hello' ? { mode, app: PS_HELLO_C } : { mode } });
+    const hello = ps('hello');
+    expect(get(hello, 'vitis/ps_hello.c')).toBe(PS_HELLO_C);
+    const ht = get(hello, 'create_project.tcl');
+    expect(ht).toContain('CONFIG.PCW_GPIO_EMIO_GPIO_IO {2}');
+    expect(ht).not.toContain('user_top');
+    expect(ht).not.toContain('ENET0');
+    expect(get(hello, 'ebaz4205.xdc')).toContain('PACKAGE_PIN W14');
+    const eth = ps('ethernet');
+    const et = get(eth, 'create_project.tcl');
+    expect(et).toContain('CONFIG.PCW_ENET0_ENET0_IO {EMIO}');
+    expect(et).toContain('CONFIG.PCW_FPGA3_PERIPHERAL_FREQMHZ {25}');
+    expect(et).toContain('xlconcat');
+    expect(et).toContain('CONFIG.DIN_WIDTH {8} CONFIG.DIN_FROM {3} CONFIG.DIN_TO {0}');
+    const ex = get(eth, 'ebaz4205.xdc');
+    for (const pin of ['U14', 'U15', 'W19', 'W16', 'Y17', 'W18', 'W15', 'Y14', 'U18']) expect(ex).toContain(`PACKAGE_PIN ${pin} `);
+    expect(eth.some((f) => f.name.endsWith('.c'))).toBe(false);
+    for (const t of [ht, et]) for (const [a, b] of [['{', '}'], ['[', ']']]) expect(t.split(a).length, a).toBe(t.split(b).length);
+  });
 
   it('builds a PS7 block design with FCLK_CLK0 on clk and the rest external', () => {
     const fs = files('verilog');

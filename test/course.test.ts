@@ -7,14 +7,15 @@ import type { LessonText } from '../src/lessons/en';
 
 describe('course per board', () => {
   it('the Nexys sees the whole course, unchanged', () => {
-    expect(chaptersFor('nexys-a7-100t')).toEqual(CHAPTERS);
-    expect(courseLessonsFor('nexys-a7-100t')).toEqual(COURSE_LESSONS);
+    expect(chaptersFor('nexys-a7-100t')).toEqual(CHAPTERS.filter((c) => !c.boards?.includes('ebaz4205')));
+    expect(courseLessonsFor('nexys-a7-100t')).toEqual(COURSE_LESSONS.filter((l) => !l.id.startsWith('z-')));
+    expect(courseLessonsFor('nexys-a7-100t').length).toBe(32);
   });
 
-  it('the EBAZ4205 sees only its own chapters and the Lab (none of its own before E2)', () => {
+  it('the EBAZ4205 sees only its own chapters and the Lab', () => {
     const ch = chaptersFor('ebaz4205');
-    expect(ch.map((c) => c.title.en)).toEqual(['Lab']);
-    expect(courseLessonsFor('ebaz4205')).toEqual([]);
+    expect(ch.map((c) => c.title.en)).toEqual(['Zynq and the EBAZ4205', 'Lab']);
+    expect(courseLessonsFor('ebaz4205').map((l) => l.id)).toEqual(['z-intro', 'z-blink', 'z-bootflow', 'z-ps-hello', 'z-ethernet']);
     expect(lessonOnBoard(PLAYGROUND, 'ebaz4205')).toBe(true);
     const gates = ALL_LESSONS.find((l) => l.id === 'gates')!;
     expect(lessonOnBoard(gates, 'ebaz4205')).toBe(false);

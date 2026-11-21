@@ -271,6 +271,62 @@ export const GLOSSARY: GlossaryTerm[] = [
     fa: 'بلوک‌های سخت‌افزاری مدیریت کلاک که از یک کلاک ورودی، کلاک‌های تمیز با فرکانس یا فاز دیگر می‌سازند (مثلاً ۲۵ مگاهرتز برای VGA).',
     en: 'Hard clock-management blocks that make clean clocks of other frequencies or phases from an input clock, for example 25 MHz for VGA.',
   }, 'clocking'),
+  g('ps', { fa: 'PS (سامانه‌ی پردازشی)', en: 'PS (processing system)' }, {
+    fa: 'بخش پردازنده‌ی تراشه‌ی Zynq: دو هسته‌ی ARM، کنترلر DDR و تجهیزات سخت مثل UART، SD و MAC شبکه. بدون PL هم کار می‌کند.',
+    en: 'The processor half of a Zynq: two ARM cores, the DDR controller and hard peripherals such as UART, SD and the Ethernet MAC. It works without the PL.',
+  }, 'z-intro'),
+  g('pl', { fa: 'PL (منطق برنامه‌پذیر)', en: 'PL (programmable logic)' }, {
+    fa: 'بخش FPGAی تراشه‌ی Zynq با LUT، فلیپ‌فلاپ، BRAM و DSP. طرح‌های HDL شما اینجا اجرا می‌شوند و PS آن را پیکربندی می‌کند.',
+    en: 'The FPGA half of a Zynq, with LUTs, flip-flops, BRAM and DSP. Your HDL designs run here, and the PS configures it.',
+  }, 'z-intro'),
+  g('mio', { fa: 'MIO', en: 'MIO' }, {
+    fa: '۵۴ پایه‌ی ثابت تجهیزات PS در Zynq، مثل UART، SD و NAND. بدون عبور از PL به بیرون می‌روند.',
+    en: 'The 54 fixed pins of the PS peripherals on a Zynq, such as UART, SD and NAND. They reach the outside without passing through the PL.',
+  }, 'z-intro'),
+  g('emio', { fa: 'EMIO', en: 'EMIO' }, {
+    fa: 'مسیری که یک تجهیز PS را از داخل PL به پایه‌های PL می‌برد. MAC شبکه‌ی EBAZ4205 و GPIO برای LEDها از آن استفاده می‌کنند.',
+    en: 'The path that takes a PS peripheral through the PL to PL pins. The EBAZ4205 Ethernet MAC and the LED GPIO use it.',
+  }, 'z-intro'),
+  g('axi', { fa: 'AXI', en: 'AXI' }, {
+    fa: 'گذرگاه استاندارد ARM برای خواندن و نوشتن بین PS و منطق PL، با کانال‌های جدا برای آدرس، داده و پاسخ.',
+    en: 'ARM’s standard bus for reads and writes between the PS and PL logic, with separate channels for address, data and response.',
+  }, 'z-intro'),
+  g('fclk', { fa: 'FCLK_CLK0..3', en: 'FCLK_CLK0..3' }, {
+    fa: 'چهار کلاکی که PS به PL می‌دهد. روی EBAZ4205 کلاک PL همان FCLK_CLK0 با ۵۰ مگاهرتز است و فقط بعد از ps7_init روشن می‌شود.',
+    en: 'The four clocks the PS gives the PL. On the EBAZ4205 the PL clock is FCLK_CLK0 at 50 MHz; it only starts after ps7_init.',
+  }, 'z-blink'),
+  g('bootrom', { fa: 'BootROM', en: 'BootROM' }, {
+    fa: 'کد ثابت داخل Zynq که اول از همه اجرا می‌شود، حالت بوت را می‌خواند و FSBL را در OCM کپی می‌کند.',
+    en: 'Fixed code inside the Zynq that runs first, reads the boot mode and copies the FSBL into OCM.',
+  }, 'z-bootflow'),
+  g('fsbl', { fa: 'FSBL', en: 'FSBL' }, {
+    fa: 'بوت‌لودر مرحله‌ی اول: DDR و کلاک‌ها را با ps7_init راه می‌اندازد، bitstream را در PL بار می‌کند و برنامه را در DDR اجرا می‌کند.',
+    en: 'First-stage boot loader: starts the DDR and clocks with ps7_init, loads the bitstream into the PL and starts the application in DDR.',
+  }, 'z-bootflow'),
+  g('ocm', { fa: 'OCM', en: 'OCM' }, {
+    fa: 'حافظه‌ی ۲۵۶ کیلوبایتی داخل Zynq. FSBL قبل از راه‌اندازی DDR اینجا اجرا می‌شود.',
+    en: 'The 256 KB on-chip memory of a Zynq. The FSBL runs here before the DDR is set up.',
+  }, 'z-bootflow'),
+  g('bootbin', { fa: 'BOOT.bin', en: 'BOOT.bin' }, {
+    fa: 'فایل بوت Zynq که bootgen از یک فایل bif می‌سازد: FSBL، bitstream و برنامه به همین ترتیب. روی کارت SD در پارتیشن FAT است.',
+    en: 'The Zynq boot file that bootgen builds from a bif file: FSBL, bitstream and application, in that order. It sits on the FAT partition of an SD card.',
+  }, 'z-bootflow'),
+  g('xsa', { fa: 'XSA', en: 'XSA' }, {
+    fa: 'فایل توصیف سخت‌افزار که Vivado برای Vitis export می‌کند: تنظیمات PS، نقشه‌ی آدرس‌ها و در صورت انتخاب، bitstream.',
+    en: 'The hardware description Vivado exports for Vitis: the PS settings, the address map and, if chosen, the bitstream.',
+  }, 'z-ps-hello'),
+  g('gmii', { fa: 'GMII و MII', en: 'GMII / MII' }, {
+    fa: 'رابط‌های بین MAC و PHY شبکه. GMII هشت بیتی است (گیگابیت) و MII چهار بیتی (۱۰۰ مگابیت).',
+    en: 'Interfaces between an Ethernet MAC and PHY. GMII is 8 bits wide (gigabit), MII 4 bits (100 Mbit).',
+  }, 'z-ethernet'),
+  g('phy', { fa: 'PHY', en: 'PHY' }, {
+    fa: 'تراشه‌ای که بیت‌های MAC را به سیگنال الکتریکی کابل شبکه تبدیل می‌کند. روی EBAZ4205 مدل IP101GA است.',
+    en: 'The chip that turns MAC bits into electrical signals on the network cable. On the EBAZ4205 it is an IP101GA.',
+  }, 'z-ethernet'),
+  g('mdio', { fa: 'MDIO', en: 'MDIO' }, {
+    fa: 'گذرگاه دوسیمه‌ی مدیریت (MDC و MDIO) که MAC با آن رجیسترهای PHY را می‌خواند و می‌نویسد.',
+    en: 'The two-wire management bus (MDC and MDIO) the MAC uses to read and write PHY registers.',
+  }, 'z-ethernet'),
 ];
 
 export const glossaryTerm = (id: string) => GLOSSARY.find((t) => t.id === id);

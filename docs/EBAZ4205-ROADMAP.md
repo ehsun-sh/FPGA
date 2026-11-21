@@ -158,6 +158,11 @@ a bitstream and an XSA; fix the Tcl until it passes and note the Vivado version 
 
 ## Phase E2 — Chapter Z: Zynq and the EBAZ4205
 
+Status (2026-11-21): implemented in `src/lessons/zynq.ts` (lessons, goals, quiz), `src/grade/zynq.ts` (z-blink
+checker), `figures.ts` (figZynq, figBootFlow, figMii) and `project.ts` (PS-only zips for z-ps-hello and z-ethernet).
+The boot-flow figure is static, not yet interactive. Still open: Ehsan's run of `z-ps-hello` on the real board, and
+a real Vivado run of the Ethernet zip.
+
 Five lessons, briefs in [LESSONS.md](ebaz4205/LESSONS.md) chapter Z: `z-intro`, `z-blink`, `z-bootflow`,
 `z-ps-hello`, `z-ethernet` (optional sixth: `z-linux` as a guide page). Chapter title fa «Zynq و برد EBAZ4205» en
 "Zynq and the EBAZ4205", `boards: ['ebaz4205']`.

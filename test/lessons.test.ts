@@ -1,19 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { BOARDS, DEFAULT_BOARD } from '../src/boards';
+import { BOARDS, DEFAULT_BOARD, getBoard, type BoardDef } from '../src/boards';
 import { BoardHarness } from '../src/grade/harness';
 import { mapPorts } from '../src/boards/mapping';
 import { compileDesign, synthesize } from '../src/hdl';
 import { Acquisition, Recorder } from '../src/la/capture';
 import { decodeI2c, decodePs2, decodeSpi, decodeUart } from '../src/la/decode';
 import { ADVANCED } from '../src/lessons/advanced';
-import { ALL_LESSONS, CHAPTERS } from '../src/lessons/course';
+import { ALL_LESSONS, CHAPTERS, lessonBoards } from '../src/lessons/course';
 import { LESSONS, PLAYGROUND } from '../src/lessons/lessons';
 
 type Harness = ReturnType<typeof harness>;
 
-function harness(src: string, lang: 'verilog' | 'vhdl', xdc: string, params?: Record<string, number>) {
+function harness(src: string, lang: 'verilog' | 'vhdl', xdc: string, params?: Record<string, number>, board: BoardDef = DEFAULT_BOARD) {
   const d = synthesize(src, lang, undefined, params);
-  const map = mapPorts(d, xdc, DEFAULT_BOARD);
+  const map = mapPorts(d, xdc, board);
   const errors = map.messages.filter((m) => m.level === 'error');
   if (errors.length) throw new Error(errors.map((e) => e.msg).join('\n'));
   const sim = compileDesign(d, { clock: map.clock });
@@ -513,6 +513,18 @@ const checks: Record<string, (h: Harness) => void> = {
     h.sim.run(2);
     expect(h.led()).toBe(1 << 14);
   },
+  ...Object.fromEntries(
+    ['z-intro', 'z-blink', 'z-bootflow', 'z-ps-hello', 'z-ethernet'].map((id) => [
+      id,
+      (h: Harness) => {
+        // EBAZ4205: LED_R and LED_G take turns every DIV = 10 clocks of FCLK_CLK0
+        const a = h.led();
+        expect([1, 2]).toContain(a);
+        h.sim.run(10);
+        expect(h.led()).toBe(3 - a);
+      },
+    ]),
+  ),
   realboard(h) {
     h.sw(0xff00);
     h.sim.run(5);
@@ -559,7 +571,9 @@ describe('lessons', () => {
   for (const l of ALL_LESSONS) {
     for (const lang of ['verilog', 'vhdl'] as const) {
       it(`${l.id} (${lang})`, () => {
-        const h = harness(lang === 'verilog' ? l.verilog : l.vhdl, lang, DEFAULT_BOARD.masterXdc(l.xdc), PARAMS[l.id]);
+        const b = lessonBoards(l)[0];
+        const board = b === '*' ? DEFAULT_BOARD : getBoard(b);
+        const h = harness(lang === 'verilog' ? l.verilog : l.vhdl, lang, board.masterXdc(l.xdc), PARAMS[l.id] ?? (l.id.startsWith('z-') ? { DIV: 10 } : undefined), board);
         const check = checks[l.id];
         expect(check, 'missing behaviour check').toBeTruthy();
         check(h);

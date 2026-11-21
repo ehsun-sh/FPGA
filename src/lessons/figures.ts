@@ -606,3 +606,96 @@ export function figMetastable(o: { title?: string; async?: string; q1?: string; 
   b += T(xe + 56, top + 30, lab.settle, 'sm ta', 's');
   return svg(x0 + 18 * u + 12, 204, lab.title, b);
 }
+
+// ---------------------------------------------------------------- Zynq (EBAZ4205 chapter)
+// The two halves of a Zynq: the PS with its hard peripherals on MIO, the PL with its pins, and the links between
+// them (EMIO, AXI, FCLK). The EBAZ4205 parts are named in the labels.
+export function figZynq(
+  o: { title?: string; ps?: string; pl?: string; cpu?: string; ddr?: string; periph?: string; logic?: string; mio?: string; plPins?: string } = {},
+): string {
+  const lab = {
+    title: 'Zynq-7010: the processing system (PS) and the programmable logic (PL) in one chip',
+    ps: 'PS (processing system)',
+    pl: 'PL (programmable logic)',
+    cpu: '2 × ARM Cortex-A9',
+    ddr: 'DDR3 controller',
+    periph: 'UART · SD · NAND · GEM (Ethernet)',
+    logic: 'LUTs · flip-flops · BRAM · DSP',
+    mio: 'MIO: 54 fixed pins (J7 UART, SD, NAND)',
+    plPins: 'PL pins: LEDs W13/W14, DATA1-3, PHY',
+    ...o,
+  };
+  let b = R(10, 10, 250, 190, 'bxa', 8) + T(135, 32, lab.ps, 'b');
+  b += R(28, 46, 214, 34) + T(135, 68, lab.cpu, 'sm');
+  b += R(28, 90, 214, 34) + T(135, 112, lab.ddr, 'sm');
+  b += R(28, 134, 214, 50) + T(135, 163, lab.periph, 'sm');
+  b += R(360, 10, 230, 190, 'bxb', 8) + T(475, 32, lab.pl, 'b');
+  b += R(378, 60, 194, 90) + T(475, 110, lab.logic, 'sm');
+  b += arrow(260, 60, 360, 60) + T(310, 54, 'AXI', 'sm mono ta');
+  b += arrow(260, 100, 360, 100) + T(310, 94, 'FCLK_CLK0..3', 'sm mono ta');
+  b += arrow(260, 160, 360, 160) + T(310, 154, 'EMIO', 'sm mono ta');
+  b += L(135, 200, 135, 226, 'la') + T(135, 242, lab.mio, 'sm');
+  b += L(475, 200, 475, 226, 'lb') + T(475, 242, lab.plPins, 'sm');
+  return svg(600, 252, lab.title, b);
+}
+
+// The boot of a Zynq: the straps pick a boot device, the BootROM copies the FSBL into OCM, the FSBL sets up DDR,
+// configures the PL from the bitstream and starts the application in DDR. BOOT.bin holds the three parts in order.
+export function figBootFlow(
+  o: { title?: string; straps?: string; rom?: string; fsbl?: string; bit?: string; app?: string; boot?: string; ocm?: string; ddr?: string; plc?: string } = {},
+): string {
+  const lab = {
+    title: 'How a Zynq boots: BootROM, then the FSBL in on-chip memory, then the PL bitstream and the application in DDR',
+    straps: 'boot straps (R2584 / R2577)',
+    rom: 'BootROM',
+    fsbl: 'FSBL',
+    bit: 'bitstream',
+    app: 'application',
+    boot: 'BOOT.bin on the SD card (FAT)',
+    ocm: '→ OCM (256 KB)',
+    ddr: 'DDR init, then → DDR',
+    plc: '→ PL configured',
+    ...o,
+  };
+  const stages: [string, string, string][] = [
+    [lab.rom, lab.straps, 'bx'],
+    [lab.fsbl, lab.ocm, 'bxa'],
+    [lab.bit, lab.plc, 'bxb'],
+    [lab.app, lab.ddr, 'bxa'],
+  ];
+  let b = '';
+  stages.forEach(([n, s, c], i) => {
+    const x = 10 + i * 150;
+    b += R(x, 20, 120, 44, c) + T(x + 60, 47, n, 'b');
+    b += T(x + 60, 84, s, 'sm tm');
+    if (i < 3) b += arrow(x + 120, 42, x + 150, 42);
+  });
+  b += R(160, 112, 420, 34, 'bus') + T(370, 134, lab.boot, 'sm');
+  [lab.fsbl, lab.bit, lab.app].forEach((n, i) => (b += L(300 + i * 140, 112, 300 + i * 140, 146, 'ld')));
+  b += T(230, 162, lab.fsbl, 'sm mono') + T(370, 162, lab.bit, 'sm mono') + T(510, 162, lab.app, 'sm mono');
+  return svg(600, 172, lab.title, b);
+}
+
+// The MII glue of the EBAZ4205: the PS MAC has 8-bit GMII buses, the IP101GA PHY 4-bit MII. A slice keeps TXD[3:0];
+// a concat puts four zero bits above RXD[3:0].
+export function figMii(o: { title?: string; mac?: string; phy?: string; slice?: string; concat?: string; zero?: string } = {}): string {
+  const lab = {
+    title: 'GMII to MII: an xlslice keeps TXD[3:0] of the 8-bit bus, an xlconcat fills RXD[7:4] with zeros',
+    mac: 'PS GEM0 (EMIO)',
+    phy: 'IP101GA PHY',
+    slice: 'xlslice [3:0]',
+    concat: 'xlconcat',
+    zero: "4'b0000",
+    ...o,
+  };
+  let b = R(10, 20, 130, 150, 'bxa', 8) + T(75, 98, lab.mac, 'b');
+  b += R(460, 20, 130, 150, 'bxb', 8) + T(525, 98, lab.phy, 'b');
+  b += R(240, 34, 120, 40) + T(300, 59, lab.slice, 'sm mono');
+  b += R(240, 114, 120, 40) + T(300, 139, lab.concat, 'sm mono');
+  b += arrow(140, 54, 240, 54) + T(190, 48, 'TXD[7:0]', 'sm mono ta');
+  b += arrow(360, 54, 460, 54) + T(410, 48, 'TXD[3:0]', 'sm mono tb');
+  b += arrow(460, 128, 360, 128) + T(410, 122, 'RXD[3:0]', 'sm mono tb');
+  b += arrow(240, 134, 140, 134) + T(190, 128, 'RXD[7:0]', 'sm mono ta');
+  b += L(300, 154, 300, 176, 'la') + T(300, 190, lab.zero, 'sm mono tm');
+  return svg(600, 198, lab.title, b);
+}
