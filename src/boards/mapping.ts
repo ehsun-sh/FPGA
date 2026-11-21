@@ -58,6 +58,14 @@ export function mapPorts(design: Design, xdc: string, board: BoardDef): Mapping 
       let pinName = pins.get(key)?.pin;
       if (!pinName && !isVec) pinName = pins.get(`${s.name}[0]`.toLowerCase())?.pin;
       if (pinName) used.add(key);
+      const ic = board.internalClock;
+      if (!pinName && ic && !isVec && s.dir === 'input' && s.name.toLowerCase() === ic.port.toLowerCase()) {
+        // the clock made inside the chip (Zynq: FCLK_CLK0 from the PS), wired by the block design, not a package pin
+        messages.push({ level: 'info', code: 'FPGA Lab', msg: `${s.name} is driven by ${ic.source} (${ic.hz / 1e6} MHz) from the PS` });
+        clock = s.id;
+        bindings.push({ sig: s.id, bit: 0, port: s.name, pin: ic.source, device: { kind: 'clk' } });
+        continue;
+      }
       if (!pinName) {
         pinName = DEFAULTS_LC.get(key) ?? (!isVec ? DEFAULTS_LC.get(s.name.toLowerCase()) : undefined);
         if (pinName) {

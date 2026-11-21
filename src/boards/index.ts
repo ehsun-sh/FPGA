@@ -1,10 +1,11 @@
+import { ebaz4205 } from './ebaz4205';
 import { nexysA7 } from './nexys-a7';
 import type { BoardDef, Device } from './types';
 
 export type { BoardDef, BoardOutputs, BoardView, Device, XdcGroup } from './types';
 
 // Add new boards here.
-export const BOARDS: BoardDef[] = [nexysA7];
+export const BOARDS: BoardDef[] = [nexysA7, ebaz4205];
 
 export const DEFAULT_BOARD = nexysA7;
 
@@ -18,7 +19,7 @@ export function deviceLabel(d: Device, board: BoardDef): string {
     case 'sw':
       return `SW${d.index}`;
     case 'led':
-      return `LD${d.index}`;
+      return board.io.ledNames?.[d.index] ?? `LD${d.index}`;
     case 'an':
       return `AN${d.index}`;
     case 'seg':
@@ -27,6 +28,10 @@ export function deviceLabel(d: Device, board: BoardDef): string {
       return `${board.io.rgb[d.index]} ${d.color.toUpperCase()}`;
     case 'clk':
       return `${board.clockHz / 1e6} MHz oscillator`;
+    case 'lcd':
+      return `LCD_${d.line.toUpperCase()}`;
+    case 'hdmi':
+      return `HDMI_${d.ch === 'clk' ? 'CLK' : 'D' + d.ch}_${d.pol.toUpperCase()}`;
     default:
       return d.name;
   }
@@ -34,5 +39,5 @@ export function deviceLabel(d: Device, board: BoardDef): string {
 
 // Devices that drive an FPGA input.
 export function isBoardInput(d: Device): boolean {
-  return d.kind === 'sw' || d.kind === 'btn' || d.kind === 'clk' || d.kind === 'reset' || (d.kind === 'uart' && d.dir === 'in');
+  return d.kind === 'sw' || d.kind === 'btn' || d.kind === 'clk' || d.kind === 'reset' || (d.kind === 'uart' && d.dir === 'in') || (d.kind === 'fan' && d.line === 'speed');
 }
