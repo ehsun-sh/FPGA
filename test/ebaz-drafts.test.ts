@@ -42,14 +42,14 @@ describe('ebaz drafts', () => {
   });
   for (const [f, lang] of [['x_tone.v', 'verilog'], ['x_tone.vhd', 'vhdl']] as const) it('tone ' + lang, () => {
     const h = sim(f, lang, { CLK_HZ: 52400, NOTE_TICKS: 4000 });
-    h.set('KEY0', 1);
+    h.set('KEY1', 1);
     const halfs: number[] = []; let last = h.get('BUZZER'), run = 0;
     for (let i = 0; i < 4000 * 14; i++) { h.s.run(1); const b = h.get('BUZZER'); run++; if (b !== last) { halfs.push(run); run = 0; last = b; } }
     const freq = new Map<number, number>(); for (const x of halfs) freq.set(x, (freq.get(x) ?? 0) + 1); const uniq = [...freq].filter(([, n]) => n >= 5).map(([x]) => x).sort((a, b) => b - a);
     // C4 half period = 52400/524 = 100 cycles, C5 = 50
     expect(uniq[0]).toBe(100);
     expect(uniq).toContain(50);
-    h.set('KEY0', 0); h.s.run(300); expect(h.get('BUZZER')).toBe(0);
+    h.set('KEY1', 0); h.s.run(300); expect(h.get('BUZZER')).toBe(0);
   });
   for (const [f, lang] of [['x_tmds.v', 'verilog'], ['x_tmds.vhd', 'vhdl']] as const) it('tmds ' + lang, () => {
     const h = sim(f, lang);

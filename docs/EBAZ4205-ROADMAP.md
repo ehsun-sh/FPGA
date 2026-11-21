@@ -215,11 +215,14 @@ Five lessons, briefs in [LESSONS.md](ebaz4205/LESSONS.md) chapter Z: `z-intro`, 
 
 ### Acceptance checklist — Phase E3
 
-- [ ] The extension board appears on the 3D model, can be detached and reattached; keys work by mouse, touch and
+Status 2026-11-21: done in the simulator; see `docs/ebaz4205/LESSONS.md` for what shipped where.
+
+- [x] The extension board appears on the 3D model, can be detached and reattached; keys work by mouse, touch and
       keyboard focus.
-- [ ] `x-buzzer` plays the scale through the speakers when sound is on; the checker passes the solution.
-- [ ] `x-uart` echoes typed bytes in the Serial Console on `UART_RX`/`UART_TX`.
-- [ ] At least six variants of existing lessons run and pass their checkers on the EBAZ4205.
+- [x] `x-buzzer` plays the scale through the speakers when sound is on; the checker passes the solution.
+- [x] `x-uart` echoes typed bytes in the Serial Console on `UART_RX`/`UART_TX`.
+- [x] At least six variants of existing lessons run and pass their checkers on the EBAZ4205 (`counter`, `fsm`,
+      `debounce`, `pwm`, `uart`, `uart_rx`; `test/variants.test.ts`).
 
 ---
 
@@ -246,10 +249,12 @@ Five lessons, briefs in [LESSONS.md](ebaz4205/LESSONS.md) chapter Z: `z-intro`, 
 
 ### Acceptance checklist — Phase E4
 
-- [ ] The LCD shows the lesson's picture on the 3D board; a wrong init sequence gives a readable message.
-- [ ] `x-hdmi-bars` shows colour bars on the monitor at 640×480; corrupting one symbol shows "No signal" or a
+Status 2026-11-21: the first three are done (`test/ext.test.ts`); the real-board run is Ehsan's.
+
+- [x] The LCD shows the lesson's picture on the 3D board; a wrong init sequence gives a readable message.
+- [x] `x-hdmi-bars` shows colour bars on the monitor at 640×480; corrupting one symbol shows "No signal" or a
       wrong colour, not a crash.
-- [ ] The HDMI decoder round-trips 10,000 random symbols through `x_tmds.v` in a unit test.
+- [x] The HDMI decoder round-trips 10,000 random symbols through `x_tmds.v` in a unit test.
 - [ ] On the real board (Ehsan): the downloaded `x-lcd` and `x-hdmi-bars` projects show their pictures.
 
 ---

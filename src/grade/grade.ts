@@ -1,9 +1,11 @@
 // Runs an exercise's checker on the student's design (or testbench) and collects the results.
 import type { BoardDef } from '../boards';
+import { withLibrary } from '../boards/library';
 import { HdlError, synthesize, synthesizeFiles, type Lang } from '../hdl';
 import { TbSim } from '../sim/tbsim';
 import { EXERCISES, Tester, type CheckItem } from './exercises';
 import { BoardHarness } from './harness';
+import { BOARD_EXERCISES } from './variants';
 
 export interface GradeInput {
   lang: Lang;
@@ -24,8 +26,11 @@ export function hasExercise(id: string) {
   return !!EXERCISES[id];
 }
 
+// a lesson's own version for a board (lessons/boards.ts) has its own exercise there
+export const exerciseOn = (id: string, board: BoardDef) => BOARD_EXERCISES[board.id]?.[id] ?? EXERCISES[id];
+
 export function gradeExercise(id: string, input: GradeInput, board: BoardDef): GradeResult {
-  const ex = EXERCISES[id];
+  const ex = exerciseOn(id, board);
   const t = new Tester();
   if (!ex) return { passed: false, items: [] };
   try {
@@ -34,7 +39,7 @@ export function gradeExercise(id: string, input: GradeInput, board: BoardDef): G
       const params: Record<string, number> = {};
       let names: string[] = [];
       try {
-        names = synthesize(input.src, input.lang).topParams ?? [];
+        names = synthesize(withLibrary(input.src, input.lang), input.lang).topParams ?? [];
       } catch (e) {
         const he = e as HdlError;
         t.need(false, `طرح سنتز نمی‌شود: ${he.message}${he.loc ? ` (خط ${he.loc.line})` : ''}`, `the design does not synthesize: ${he.message}${he.loc ? ` (line ${he.loc.line})` : ''}`);
@@ -44,7 +49,7 @@ export function gradeExercise(id: string, input: GradeInput, board: BoardDef): G
         t.need(has, `ماژول top یک parameter/generic به نام ${k} دارد`, `the top module has a parameter/generic named ${k}`);
         params[k] = v;
       }
-      const d = synthesize(input.src, input.lang, undefined, params);
+      const d = synthesize(withLibrary(input.src, input.lang), input.lang, undefined, params);
       let h: BoardHarness;
       try {
         h = new BoardHarness(d, input.xdc, board);
@@ -68,7 +73,7 @@ export function gradeExercise(id: string, input: GradeInput, board: BoardDef): G
 function gradeTestbench(mutate: [RegExp, string], input: GradeInput, t: Tester) {
   const design = input.original ?? input.src;
   const run = (src: string) => {
-    const s = new TbSim(synthesizeFiles([{ name: 'design', src }, { name: 'tb', src: input.tb ?? '' }], input.lang));
+    const s = new TbSim(synthesizeFiles([{ name: 'design', src: withLibrary(src, input.lang) }, { name: 'tb', src: input.tb ?? '' }], input.lang));
     s.run(Infinity, 3000);
     return s;
   };

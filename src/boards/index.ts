@@ -1,4 +1,5 @@
 import { ebaz4205 } from './ebaz4205';
+export { setEbazExtension } from './ebaz4205';
 import { nexysA7 } from './nexys-a7';
 import type { BoardDef, Device } from './types';
 

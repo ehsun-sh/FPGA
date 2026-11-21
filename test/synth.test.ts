@@ -1,6 +1,7 @@
 // RTL netlist, resource / timing estimate, schematic layout and the Vivado project export.
 import { describe, expect, it } from "vitest";
 import { synthesize } from "../src/hdl";
+import { withLibrary } from "../src/boards/library";
 import { ALL_LESSONS } from "../src/lessons/course";
 import { buildNetlist } from "../src/synth/netlist";
 import { projectFiles } from "../src/synth/project";
@@ -137,7 +138,7 @@ describe("schematic", () => {
   it("lays out every lesson without overlaps", () => {
     for (const l of ALL_LESSONS) {
       for (const lang of ["verilog", "vhdl"] as const) {
-        const nl = net(l[lang], lang);
+        const nl = net(withLibrary(l[lang], lang), lang);
         const L = layout(nl);
         for (const n of L.nodes)
           expect(Number.isFinite(n.x) && Number.isFinite(n.y)).toBe(true);

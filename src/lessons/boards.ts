@@ -1,10 +1,14 @@
 // Per-board versions of lessons (docs/EBAZ4205-ROADMAP.md, E1.1 and E3.4). The board is fixed for a page load
-// (switching it reloads the page), so applyBoardVariants() rewrites the lessons in place once, at start-up.
+// (switching it reloads the page), so applyBoardVariants() rewrites the lessons in place once, at start-up. A lesson
+// with a version for a board is listed on that board too (course.ts), and its exercise there is in grade/variants.ts.
 import { Z_BLINK_V, Z_BLINK_VHD } from '../boards/ebaz4205/code';
+import { EBAZ_VARIANTS } from './ebaz-variants';
 import type { LessonText } from './en';
 import type { Lesson } from './lessons';
 
-export type Variant = Partial<Pick<Lesson, 'body' | 'verilog' | 'vhdl' | 'xdc' | 'tryIt'>> & { en?: Partial<LessonText> };
+export type Variant = Partial<Pick<Lesson, 'summary' | 'body' | 'verilog' | 'vhdl' | 'xdc' | 'tryIt' | 'la' | 'prereq' | 'objectives' | 'takeaways' | 'quiz'>> & {
+  en?: Partial<LessonText>;
+};
 
 const PORTS_FA = (rows: string) =>
   `<h3>نام پورت‌های آماده</h3>
@@ -44,6 +48,7 @@ shows <code>clk is driven by FCLK_CLK0</code>: the clock comes from the PS.</p>`
     },
   },
 };
+for (const [id, v] of Object.entries(EBAZ_VARIANTS)) (VARIANTS[id] ??= {}).ebaz4205 = v;
 
 export const hasVariant = (id: string, board: string) => !!VARIANTS[id]?.[board];
 

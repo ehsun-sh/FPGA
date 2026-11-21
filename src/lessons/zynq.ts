@@ -15,7 +15,7 @@ type Goals = { objectives: string[]; takeaways: string[] };
 const q = (text: string, options: string[], answer: number, why: string): Question => ({ q: text, options, answer, why });
 
 // ---------------------------------------------------------------- shared pieces
-type Src = 'codeasm' | 'zynq1' | 'zynq2' | 'xjtuecho' | 'keitetsu' | 'elrori' | 'blkf';
+export type Src = 'codeasm' | 'zynq1' | 'zynq2' | 'xjtuecho' | 'keitetsu' | 'elrori' | 'blkf' | 'extsch' | 'vendorlcd' | 'dvi' | 'st7789';
 const CREDITS: Record<Src, [string, string]> = {
   codeasm: ['https://gist.github.com/CodeAsm/57d5856370546adbc41941ca716988f8', 'Board notes: CodeAsm, gist EBAZ4205'],
   zynq1: ['https://hhuysqt.github.io/zynq1/', 'Vivado/SDK walkthrough after hhuysqt, zynq[1] (CC BY-NC-SA 4.0)'],
@@ -24,6 +24,11 @@ const CREDITS: Record<Src, [string, string]> = {
   keitetsu: ['https://github.com/KeitetsuWorks/EBAZ4205', 'Block design: KeitetsuWorks/EBAZ4205 (MIT)'],
   elrori: ['https://github.com/Elrori/EBAZ4205', 'Core board schematic and EBAZEXT: Elrori/EBAZ4205'],
   blkf: ['https://github.com/blkf2016/ebaz4205', 'U-Boot and Buildroot notes: blkf2016/ebaz4205'],
+  // no link: the board vendor's files (not published online), and two documents without a stable public address
+  extsch: ['', 'Extension board pins: the vendor\u2019s adapter-board schematic (REV 1.0, 2022-03-20) and example XDC files'],
+  vendorlcd: ['', 'Display start-up: the vendor\u2019s example project 04_PS_LCD_test (ST7789 driven over EMIO)'],
+  dvi: ['', 'TMDS encoding: Digital Visual Interface (DVI) 1.0 specification, DDWG, 1999, section 3.2'],
+  st7789: ['', 'Display commands and reset timing: Sitronix ST7789V datasheet'],
 };
 // the "Sources" box at the end of every EBAZ4205 lesson; the credit lines stay in English in both languages
 export function sourcesBox(lang: 'fa' | 'en', ...ids: Src[]): string {
@@ -33,7 +38,7 @@ export function sourcesBox(lang: 'fa' | 'en', ...ids: Src[]): string {
       ? 'متن این درس را خودمان نوشته‌ایم؛ از این منابع فقط واقعیت‌ها (شماره‌ی پایه‌ها، تنظیمات و ترتیب مراحل) آمده است.'
       : 'The text of this lesson is our own; only facts (pin numbers, settings, the order of steps) come from these sources.';
   return `<aside class="sources" dir="${lang === 'fa' ? 'rtl' : 'ltr'}"><h3>${h}</h3><ul>${ids
-    .map((id) => `<li dir="ltr"><a href="${CREDITS[id][0]}" target="_blank" rel="noopener">${CREDITS[id][1]}</a></li>`)
+    .map((id) => `<li dir="ltr">${CREDITS[id][0] ? `<a href="${CREDITS[id][0]}" target="_blank" rel="noopener">${CREDITS[id][1]}</a>` : CREDITS[id][1]}</li>`)
     .join('')}</ul><p class="dim">${note}</p></aside>`;
 }
 

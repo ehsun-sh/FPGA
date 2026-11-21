@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { synthesizeFiles } from '../src/hdl';
 import { TbSim } from '../src/sim/tbsim';
+import { withLibrary } from '../src/boards/library';
 
 const COUNTER_V = `module counter #(parameter W = 4) (input clk, input rst, input en, output reg [W-1:0] q);
   always @(posedge clk)
@@ -152,13 +153,14 @@ describe('testbench simulation', () => {
 });
 
 describe('generated testbenches', () => {
+  // the HDMI lesson's tmds_serializer comes from the board library, as in the app
   it('compile and run for every lesson in both languages', async () => {
     const { ALL_LESSONS } = await import('../src/lessons/course');
     const { generateTestbench } = await import('../src/sim/tbgen');
     const { synthesize } = await import('../src/hdl');
     for (const l of ALL_LESSONS) {
       for (const lang of ['verilog', 'vhdl'] as const) {
-        const src = lang === 'verilog' ? l.verilog : l.vhdl;
+        const src = withLibrary(lang === 'verilog' ? l.verilog : l.vhdl, lang);
         const tb = l.tb?.[lang] ?? generateTestbench(synthesize(src, lang), lang);
         let s: TbSim;
         try {

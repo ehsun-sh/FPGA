@@ -15,12 +15,15 @@ import { GOALS, PREREQ, type Level } from './goals';
 import { PREDICT, type Question } from './predict';
 import { QUIZ } from './quiz';
 import { ZYNQ_EN, ZYNQ_GOALS, ZYNQ_LESSONS, ZYNQ_LEVEL, ZYNQ_PREREQ, ZYNQ_QUIZ } from './zynq';
+import { EXT_EN, EXT_GOALS, EXT_LESSONS, EXT_LEVEL, EXT_PREREQ, EXT_QUIZ } from './ext';
+import { hasVariant } from './boards';
 
-// chapter Z (EBAZ4205) keeps its learning-loop data in zynq.ts
-Object.assign(EN, ZYNQ_EN);
-Object.assign(GOALS, ZYNQ_GOALS);
-Object.assign(QUIZ, ZYNQ_QUIZ);
-Object.assign(PREREQ, ZYNQ_PREREQ);
+// the EBAZ4205 chapters keep their learning-loop data in zynq.ts (chapter Z) and ext.ts (extension board, HDMI)
+Object.assign(EN, ZYNQ_EN, EXT_EN);
+Object.assign(GOALS, ZYNQ_GOALS, EXT_GOALS);
+Object.assign(QUIZ, ZYNQ_QUIZ, EXT_QUIZ);
+Object.assign(PREREQ, ZYNQ_PREREQ, EXT_PREREQ);
+Object.assign(ZYNQ_LEVEL, EXT_LEVEL);
 
 type Text = { fa: string; en: string };
 
@@ -31,9 +34,11 @@ export interface Chapter {
   projects?: boolean; // the guided projects: listed on their own, not counted in the course progress
   // the boards this chapter is for (default: the Nexys A7); '*' = any board (no board-specific hardware)
   boards?: string[];
+  // listed with the board's own versions of lessons from the other boards' chapters (lessons/boards.ts)
+  variants?: boolean;
 }
 
-const pool = new Map([...LESSONS, ...ADVANCED, TESTBENCH_LESSON, VGA_LESSON, SENSORS_LESSON, PS2_LESSON, SOFTCORE_LESSON, ...BEYOND, ...ZYNQ_LESSONS, PROJECT_CLOCK, PLAYGROUND].map((l) => [l.id, l]));
+const pool = new Map([...LESSONS, ...ADVANCED, TESTBENCH_LESSON, VGA_LESSON, SENSORS_LESSON, PS2_LESSON, SOFTCORE_LESSON, ...BEYOND, ...ZYNQ_LESSONS, ...EXT_LESSONS, PROJECT_CLOCK, PLAYGROUND].map((l) => [l.id, l]));
 const pick = (...ids: string[]) =>
   ids.map((id) => {
     const l = pool.get(id);
@@ -51,6 +56,9 @@ export const CHAPTERS: Chapter[] = [
   { title: { fa: 'حافظه و پردازنده‌ی نرم', en: 'Memory and a soft-core processor' }, lessons: pick('ram', 'softcore') },
   { title: { fa: 'فراتر از مبانی', en: 'Beyond the basics' }, lessons: pick('timing', 'clocking', 'cdc', 'bram', 'realboard') },
   { title: { fa: 'Zynq و برد EBAZ4205', en: 'Zynq and the EBAZ4205' }, lessons: pick('z-intro', 'z-blink', 'z-bootflow', 'z-ps-hello', 'z-ethernet'), boards: ['ebaz4205'] },
+  { title: { fa: 'برد توسعه: LED، کلید، سریال، بازر و LCD', en: 'Extension board: LEDs, keys, serial, buzzer and LCD' }, lessons: pick('x-leds', 'x-keys', 'x-uart', 'x-buzzer', 'x-lcd'), boards: ['ebaz4205'] },
+  { title: { fa: 'درس‌های پایه روی EBAZ4205', en: 'Core lessons on the EBAZ4205' }, lessons: [], boards: ['ebaz4205'], variants: true },
+  { title: { fa: 'HDMI', en: 'HDMI' }, lessons: pick('x-hdmi-tmds', 'x-hdmi-bars'), boards: ['ebaz4205'] },
   { title: { fa: 'آزمایشگاه', en: 'Lab' }, lessons: [PLAYGROUND], boards: ['*'] },
   {
     title: { fa: 'پروژه‌ها', en: 'Projects' },
@@ -112,13 +120,25 @@ CHAPTERS.forEach((c, ci) => {
 export const NEXYS = 'nexys-a7-100t';
 export const chapterBoards = (c: Chapter) => c.boards ?? [NEXYS];
 export const chapterOnBoard = (c: Chapter, board: string) => chapterBoards(c).some((b) => b === '*' || b === board);
-// the chapters a learner on this board sees: its own and the board-independent ones
-export const chaptersFor = (board: string) => CHAPTERS.filter((c) => chapterOnBoard(c, board));
-export const courseChaptersFor = (board: string) => chaptersFor(board).filter((c) => COURSE_CHAPTERS.includes(c));
+// a board's versions of lessons from other boards' chapters, in course order; they fill its `variants` chapter
+const variantLessons = (board: string) =>
+  CHAPTERS.filter((c) => !c.variants && !chapterOnBoard(c, board)).flatMap((c) => c.lessons).filter((l) => hasVariant(l.id, board));
+const filled = (c: Chapter, board: string): Chapter => (c.variants ? { ...c, lessons: variantLessons(board) } : c);
+// the chapters a learner on this board sees: its own (one of them may hold its versions of other lessons) and the
+// board-independent ones
+export const chaptersFor = (board: string) =>
+  CHAPTERS.filter((c) => chapterOnBoard(c, board))
+    .map((c) => filled(c, board))
+    .filter((c) => c.lessons.length > 0 || !!c.soon);
+export const courseChaptersFor = (board: string) =>
+  CHAPTERS.filter((c) => chapterOnBoard(c, board) && COURSE_CHAPTERS.includes(c))
+    .map((c) => filled(c, board))
+    .filter((c) => c.lessons.length > 0);
 export const courseLessonsFor = (board: string) => courseChaptersFor(board).flatMap((c) => c.lessons);
 // the boards a lesson can run on (those of its chapter)
 export const lessonBoards = (l: Lesson) => chapterBoards(CHAPTERS.find((c) => c.lessons.includes(l)) ?? CHAPTERS[0]);
-export const lessonOnBoard = (l: Lesson, board: string) => lessonBoards(l).some((b) => b === '*' || b === board);
+// a lesson runs on its chapter's boards and on every board it has a version for
+export const lessonOnBoard = (l: Lesson, board: string) => lessonBoards(l).some((b) => b === '*' || b === board) || hasVariant(l.id, board);
 
 export const chapterOf = (l: Lesson) => CHAPTERS.findIndex((c) => c.lessons.includes(l));
 export { PLAYGROUND };

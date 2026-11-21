@@ -7,7 +7,8 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import type { BoardOutputs, BoardView } from '../types';
 import { roundedSlab } from '../nexys-a7/modules3d';
 import { expandEbazParts } from './parts';
-import { HEADERS } from './pins';
+import { HEADERS, KEYS } from './pins';
+import { buildExtension, EXT_PARTS, Z0 as EXT_Z0, ZD as EXT_ZD, type ExtModel } from './ext3d';
 
 const W = 13.6; // board length (x)
 const D = 7.7; // board depth (z)
@@ -163,8 +164,19 @@ export class EbazModel implements BoardView {
   private userMoved = false;
   private hl: { group: THREE.Group; ring: THREE.MeshBasicMaterial; halos: THREE.Sprite[]; t: number; still: boolean } | null = null;
   private probeGroup: THREE.Group | null = null;
+  private ext: ExtModel | null = null;
+  private pressed = new Set<string>();
+  private raycaster = new THREE.Raycaster();
+  private pointer = new THREE.Vector2();
+  private buzzHz = 0;
+  private buzzT = 0;
+  private lcdTex: THREE.CanvasTexture | null = null;
+  private lcdMat: THREE.MeshBasicMaterial | null = null;
 
-  constructor(private container: HTMLElement) {
+  constructor(
+    private container: HTMLElement,
+    attached = false,
+  ) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
@@ -182,6 +194,12 @@ export class EbazModel implements BoardView {
     this.resetView();
     this.buildLights();
     this.buildBoard();
+    if (attached) {
+      this.ext = buildExtension(TOP, this.glowTex, HDR_X.map((x) => x + 0.9));
+      this.scene.add(this.ext.group);
+      this.bindKeys();
+    }
+    this.resetView();
     new ResizeObserver(() => this.resize()).observe(container);
     this.resize();
     this.renderer.setAnimationLoop(() => this.tick());
@@ -190,7 +208,14 @@ export class EbazModel implements BoardView {
   private fit(): number {
     const aspect = this.camera.aspect || 1.5;
     // the board is long and flat: a narrow (phone) panel needs the camera further back to keep both ends in view
-    return aspect >= 1.7 ? 1 : (1.7 / aspect) ** 1.05;
+    const k = aspect >= 1.7 ? 1 : (1.7 / aspect) ** 1.05;
+    // the extension board doubles the depth of the scene
+    return this.ext ? k * 1.45 : k;
+  }
+
+  // the middle of what is on the desk (z): the core board, or the core and the extension board
+  private midZ() {
+    return this.ext ? (-D / 2 + EXT_Z0 + EXT_ZD) / 2 : 0.4;
   }
 
   private buildLights() {
@@ -356,8 +381,14 @@ export class EbazModel implements BoardView {
     this.view = 'persp';
     this.userMoved = false;
     const k = this.fit();
-    this.camera.position.set(0, 11 * k, 10 * k);
-    this.controls.target.set(0, 0, 0.4);
+    const z = this.midZ();
+    if (this.monitor) {
+      this.camera.position.set(0, 13 * k, z + 13 * k);
+      this.controls.target.set(0, 2.2, z - 4.5);
+    } else {
+      this.camera.position.set(0, 11 * k, z + 9.6 * k);
+      this.controls.target.set(0, 0, z);
+    }
     this.controls.update();
   }
 
@@ -365,8 +396,9 @@ export class EbazModel implements BoardView {
     this.view = 'top';
     this.userMoved = false;
     const k = this.fit();
-    this.camera.position.set(0, 15.5 * k, 0.4);
-    this.controls.target.set(0, 0, 0.3);
+    const z = this.midZ();
+    this.camera.position.set(0, 15.5 * k, z + 0.1);
+    this.controls.target.set(0, 0, z);
     this.controls.update();
   }
 
@@ -396,13 +428,14 @@ export class EbazModel implements BoardView {
       this.hl.ring.dispose();
       this.hl = null;
     }
-    const parts = expandEbazParts(names);
+    const parts = expandEbazParts(names).filter((p) => PARTS[p] || (this.ext && EXT_PARTS[p]));
     if (!parts.length) return;
     const group = new THREE.Group();
     const ring = new THREE.MeshBasicMaterial({ color: HL_COLOR, transparent: true, depthWrite: false });
     const halos: THREE.Sprite[] = [];
     for (const p of parts) {
-      const [x, z, w, d] = PARTS[p];
+      const [x, z, w, d] = PARTS[p] ?? EXT_PARTS[p];
+      const y = PARTS[p] ? TOP : TOP + (p === 'LCD' ? 0.4 : 0.02);
       const t = 0.06;
       for (const [fx, fz, fw, fd] of [
         [x, z - d / 2 + t / 2, w, t],
@@ -411,10 +444,10 @@ export class EbazModel implements BoardView {
         [x + w / 2 - t / 2, z, t, d - 2 * t],
       ]) {
         const m = new THREE.Mesh(new THREE.BoxGeometry(fw, 0.012, fd), ring);
-        m.position.set(fx, TOP + 0.012, fz);
+        m.position.set(fx, y + 0.012, fz);
         group.add(m);
       }
-      const s = this.glow(HL_COLOR, x, TOP + 0.3, z, Math.max(w, d) + 0.5);
+      const s = this.glow(HL_COLOR, x, y + 0.3, z, Math.max(w, d) + 0.5);
       this.scene.remove(s);
       group.add(s);
       halos.push(s);
@@ -429,17 +462,202 @@ export class EbazModel implements BoardView {
     this.deskMat.color.set('#' + n.toString(16).padStart(6, '0'));
   }
 
-  isPressed() {
-    return false;
+  isPressed(name: string) {
+    return this.pressed.has(name);
+  }
+
+  press(name: string, down: boolean) {
+    if (!this.ext?.keyCaps.has(name) || this.pressed.has(name) === down) return;
+    if (down) this.pressed.add(name);
+    else this.pressed.delete(name);
+    this.keyButtons.get(name)?.setAttribute('aria-pressed', String(down));
+    this.onButton(name, down);
   }
 
   setOutputs(o: BoardOutputs) {
-    this.ledMats.forEach((m, i) => {
+    const mats = [...this.ledMats, ...(this.ext?.ledMats ?? [])];
+    const glows = [...this.ledGlows, ...(this.ext?.ledGlows ?? [])];
+    mats.forEach((m, i) => {
       const b = o.led[i] ?? 0;
       m.emissiveIntensity = b * 3.2;
-      this.ledGlows[i].material.opacity = Math.min(1, b * 1.1);
+      glows[i].material.opacity = Math.min(1, b * 1.1);
     });
     this.doneMat.emissiveIntensity = o.done ? 3 : 0;
+    this.buzzHz = o.buzzer ?? 0;
+  }
+
+  // the extension board's LCD: the canvas the display model paints, or dark glass
+  setLcd(screen: HTMLCanvasElement | null) {
+    if (!this.ext) return;
+    if (this.lcdTex && this.lcdTex.image !== screen) {
+      this.lcdTex.dispose();
+      this.lcdMat?.dispose();
+      this.lcdTex = null;
+      this.lcdMat = null;
+    }
+    if (screen && !this.lcdTex) {
+      this.lcdTex = new THREE.CanvasTexture(screen);
+      this.lcdTex.colorSpace = THREE.SRGBColorSpace;
+      this.lcdTex.magFilter = THREE.NearestFilter;
+      this.lcdMat = new THREE.MeshBasicMaterial({ map: this.lcdTex, toneMapped: false });
+    }
+    this.ext.lcd.material = this.lcdMat ?? this.ext.dark;
+  }
+
+  refreshLcd() {
+    if (this.lcdTex) this.lcdTex.needsUpdate = true;
+  }
+
+  // the keys: pressed on the 3D board with the mouse or a finger (held while the pointer is down), and from the
+  // keyboard on the key pad in the corner (Space or Enter, held while the key is down)
+  private keyButtons = new Map<string, HTMLButtonElement>();
+  private bindKeys() {
+    const el = this.renderer.domElement;
+    const caps = [...this.ext!.keyCaps.values()];
+    const pick = (ev: { clientX: number; clientY: number }) => {
+      const r = el.getBoundingClientRect();
+      this.pointer.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+      this.raycaster.setFromCamera(this.pointer, this.camera);
+      const hit = this.raycaster.intersectObjects(caps, false)[0];
+      return hit ? (hit.object.userData.key as string) : null;
+    };
+    // capturing, so it runs before OrbitControls: pressing a key never turns the view as well
+    el.addEventListener(
+      'pointerdown',
+      (ev) => {
+        const k = pick(ev);
+        if (!k) return;
+        this.controls.enabled = false;
+        this.press(k, true);
+      },
+      true,
+    );
+    const release = () => {
+      for (const k of [...this.pressed]) if (!this.held.has(k)) this.press(k, false);
+      this.controls.enabled = true;
+    };
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+    window.addEventListener('blur', () => {
+      this.held.clear();
+      release();
+    });
+    el.addEventListener('pointermove', (ev) => {
+      el.style.cursor = pick(ev) ? 'pointer' : 'grab';
+    });
+    const pad = document.createElement('div');
+    pad.className = 'key-pad';
+    pad.setAttribute('role', 'group');
+    pad.setAttribute('aria-label', 'Extension board keys');
+    for (const [name] of KEYS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = name.replace('KEY', 'K');
+      b.title = `${name}: hold Space or Enter, or press the key on the board`;
+      b.setAttribute('aria-label', name);
+      b.setAttribute('aria-pressed', 'false');
+      const down = (e: Event) => {
+        e.preventDefault();
+        this.held.add(name);
+        this.press(name, true);
+      };
+      const up = () => {
+        this.held.delete(name);
+        this.press(name, false);
+      };
+      b.addEventListener('pointerdown', down);
+      b.addEventListener('pointerup', up);
+      b.addEventListener('pointerleave', up);
+      b.addEventListener('keydown', (e) => {
+        if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) down(e);
+      });
+      b.addEventListener('keyup', (e) => {
+        if (e.key === ' ' || e.key === 'Enter') up();
+      });
+      b.addEventListener('blur', up);
+      pad.appendChild(b);
+      this.keyButtons.set(name, b);
+    }
+    this.container.appendChild(pad);
+  }
+  private held = new Set<string>();
+
+  // HDMI monitor behind the boards, with a cable from the extension board's HDMI socket
+  private monitor: { group: THREE.Group; tex: THREE.CanvasTexture; led: THREE.MeshStandardMaterial; signal: boolean | null } | null = null;
+  setMonitor(screen: HTMLCanvasElement | null) {
+    if (this.monitor && (!screen || this.monitor.tex.image !== screen)) {
+      this.scene.remove(this.monitor.group);
+      this.monitor.group.traverse((o) => {
+        if (o instanceof THREE.Mesh) {
+          o.geometry.dispose();
+          (o.material as THREE.Material).dispose();
+        }
+      });
+      this.monitor.tex.dispose();
+      this.monitor = null;
+    }
+    if (screen && !this.monitor && this.ext) this.buildMonitor(screen);
+    if (!this.userMoved) this.fitView();
+  }
+
+  refreshMonitor() {
+    if (this.monitor) this.monitor.tex.needsUpdate = true;
+  }
+
+  updateMonitor(signal: boolean) {
+    const m = this.monitor;
+    if (!m || m.signal === signal) return;
+    m.signal = signal;
+    m.led.emissive.set(signal ? '#27d65a' : '#ffae1a');
+  }
+
+  private buildMonitor(screen: HTMLCanvasElement) {
+    const g = new THREE.Group();
+    const add = (w: number, h: number, d: number, mat: THREE.Material, x: number, y: number, z: number) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      m.position.set(x, y + h / 2, z);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      g.add(m);
+      return m;
+    };
+    const plastic = new THREE.MeshStandardMaterial({ color: '#16181c', roughness: 0.55, metalness: 0.1 });
+    const dark = new THREE.MeshStandardMaterial({ color: '#0b0c0e', roughness: 0.4 });
+    const tex = new THREE.CanvasTexture(screen);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    const MZ = -D / 2 - 2.6; // screen plane, behind the core board
+    const SW_ = 11.2; // screen size (4:3)
+    const SH = 8.4;
+    const BOT = 1.6;
+    const DESK = -0.62;
+    add(4.6, 0.18, 2.8, plastic, 0, DESK, MZ - 0.6);
+    add(1.1, BOT - DESK - 0.2, 0.5, plastic, 0, DESK + 0.18, MZ - 0.75);
+    add(SW_ + 0.7, SH + 0.8, 0.5, plastic, 0, BOT - 0.55, MZ - 0.3);
+    add(SW_ + 0.7, 0.45, 0.12, dark, 0, BOT - 0.55, MZ);
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(SW_, SH), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
+    scr.position.set(0, BOT + SH / 2 - 0.05, MZ - 0.04);
+    g.add(scr);
+    const led = new THREE.MeshStandardMaterial({ color: '#222', emissive: '#ffae1a', emissiveIntensity: 2.5 });
+    const ledM = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 8), led);
+    ledM.position.set(SW_ / 2 - 0.2, BOT - 0.33, MZ + 0.08);
+    g.add(ledM);
+    // cable from the HDMI socket on the right edge, round the boards on the desk and up into the monitor
+    const [hx, hz] = EXT_PARTS.HDMI;
+    const cableMat = new THREE.MeshStandardMaterial({ color: '#1b1b1f', roughness: 0.6 });
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(hx + 0.6, TOP + 0.4, hz),
+      new THREE.Vector3(hx + 1.6, TOP + 0.2, hz),
+      new THREE.Vector3(W / 2 + 1.2, DESK + 0.1, 2),
+      new THREE.Vector3(W / 2 + 0.6, DESK + 0.1, MZ + 1.2),
+      new THREE.Vector3(SW_ / 2 - 1.5, BOT + 0.6, MZ - 0.62),
+    ]);
+    const cable = new THREE.Mesh(new THREE.TubeGeometry(curve, 64, 0.09, 8), cableMat);
+    cable.castShadow = true;
+    g.add(cable);
+    add(0.7, 0.4, 1.0, cableMat, hx + 0.85, TOP + 0.15, hz);
+    this.scene.add(g);
+    this.monitor = { group: g, tex, led, signal: null };
   }
 
   private tick() {
@@ -453,6 +671,20 @@ export class EbazModel implements BoardView {
       const k = h.still ? 1 : 0.5 + 0.5 * Math.sin((h.t / 1.2) * Math.PI * 2);
       for (const s of h.halos) s.material.opacity = 0.35 + 0.55 * k;
       h.ring.opacity = 0.6 + 0.4 * k;
+    }
+    const ext = this.ext;
+    if (ext) {
+      // key caps go down while pressed; the buzzer trembles and glows faintly while it sounds
+      for (const [name, cap] of ext.keyCaps) {
+        const target = TOP + 0.41 - (this.pressed.has(name) ? 0.08 : 0);
+        cap.position.y += (target - cap.position.y) * Math.min(1, dt * 30);
+      }
+      this.buzzT += dt;
+      const on = this.buzzHz > 0;
+      const m = ext.buzzer.material as THREE.MeshStandardMaterial;
+      m.emissiveIntensity = on ? 0.25 + 0.15 * Math.sin(this.buzzT * 40) : 0;
+      const sc = on ? 1 + 0.03 * Math.sin(this.buzzT * 60) : 1;
+      ext.buzzer.scale.set(sc, 1, sc);
     }
     this.controls.update();
     this.renderer.render(this.scene, this.camera);

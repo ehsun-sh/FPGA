@@ -55,7 +55,7 @@ export class VgaMonitor {
   private cpp: number; // board cycles per pixel
   private hs = 1;
   private vs = 1;
-  private color = 0; // 12-bit {r, g, b}
+  private color = 0; // {r, g, b}: 12-bit (VGA, 4 bits a channel) or 24-bit (HDMI, depth 8)
   private tLast = 0;
   // sync polarity: the level that means "in the sync pulse"; found from which level is shorter
   private hsPol = 0;
@@ -71,7 +71,10 @@ export class VgaMonitor {
   private lastSyncAt = -Infinity;
   private rangeOk = true;
 
-  constructor(public clockHz: number) {
+  constructor(
+    public clockHz: number,
+    public depth: 4 | 8 = 4,
+  ) {
     this.cpp = clockHz / VGA_MODES[0].pixelHz;
     this.pixels = new Uint8ClampedArray(this.mode.w * this.mode.h * 4);
     this.clear();
@@ -195,9 +198,10 @@ export class VgaMonitor {
     const x0 = Math.max(0, Math.ceil((a - this.hsLead) / this.cpp - off - 0.5));
     const x1 = Math.min(m.w, Math.ceil((b - this.hsLead) / this.cpp - off - 0.5));
     if (x1 <= x0) return;
-    const r = ((color >> 8) & 15) * 17;
-    const g = ((color >> 4) & 15) * 17;
-    const bl = (color & 15) * 17;
+    const d8 = this.depth === 8;
+    const r = d8 ? (color >> 16) & 255 : ((color >> 8) & 15) * 17;
+    const g = d8 ? (color >> 8) & 255 : ((color >> 4) & 15) * 17;
+    const bl = d8 ? color & 255 : (color & 15) * 17;
     const px = this.pixels;
     for (let x = x0, i = (y * m.w + x0) * 4; x < x1; x++, i += 4) {
       px[i] = r;

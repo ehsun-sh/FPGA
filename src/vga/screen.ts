@@ -3,6 +3,8 @@
 import type { BoardDef, BoardView } from '../boards';
 import type { Mapping } from '../boards/mapping';
 import type { Runner } from '../sim/runner';
+import type { Design } from '../hdl';
+import { hdmiTap } from './hdmi';
 import { VgaMonitor, vgaTap, type VgaTap } from './monitor';
 
 const W = 640;
@@ -17,6 +19,9 @@ export class VgaScreen {
   private info: HTMLElement;
   private shown: 'ok' | 'no-signal' | 'out-of-range' | '' = '';
   private fpsWin: { t: number; f: number }[] = [];
+  // a board with an HDMI socket (EBAZ4205 extension board): the same monitor, fed by the TMDS decoder
+  readonly hdmi: boolean;
+  private clockHz: number;
   onToggle: (open: boolean) => void = () => {};
 
   constructor(
@@ -25,6 +30,8 @@ export class VgaScreen {
     private view: BoardView,
     private runner: Runner,
   ) {
+    this.clockHz = board.clockHz;
+    this.hdmi = Object.values(board.pins).some((d) => d.kind === 'hdmi');
     this.monitor = new VgaMonitor(board.clockHz);
     this.canvas.width = W;
     this.canvas.height = H;
@@ -32,7 +39,7 @@ export class VgaScreen {
     this.el.className = 'la-win vga-win';
     this.el.hidden = true;
     this.el.innerHTML = `
-<div class="la-title"><span class="la-ico vga"></span><b>VGA Monitor</b><span class="dim" id="vga-info">No signal</span><span class="grow"></span><button class="la-close" title="Close">✕</button></div>
+<div class="la-title"><span class="la-ico vga"></span><b>${this.hdmi ? 'HDMI Monitor' : 'VGA Monitor'}</b><span class="dim" id="vga-info">No signal</span><span class="grow"></span><button class="la-close" title="Close">✕</button></div>
 <div class="vga-body"></div>`;
     this.el.querySelector('.vga-body')!.appendChild(this.canvas);
     this.info = this.el.querySelector('#vga-info')!;
@@ -59,8 +66,18 @@ export class VgaScreen {
     return !!this.tap;
   }
 
-  setDesign(mapping: Mapping | null) {
+  // design: for the HDMI decoder, which listens to the stand-in serializer inside the design
+  setDesign(mapping: Mapping | null, design?: Design | null) {
     this.tap = mapping ? vgaTap(mapping.bindings) : null;
+    let depth: 4 | 8 = 4;
+    if (!this.tap && design) {
+      const h = hdmiTap(design);
+      if (h) {
+        this.tap = h;
+        depth = 8;
+      }
+    }
+    if (this.monitor.depth !== depth) this.monitor = new VgaMonitor(this.clockHz, depth);
     if (!this.tap || !this.runner.sim) {
       this.tap = null;
       this.runner.setProbe('vga', null);
@@ -147,7 +164,7 @@ export class VgaScreen {
       g.fillText(text, 320, 228);
       g.font = '16px sans-serif';
       g.fillStyle = '#9fb0c2';
-      g.fillText(st === 'no-signal' ? 'check HS / VS (VGA input)' : 'use 640×480, 800×600 or 1024×768 @ 60 Hz', 320, 264);
+      g.fillText(st === 'no-signal' ? (this.hdmi ? 'check the TMDS symbols and HS / VS (HDMI input)' : 'check HS / VS (VGA input)') : 'use 640×480, 800×600 or 1024×768 @ 60 Hz', 320, 264);
     }
     this.view.refreshMonitor?.();
   }
