@@ -30,7 +30,8 @@ function grade(l: Lesson, src: string, lang: 'verilog' | 'vhdl' = 'verilog', tb?
 const show = (r: GradeResult) => r.items.map((i) => `${i.ok ? '✓' : '✗'} ${i.en}`).join('\n');
 
 // guided real-board lessons of the EBAZ4205 chapter: no checker
-const REAL = ['z-intro', 'z-bootflow', 'z-ps-hello', 'z-ethernet'];
+// lessons whose practice is on the real board (or, for Linux on Zynq, in the simulated terminal) instead of an HDL exercise
+const REAL = ['z-intro', 'z-bootflow', 'z-ps-hello', 'z-ethernet', 'lx-boot', 'lx-console', 'lx-gpio', 'lx-driver', 'lx-fpgamgr'];
 
 describe('exercise checkers', () => {
   it('every lesson but the playground and the real-board guide has an exercise', () => {

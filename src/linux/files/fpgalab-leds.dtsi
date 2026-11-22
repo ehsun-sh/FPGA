@@ -1,0 +1,17 @@
+// FPGA Lab (lesson lx-driver): add this to the board's device tree.
+// With Buildroot, append it to board/ebaz4205/zynq-ebaz4205.dts; on its own, "make dtb" appends it to the
+// decompiled dtb from the board. A decompiled dtb has no labels, so the clock node is named by its path.
+
+/ {
+	// the AXI GPIO of the lx-gpio design: LED1-LED3 on channel 1, KEY1-KEY5 on channel 2
+	fpgalab_leds: leds@41200000 {
+		compatible = "fpgalab,axi-leds";
+		reg = <0x41200000 0x10000>;
+	};
+};
+
+// keep FCLK_CLK0 running after boot: without this (or clk_ignore_unused on the command line) Linux turns off the
+// PL clock as unused, and the AXI GPIO stops answering. Bit 0 = FCLK_CLK0.
+&{/amba/slcr@f8000000/clkc@100} {
+	fclk-enable = <0x1>;
+};

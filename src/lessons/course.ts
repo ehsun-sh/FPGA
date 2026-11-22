@@ -16,14 +16,16 @@ import { PREDICT, type Question } from './predict';
 import { QUIZ } from './quiz';
 import { ZYNQ_EN, ZYNQ_GOALS, ZYNQ_LESSONS, ZYNQ_LEVEL, ZYNQ_PREREQ, ZYNQ_QUIZ } from './zynq';
 import { EXT_EN, EXT_GOALS, EXT_LESSONS, EXT_LEVEL, EXT_PREREQ, EXT_QUIZ } from './ext';
+import { LINUX_EN, LINUX_GOALS, LINUX_LESSONS, LINUX_LEVEL, LINUX_PREREQ, LINUX_QUIZ } from './linux';
 import { hasVariant } from './boards';
 
-// the EBAZ4205 chapters keep their learning-loop data in zynq.ts (chapter Z) and ext.ts (extension board, HDMI)
-Object.assign(EN, ZYNQ_EN, EXT_EN);
-Object.assign(GOALS, ZYNQ_GOALS, EXT_GOALS);
-Object.assign(QUIZ, ZYNQ_QUIZ, EXT_QUIZ);
-Object.assign(PREREQ, ZYNQ_PREREQ, EXT_PREREQ);
-Object.assign(ZYNQ_LEVEL, EXT_LEVEL);
+// the EBAZ4205 chapters keep their learning-loop data in zynq.ts (chapter Z), ext.ts (extension board, HDMI) and
+// linux.ts (Linux on Zynq)
+Object.assign(EN, ZYNQ_EN, EXT_EN, LINUX_EN);
+Object.assign(GOALS, ZYNQ_GOALS, EXT_GOALS, LINUX_GOALS);
+Object.assign(QUIZ, ZYNQ_QUIZ, EXT_QUIZ, LINUX_QUIZ);
+Object.assign(PREREQ, ZYNQ_PREREQ, EXT_PREREQ, LINUX_PREREQ);
+Object.assign(ZYNQ_LEVEL, EXT_LEVEL, LINUX_LEVEL);
 
 type Text = { fa: string; en: string };
 
@@ -38,7 +40,7 @@ export interface Chapter {
   variants?: boolean;
 }
 
-const pool = new Map([...LESSONS, ...ADVANCED, TESTBENCH_LESSON, VGA_LESSON, SENSORS_LESSON, PS2_LESSON, SOFTCORE_LESSON, ...BEYOND, ...ZYNQ_LESSONS, ...EXT_LESSONS, PROJECT_CLOCK, PLAYGROUND].map((l) => [l.id, l]));
+const pool = new Map([...LESSONS, ...ADVANCED, TESTBENCH_LESSON, VGA_LESSON, SENSORS_LESSON, PS2_LESSON, SOFTCORE_LESSON, ...BEYOND, ...ZYNQ_LESSONS, ...EXT_LESSONS, ...LINUX_LESSONS, PROJECT_CLOCK, PLAYGROUND].map((l) => [l.id, l]));
 const pick = (...ids: string[]) =>
   ids.map((id) => {
     const l = pool.get(id);
@@ -59,6 +61,7 @@ export const CHAPTERS: Chapter[] = [
   { title: { fa: 'برد توسعه: LED، کلید، سریال، بازر و LCD', en: 'Extension board: LEDs, keys, serial, buzzer and LCD' }, lessons: pick('x-leds', 'x-keys', 'x-uart', 'x-buzzer', 'x-lcd'), boards: ['ebaz4205'] },
   { title: { fa: 'درس‌های پایه روی EBAZ4205', en: 'Core lessons on the EBAZ4205' }, lessons: [], boards: ['ebaz4205'], variants: true },
   { title: { fa: 'HDMI', en: 'HDMI' }, lessons: pick('x-hdmi-tmds', 'x-hdmi-bars'), boards: ['ebaz4205'] },
+  { title: { fa: 'لینوکس روی Zynq', en: 'Linux on Zynq' }, lessons: pick('lx-boot', 'lx-console', 'lx-gpio', 'lx-driver', 'lx-fpgamgr'), boards: ['ebaz4205'] },
   { title: { fa: 'آزمایشگاه', en: 'Lab' }, lessons: [PLAYGROUND], boards: ['*'] },
   {
     title: { fa: 'پروژه‌ها', en: 'Projects' },

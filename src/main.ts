@@ -71,6 +71,8 @@ import { lessonTime } from "./lessons/time";
 import { partsIn, ref } from "./lessons/helpers";
 import { segPattern } from "./lessons/figures";
 import { helpHtml, predictHtml, progressMarks, quizHtml, resultHtml, LEARN_UI, levelDot, objectivesHtml, takeawaysHtml, type HelpState, type PredictState, type QuizState } from "./ui/learn";
+import { mountLinuxTerms } from "./linux/term";
+import type { LinuxMode } from "./synth/linux";
 
 // ---------------------------------------------------------------- storage
 const store = {
@@ -1400,10 +1402,21 @@ ${exerciseHtml()}
   fillRefs(el);
   restoreMilestones(el);
   restorePrep(el);
+  mountLinuxTerms(el, linuxDeps);
   el.scrollTop = 0;
   setRunState();
   void vivado.mount();
 }
+
+// the simulated terminal of the chapter "Linux on Zynq" (src/linux/term.ts)
+let linuxLeds: number[] | null = null;
+const linuxDeps = {
+  lang: () => uiLang,
+  setLeds: (l: number[] | null) => (linuxLeds = l),
+  pressed: (n: string) => board.isPressed(n),
+  get: (k: string) => store.get(k),
+  set: (k: string, v: string) => store.set(k, v),
+};
 
 // "Prepare your board" checklists (z-intro): the ticked steps are a bitmask in prep:<board>
 function restorePrep(el: HTMLElement) {
@@ -1720,6 +1733,9 @@ function download(
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
+// the Vivado project of each lesson in the chapter "Linux on Zynq" (src/synth/linux.ts)
+const LINUX_PROJECT: Record<string, LinuxMode> = { "lx-boot": "linux", "lx-console": "linux", "lx-gpio": "axigpio", "lx-driver": "axigpio", "lx-fpgamgr": "linux-pl" };
+
 // the editor's design as a Vivado project (the EBAZ4205 PS lessons export a PS-only project instead)
 function projectSpec(): ProjectSpec {
   let top = "top";
@@ -1745,7 +1761,9 @@ function projectSpec(): ProjectSpec {
         ? { mode: "hello", app: PS_HELLO_C }
         : lesson.id === "z-ethernet"
           ? { mode: "ethernet" }
-          : undefined,
+          : LINUX_PROJECT[lesson.id]
+            ? { mode: LINUX_PROJECT[lesson.id] }
+            : undefined,
   };
 }
 
@@ -2305,7 +2323,8 @@ const buzzBtn = $("#buzz-btn");
 const modBtn = $("#mod-btn");
 board.onFrame = (dt) => {
   const out = runner.frame(dt);
-  board.setOutputs(out);
+  // the simulated Linux of the chapter "Linux on Zynq" drives the LEDs while the PL simulation is stopped
+  board.setOutputs(linuxLeds && !runner.running ? { ...out, led: linuxLeds, done: true } : out);
   la.frame();
   serial.frame();
   vga.frame();

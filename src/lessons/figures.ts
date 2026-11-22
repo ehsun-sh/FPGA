@@ -699,3 +699,69 @@ export function figMii(o: { title?: string; mac?: string; phy?: string; slice?: 
   b += L(300, 154, 300, 176, 'la') + T(300, 190, lab.zero, 'sm mono tm');
   return svg(600, 198, lab.title, b);
 }
+
+// Linux on the EBAZ4205 (lx-boot): the boot chain from the BootROM to /sbin/init, and where each piece sits on the
+// SD card of the blkf2016 image (partition 1 FAT, partition 2 ext4).
+export function figLinuxBoot(
+  o: { title?: string; rom?: string; uboot?: string; script?: string; kernel?: string; init?: string; p1?: string; p2?: string; f1?: string; f2?: string } = {},
+): string {
+  const lab = {
+    title: 'Linux on a Zynq: BootROM, FSBL, U-Boot, boot.scr, the kernel with its device tree, then the root file system',
+    rom: 'BootROM',
+    uboot: 'U-Boot',
+    script: 'boot.scr',
+    kernel: 'zImage + dtb',
+    init: '/sbin/init',
+    p1: 'partition 1 · FAT',
+    p2: 'partition 2 · ext4 (root=/dev/mmcblk0p2)',
+    f1: 'boot.bin · u-boot.bin · boot.scr',
+    f2: '/boot/zImage · /boot/zynq-ebaz4205.dtb · /bin · /etc · /lib',
+    ...o,
+  };
+  const st: [string, string][] = [
+    [lab.rom, 'bx'],
+    ['FSBL', 'bxa'],
+    [lab.uboot, 'bxa'],
+    [lab.script, 'bx'],
+    [lab.kernel, 'bxb'],
+    [lab.init, 'bxb'],
+  ];
+  let b = '';
+  st.forEach(([n, c], i) => {
+    const x = 6 + i * 99;
+    b += R(x, 16, 84, 40, c) + T(x + 42, 41, n, 'sm b');
+    if (i < st.length - 1) b += arrow(x + 84, 36, x + 99, 36);
+  });
+  b += R(6, 92, 186, 70, 'bus') + T(99, 114, lab.p1, 'sm b') + T(99, 140, lab.f1, 'sm mono');
+  b += R(204, 92, 390, 70, 'bus') + T(399, 114, lab.p2, 'sm b') + T(399, 140, lab.f2, 'sm mono');
+  // where each stage comes from
+  b += L(147, 56, 99, 92, 'ld') + L(246, 56, 120, 92, 'ld') + L(345, 56, 160, 92, 'ld') + L(444, 56, 399, 92, 'ld') + L(543, 56, 520, 92, 'ld');
+  return svg(600, 172, lab.title, b);
+}
+
+// The AXI GPIO of lx-gpio as Linux sees it: a program (through /dev/mem) or a driver writes an address, the PS sends
+// it out on M_AXI_GP0, and the AXI GPIO's registers drive LED1-LED3 and read KEY1-KEY5.
+export function figAxiMap(
+  o: { title?: string; user?: string; kernel?: string; leds?: string; keys?: string } = {},
+): string {
+  const lab = {
+    title: 'From Linux to the pins: /dev/mem or a driver, M_AXI_GP0, the AXI GPIO registers at 0x41200000, LED1-LED3 and KEY1-KEY5',
+    user: 'devmem · gpio_mem (/dev/mem)',
+    kernel: 'fpgalab_leds.ko (ioremap)',
+    leds: 'LED1-LED3 (E19 K17 H18)',
+    keys: 'KEY1-KEY5 (active low)',
+    ...o,
+  };
+  let b = R(6, 10, 196, 150, 'bxa', 8) + T(104, 30, 'PS · Linux', 'b');
+  b += R(18, 42, 172, 36) + T(104, 65, lab.user, 'sm');
+  b += R(18, 88, 172, 36) + T(104, 111, lab.kernel, 'sm');
+  b += T(104, 146, 'M_AXI_GP0', 'sm mono');
+  b += arrow(202, 85, 252, 85) + T(227, 78, 'AXI', 'sm mono ta');
+  b += R(252, 10, 196, 150, 'bxb', 8) + T(350, 30, 'AXI GPIO · 0x41200000', 'sm b');
+  b += R(264, 46, 172, 30) + T(350, 66, '+0x0  GPIO_DATA', 'sm mono');
+  b += R(264, 86, 172, 30) + T(350, 106, '+0x8  GPIO2_DATA', 'sm mono');
+  b += T(350, 144, '+0x4 / +0xC  TRI', 'sm mono tm');
+  b += arrow(436, 61, 488, 61) + T(540, 65, lab.leds, 'sm');
+  b += arrow(488, 101, 436, 101) + T(540, 105, lab.keys, 'sm');
+  return svg(600, 170, lab.title, b);
+}

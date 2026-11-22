@@ -519,10 +519,11 @@ const checks: Record<string, (h: Harness) => void> = {
     expect(h.led()).toBe(1 << 14);
   },
   ...Object.fromEntries(
-    ['z-intro', 'z-blink', 'z-bootflow', 'z-ps-hello', 'z-ethernet'].map((id) => [
+    ['z-intro', 'z-blink', 'z-bootflow', 'z-ps-hello', 'z-ethernet', 'lx-boot', 'lx-console', 'lx-gpio', 'lx-driver'].map((id) => [
       id,
       (h: Harness) => {
-        // EBAZ4205: LED_R and LED_G take turns every DIV = 10 clocks of FCLK_CLK0
+        // EBAZ4205 (and the Linux lessons, which keep the same blinker in the editor): LED_R and LED_G take turns
+        // every DIV = 10 clocks of FCLK_CLK0
         const a = h.led();
         expect([1, 2]).toContain(a);
         h.sim.run(10);
@@ -539,6 +540,10 @@ const checks: Record<string, (h: Harness) => void> = {
       b.run(4);
     }
     expect(seen).toEqual([1, 2, 4, 1]);
+  },
+  // lx-fpgamgr loads the running light from Linux: the same design as x-leds
+  'lx-fpgamgr'(h) {
+    checks['x-leds'](h);
   },
   'x-keys'(h) {
     const b = ext(h, { key: true, ext_led: true });
@@ -679,6 +684,7 @@ const checks: Record<string, (h: Harness) => void> = {
 // lessons whose delays are shortened for the test
 const PARAMS: Record<string, Record<string, number>> = {
   'x-leds': { DIV: 4 },
+  'lx-fpgamgr': { DIV: 4 },
   'x-keys': { DB: 50 },
   'x-buzzer': { CLK_HZ: 52400, NOTE_TICKS: 4000 },
   'x-lcd': { CLK_HZ: 50000 },
@@ -691,7 +697,7 @@ describe('lessons', () => {
       it(`${l.id} (${lang})`, () => {
         const b = lessonBoards(l)[0];
         const board = b === '*' ? DEFAULT_BOARD : getBoard(b);
-        const h = harness(lang === 'verilog' ? l.verilog : l.vhdl, lang, board.masterXdc(l.xdc), PARAMS[l.id] ?? (l.id.startsWith('z-') ? { DIV: 10 } : undefined), board);
+        const h = harness(lang === 'verilog' ? l.verilog : l.vhdl, lang, board.masterXdc(l.xdc), PARAMS[l.id] ?? (/^(z|lx)-/.test(l.id) ? { DIV: 10 } : undefined), board);
         const check = checks[l.id];
         expect(check, 'missing behaviour check').toBeTruthy();
         check(h);

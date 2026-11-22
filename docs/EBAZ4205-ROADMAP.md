@@ -257,11 +257,33 @@ Status 2026-11-21: the first three are done (`test/ext.test.ts`); the real-board
 - [x] The HDMI decoder round-trips 10,000 random symbols through `x_tmds.v` in a unit test.
 - [ ] On the real board (Ehsan): the downloaded `x-lcd` and `x-hdmi-bars` projects show their pictures.
 
+## Phase E5 — Linux on Zynq
+
+Status (2026-11-21): implemented. Chapter fa «لینوکس روی Zynq» en "Linux on Zynq", `boards: ['ebaz4205']`, after
+HDMI, five lessons in `src/lessons/linux.ts`, built on the Buildroot image of blkf2016/ebaz4205 (U-Boot 2019.07,
+Linux 5.1.5, root/root, eth0 192.168.100.1 with dnsmasq):
+
+- `lx-boot` — the boot chain BootROM → FSBL → U-Boot → boot.scr → zImage + dtb → rootfs, the SD card layout, booting
+  by hand from the U-Boot prompt.
+- `lx-console` — the J7 serial console, the network and SSH/scp, the LEDs in sysfs.
+- `lx-gpio` — an AXI GPIO at 0x41200000 (LED1-LED3, KEY1-KEY5), `devmem` and a `/dev/mem` C program; why
+  `clk_ignore_unused` matters (a gated FCLK hangs the bus).
+- `lx-driver` — a platform driver (`fpgalab_leds.ko`) and a device-tree node for it; the driver only binds once the
+  node is in the dtb.
+- `lx-fpgamgr` — a new bitstream from inside Linux through the FPGA manager (`fpgalab_load.ko`, since 5.1 has no
+  sysfs `firmware` file), and back to the AXI GPIO design.
+
+Practice is a simulated terminal in each lesson (`src/linux/`: an in-memory file system, a board model with U-Boot,
+a shell, sysfs and the PC side, and a task list per lesson). The Vivado zips (`src/synth/linux.ts`) add U-Boot to
+BOOT.bin, write `sd/boot.scr` and the `.bin` for the FPGA manager with plain Tcl (`linux/fpgalab.tcl`, byte-identical
+to mkimage and bootgen), and carry the C sources, the dtsi and a cross-compile Makefile. Still open: Ehsan's run on
+the real board.
+
 ---
 
 ## Later (not planned in detail)
 
-- `z-linux` as a full lesson; a PetaLinux variant; the Buildroot route of blkf2016/ebaz4205.
+- A PetaLinux variant of the Linux chapter; device-tree overlays (needs a kernel with OF_OVERLAY).
 - Elrori's EBAZEXT-V2 as a second extension-board option (`ebazext-v2.xdc`): audio jack, GPIO header, and an
   `x-camera` lesson (OV7670 on its camera header, shown on HDMI).
 - A small PS model in the simulator (EMIO GPIO and an AXI-GPIO register panel driven by a tiny C-like script) so
