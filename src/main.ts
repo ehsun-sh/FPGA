@@ -200,10 +200,15 @@ ${BOARDS.map((b) => `    <button data-board="${b.id}" role="menuitemradio" aria-
   </div></div>
 </nav>
 <div class="toolbar" role="toolbar" aria-label="Design flow">
-  <button class="tb run" data-act="run" title="Synthesize, implement and program the board (Ctrl+Enter)">${icon("play", 14)}<span class="lbl">Run on Board</span></button>
+  <button class="tb run" data-act="run" id="run-btn" title="Run on the 3D board in your browser (simulation) · Ctrl+Enter">${icon("play", 14)}<span class="lbl">Run on Board</span></button>
   <button class="tb" data-act="stop" title="Stop">${icon("stop", 14)}<span class="lbl">Stop</span></button>
   <button class="tb" data-act="reset" title="Reset the design (like re-programming)">${icon("reset", 14)}<span class="lbl">Reset</span></button>
   <button class="tb" data-act="sim" id="sim-btn" title="Run the testbench and show the waveforms (Shift+F6)">${icon("wave", 14)}<span class="lbl">Simulate</span></button>
+  <button class="tb" data-act="schematic" id="schem-btn" title="">${icon("schematic", 14)}<span class="lbl">Schematic</span></button>
+  <span class="sep lesson-sep"></span>
+  <button class="tb check-tb" data-act="check-tb" id="check-btn" title="">${icon("check", 14)}<span class="lbl" id="check-l">Check</span></button>
+  <span class="check-res" id="check-res" role="status" aria-live="polite"></span>
+  <button class="tb real-tb" data-act="real-board" id="real-btn" title="">${icon("cpu", 14)}<span class="lbl" id="real-l">Real board</span></button>
   <span class="sep" id="tool-sep"></span>
   <button class="tb tool" data-act="la" id="la-btn" title="Logic Analyzer (Ctrl+L)">${icon("logic", 14)}<span class="lbl">Logic Analyzer</span></button>
   <button class="tb tool" data-act="serial" id="serial-btn" title="Serial Console on the USB-UART (Ctrl+M)">${icon("terminal", 14)}<span class="lbl">Serial Console</span></button>
@@ -279,10 +284,10 @@ ${BOARDS.map((b) => `    <button data-board="${b.id}" role="menuitemradio" aria-
     <div class="phone-note" id="phone-note" role="note"><span id="phone-note-t"></span><button data-act="phone-note-close" id="phone-note-x">×</button></div>
     <div class="tab-body">
       <article class="lesson" id="lesson" tabindex="-1"></article>
-      <div class="editor-host hidden" id="src-editor"></div>
-      <div class="editor-host hidden" id="xdc-editor"></div>
-      <div class="editor-host hidden" id="tb-editor"></div>
-      <div class="schem-host hidden" id="schematic"></div>
+      <div class="editor-host hidden" id="src-editor" dir="ltr"></div>
+      <div class="editor-host hidden" id="xdc-editor" dir="ltr"></div>
+      <div class="editor-host hidden" id="tb-editor" dir="ltr"></div>
+      <div class="schem-host hidden" id="schematic" dir="ltr"></div>
     </div>
   </section>
   <div class="splitter v" id="split-v" title="Drag to resize"></div>
@@ -296,7 +301,7 @@ ${BOARDS.map((b) => `    <button data-board="${b.id}" role="menuitemradio" aria-
         <button data-act="view-reset" title="Perspective view">${icon("cube", 13)}3D</button>
         <button data-act="view-top" title="Top view">${icon("top", 13)}Top</button>
         <button data-act="modules" id="mod-btn" title="Sensors and Pmod modules connected to the board">${icon("plug", 13)}Modules</button>
-        <label class="clock" title="Board clock speed">${icon("clock", 13)}<span>Clock</span> <select id="speed">
+        <label class="clock" title="Board clock speed" dir="ltr">${icon("clock", 13)}<span>Clock</span> <select id="speed">
           <option value="${boardDef.clockHz}">${clockLabel} (real time)</option>
           <option value="1000000">1 MHz</option>
           <option value="10000">10 kHz</option>
@@ -319,10 +324,10 @@ ${BOARDS.map((b) => `    <button data-board="${b.id}" role="menuitemradio" aria-
     <button data-btab="reports" role="tab" aria-selected="false">Reports</button>
   </div>
   <div class="bottom-body">
-    <div class="console" id="console"><div class="log" id="log" role="log" tabindex="0" aria-label="Tcl Console output"></div>
+    <div class="console" id="console" dir="ltr"><div class="log" id="log" role="log" tabindex="0" aria-label="Tcl Console output"></div>
       <form class="tcl-in" id="tcl-form"><span>Tcl&gt;</span><input id="tcl" autocomplete="off" spellcheck="false" placeholder="type help" aria-label="Tcl command"/></form>
     </div>
-    <div class="messages hidden" id="messages"></div>
+    <div class="messages hidden" id="messages" dir="ltr"></div>
     <div class="reports hidden" id="reports"><p class="dim">Run synthesis to see the utilization report.</p></div>
   </div>
 </section>
@@ -360,7 +365,11 @@ let lesson: Lesson =
 // the course lesson the workbench returns to when leaving the playground
 let lastCourse: Lesson = lesson === PLAYGROUND ? (COURSE_LESSONS[0] ?? PLAYGROUND) : lesson;
 let tab: "lesson" | "source" | "xdc" | "tb" | "schematic" = "lesson";
-let uiLang: UiLang = store.get("ui-lang") === "fa" ? "fa" : "en";
+// the site language: the learner's own pick, else the browser's language on a first visit (Persian browsers get
+// Persian), else English. A /fa/ or /en/ URL overrides it in route().
+const browserLang = (): UiLang =>
+  (navigator.languages?.length ? navigator.languages : [navigator.language]).some((l) => /^fa\b/i.test(l ?? "")) ? "fa" : "en";
+let uiLang: UiLang = ((s) => (s === "fa" || s === "en" ? s : browserLang()))(store.get("ui-lang"));
 // the Vivado-style start-up lines; Learn mode starts with a quiet console and prints them on the first switch
 let bannerShown = false;
 function logBanner() {
@@ -1131,7 +1140,6 @@ function toggleFlowSection(key: string) {
 const solved = new Set<string>(
   (store.get("solved") ?? "").split(",").filter(knownEx),
 );
-const exerciseCount = () => ALL_LESSONS.filter((l) => exOf(l)).length;
 
 // lessons solved after the solution was shown: they count as done, with a hollow check
 const solvedHelp = new Set<string>((store.get("solved-help") ?? "").split(",").filter(knownEx));
@@ -1208,12 +1216,14 @@ function checkQuiz(i: number) {
   const m = quizPicks.get(lesson.id) ?? { picks: [], checked: [] };
   m.checked[i] = m.picks[i] ?? -1;
   quizPicks.set(lesson.id, m);
-  if (!quizPassed(lesson) && qs.every((q, k) => m.checked[k] === q.answer)) {
+  const justPassed = !quizPassed(lesson) && qs.every((q, k) => m.checked[k] === q.answer);
+  if (justPassed) {
     store.set(`quiz:${lesson.id}`, "1");
     renderLessonList();
     applyUiLang();
   }
   renderQuiz();
+  if (justPassed) document.getElementById("sec-quiz")?.insertAdjacentHTML("beforeend", nextStepHtml());
   document.querySelector<HTMLElement>(`#sec-quiz [data-q="${i}"] .q-why`)?.focus?.();
 }
 
@@ -1233,10 +1243,61 @@ function showScene(scene: { sw?: number; btn?: string }) {
   if (phone.matches) setMobile("board");
 }
 
-function checkExercise() {
+// what is left of the lesson after the exercise or the quick check: the other one, or the next lesson
+function nextStepHtml(): string {
+  const u = UI[uiLang];
+  const ex = !!exOf(lesson);
+  const qz = !!text(lesson).quiz?.length;
+  const exOk = !ex || solved.has(exId(lesson));
+  const qzOk = !qz || quizPassed(lesson);
+  if (!exOk && !qzOk) return "";
+  if (!qzOk)
+    return `<div class="next-step"><p>${u.nextStepQuiz}</p><button class="link-btn" data-jump="sec-quiz">${icon("list", 13)}${u.goQuiz}</button></div>`;
+  if (!exOk)
+    return `<div class="next-step"><p>${u.nextStepEx}</p><button class="link-btn" data-jump="sec-exercise">${icon("target", 13)}${u.goExercise}</button></div>`;
+  const next = BOARD_LESSONS[BOARD_LESSONS.indexOf(lesson) + 1];
+  return `<div class="next-step done"><p>${icon("check", 15)}<b>${u.lessonDone}</b></p><div class="next-acts">${
+    next && next !== PLAYGROUND ? `<button class="vv-btn primary" data-lesson="${next.id}">${icon("arrow", 14)}<span>${esc(u.nextLesson(text(next).title))}</span></button>` : ""
+  }<button class="vv-btn" data-act="real-board">${icon("cpu", 14)}<span>${u.realBoardTip}</span></button></div></div>`;
+}
+
+// the toolbar's "Real board": the lesson's "Build it in Vivado" box, from anywhere (toolbar, help menu, lesson end)
+function showRealBoard() {
+  if (homeOpen) goLab();
+  if (lesson === PLAYGROUND) openLesson(lastCourse);
+  if (tab !== "lesson") showTab("lesson");
+  if (phone.matches) setMobile("lesson");
+  const el = $("#lesson");
+  const sec = document.getElementById("sec-vivado");
+  if (!sec) return;
+  const toc = el.querySelector<HTMLElement>(".lesson-toc");
+  el.scrollTo({ top: sec.offsetTop - (toc?.offsetHeight ?? 0) - 8, behavior: "smooth" });
+  sec.classList.remove("flash");
+  void sec.offsetWidth; // restart the highlight
+  sec.classList.add("flash");
+  setTimeout(() => sec.classList.remove("flash"), 1600);
+  sec.querySelector<HTMLElement>(".vv-btn.primary")?.focus({ preventScroll: true });
+}
+
+// the toolbar's Check: runs the checker without leaving the editor and shows a one-line result next to the button
+function setCheckResult(r: { passed: boolean; items: CheckItem[] } | null) {
+  const el = $("#check-res");
+  if (!r) {
+    el.textContent = "";
+    el.className = "check-res";
+    return;
+  }
+  const u = UI[uiLang];
+  const bad = r.items.filter((i) => !i.ok).length;
+  el.className = "check-res " + (r.passed ? "pass" : "fail");
+  el.textContent = r.passed ? `✓ ${u.checkPass}` : `✗ ${u.checkFail(num(bad, uiLang), num(r.items.length, uiLang))}`;
+}
+
+function checkExercise(stay = false) {
   if (!exOf(lesson)) return;
   const ui = LESSON_UI[uiLang];
-  if (tab !== "lesson") showTab("lesson");
+  if (!stay && tab !== "lesson") showTab("lesson");
+  setCheckResult(null);
   const box = document.getElementById("ex-result");
   if (box) {
     box.className = "ex-result busy";
@@ -1279,6 +1340,7 @@ function checkExercise() {
       applyUiLang();
     }
     if (l !== lesson) return;
+    setCheckResult(r);
     const sec = document.querySelector("#lesson .exercise h2");
     if (sec && r.passed && !sec.querySelector(".ex-done"))
       sec.insertAdjacentHTML(
@@ -1289,7 +1351,7 @@ function checkExercise() {
     if (!el) return;
     el.className = "ex-result " + (r.passed ? "pass" : "fail");
     lastResult = r.items;
-    el.innerHTML = `<b>${r.passed ? ui.passed : ui.failed}</b>${resultHtml(r.items, uiLang)}`;
+    el.innerHTML = `<b>${r.passed ? ui.passed : ui.failed}</b>${resultHtml(r.items, uiLang)}${r.passed ? nextStepHtml() : ""}`;
   }, 30);
 }
 
@@ -1349,12 +1411,11 @@ function renderLesson() {
   const toc = [
     ...(tx.objectives?.length ? [["sec-goals", "target", LEARN_UI[uiLang].goalsToc]] : []),
     ["sec-overview", "book", u.overview],
-    ["sec-code", "code", u.code],
     ["sec-try", "zap", u.tryIt],
-    ["sec-vivado", "cpu", "Vivado"],
     ...(tx.takeaways?.length ? [["sec-takeaways", "list", LEARN_UI[uiLang].takeaways]] : []),
     ...(tx.quiz?.length ? [["sec-quiz", "list", LEARN_UI[uiLang].quiz]] : []),
     ...(hasEx ? [["sec-exercise", "target", u.exercise]] : []),
+    ["sec-vivado", "cpu", u.realBoard],
   ] as [string, Parameters<typeof icon>[0], string][];
   const navCard = (l: Lesson | undefined, label: string, cls: string) =>
     l
@@ -1391,10 +1452,10 @@ ${toolsBox(lesson, uiLang)}
     <button class="big-run sim" data-act="sim">${icon("wave", 15)}${ui.simulate}</button>
   </div>
 </section>
-${vivado.card()}
 ${takeawaysHtml(tx, uiLang)}
 ${quizBox()}
 ${exerciseHtml()}
+${vivado.card()}
 <nav class="lesson-nav" aria-label="${u.prevNext}">
   ${navCard(prev, `${rtl ? "→" : "←"} ${u.prev}`, "prev")}
   ${navCard(next, `${u.next} ${rtl ? "←" : "→"}`, "next")}
@@ -1557,6 +1618,10 @@ function markLessonTools() {
   const ids: [string, Tool][] = [["#la-btn", "la"], ["#serial-btn", "serial"], ["#vga-btn", "vga"]];
   for (const [sel, t] of ids) $(sel).classList.toggle("hidden-tool", !ts.includes(t));
   $("#tool-sep").classList.toggle("hidden-tool", !ids.some(([, t]) => ts.includes(t)));
+  // Check only where there is an exercise to check; the real-board box is in every lesson but not in the playground
+  $("#check-btn").hidden = !exOf(lesson);
+  $("#real-btn").hidden = lesson === PLAYGROUND;
+  setCheckResult(null);
 }
 
 // phones always get the Learn layout (no room for the Vivado chrome there); the stored choice is kept for desktops
@@ -1620,11 +1685,21 @@ function loadTb() {
 }
 
 function setUiLang(l: UiLang) {
+  // keep the reader's place: the section they are in and how far into it, as a share of its height (the two
+  // languages differ in length, so pixels would land elsewhere)
+  const el = $("#lesson");
+  // the line just under the sticky section chips is where the reader is
+  const line = () => el.scrollTop + (el.querySelector<HTMLElement>(".lesson-toc")?.offsetHeight ?? 0) + 8;
+  const secId = el.scrollTop > 0 ? el.querySelector<HTMLElement>(".lesson-toc .active")?.dataset.jump : undefined;
+  const sec = secId ? document.getElementById(secId) : null;
+  const frac = sec ? Math.min(1, Math.max(0, (line() - sec.offsetTop) / Math.max(1, sec.offsetHeight))) : 0;
   uiLang = l;
   store.set("ui-lang", l);
   applyUiLang();
   renderLessonList();
   renderLesson();
+  const again = secId ? document.getElementById(secId) : null;
+  if (again) el.scrollTop = again.offsetTop + frac * again.offsetHeight - (line() - el.scrollTop);
   modules.render();
   renderMessages();
   if (homeOpen) renderHomePage();
@@ -1634,11 +1709,15 @@ function setUiLang(l: UiLang) {
 function applyUiLang() {
   const u = UI[uiLang];
   document.documentElement.lang = uiLang;
+  // the workbench is laid out left to right in both languages, like Vivado; Persian parts set their own direction
+  // (the lesson, the landing page, menus and dialogs). A prerendered /fa/ page arrives with dir="rtl" on <html>,
+  // which used to mirror the whole workbench and turn the code editor right to left.
+  document.documentElement.dir = "ltr";
   document.title =
     uiLang === "fa" ? "FPGA Lab | محیط یادگیری به سبک Vivado" : "FPGA Lab | a Vivado-style learning environment";
   $("#titlebar").innerHTML = homeNav(
     uiLang,
-    `<div class="seg-ctl mode-ctl" role="group" aria-label="${u.modeGroup}"><button data-act="mode-learn" aria-pressed="false">${u.modeLearn}</button><button data-act="mode-vivado" aria-pressed="false" dir="ltr">${u.modeVivado}</button></div><div class="project" dir="ltr">${boardDef.vendor} <b>${boardDef.name}</b> · <b>${boardDef.part}</b></div>`,
+    `<div class="seg-ctl mode-ctl" role="group" aria-label="${u.modeGroup}"><button data-act="mode-learn" aria-pressed="false" title="${u.modeLearnTip}">${u.modeLearn}</button><button data-act="mode-vivado" aria-pressed="false" dir="ltr" title="${u.modeVivadoTip}">${u.modeVivado}</button></div><div class="project" dir="ltr">${boardDef.vendor} <b>${boardDef.name}</b> · <b>${boardDef.part}</b></div>`,
     lesson === PLAYGROUND ? "playground" : "lab",
   );
   playgroundMode();
@@ -1660,7 +1739,17 @@ function applyUiLang() {
     .querySelectorAll<HTMLElement>("[data-ml]")
     .forEach((e) => (e.textContent = u[e.dataset.ml as "mLesson"]));
   setRunState();
-  $("#learn-h").innerHTML = `LEARN · ${LESSON_UI[uiLang].learn} <span class="progress" title="${LESSON_UI[uiLang].progress(solved.size, exerciseCount())}">${num(solved.size, uiLang)}/${num(exerciseCount(), uiLang)}</span>`;
+  // one measure of progress everywhere: the lessons of this board's course that are done (exercise and quick check)
+  const doneN = num(COURSE_LESSONS.filter((l) => isDone(l)).length, uiLang);
+  const allN = num(COURSE_LESSONS.length, uiLang);
+  $("#learn-h").innerHTML = `LEARN · ${LESSON_UI[uiLang].learn} <span class="progress" title="${LESSON_UI[uiLang].progress(doneN, allN)}">${doneN}/${allN}</span>`;
+  // the toolbar's lesson shortcuts
+  $("#run-btn").title = u.runTip;
+  $("#check-l").textContent = u.check;
+  $("#check-btn").title = u.checkTip;
+  $("#real-l").textContent = u.realBoard;
+  $("#real-btn").title = u.realBoardTip;
+  $("#schem-btn").title = u.schematicTip;
   $("#bouncy-l").textContent = LESSON_UI[uiLang].bouncy;
   $("#ext-t").textContent = boardDef.extension?.label[uiLang === "fa" ? "fa" : "en"] ?? "";
 }
@@ -1826,6 +1915,7 @@ function act(name: string) {
   }
   switch (name) {
     case "run":
+      heroLive = false;
       runFlow();
       if (runner.running && phone.matches) setMobile("board");
       break;
@@ -2050,6 +2140,12 @@ function act(name: string) {
       break;
     case "check":
       checkExercise();
+      break;
+    case "check-tb":
+      checkExercise(true);
+      break;
+    case "real-board":
+      showRealBoard();
       break;
     case "new-tb":
       if (
@@ -2529,7 +2625,9 @@ const homeEl = $("#home");
 const boardEl = $("#board");
 const boardPane = boardEl.parentElement!;
 let homeOpen = false;
-let heroRan = false;
+// lesson 1 runs on the landing page's board so it reacts to clicks; it stops when the learner enters the workbench,
+// so their own first Run (and the lesson's "predict first") starts from an idle board
+let heroLive = false;
 // the page shown in the landing-page layer: the landing page itself or the glossary
 type HomeView = "home" | "glossary";
 let homeView: HomeView = "home";
@@ -2593,9 +2691,9 @@ function showHome(on: boolean) {
     if (el !== homeEl && el.tagName !== "DIALOG") (el as HTMLElement).inert = on;
   document.body.classList.toggle("at-home", on);
   if (on) {
-    // first visit: run lesson 1 so the hero board reacts to its switches
-    if (!heroRan && !runner.running && lesson === BOARD_LESSONS[0]) {
-      heroRan = true;
+    // run lesson 1 so the hero board reacts to its switches
+    if (!runner.running && lesson === BOARD_LESSONS[0]) {
+      heroLive = true;
       try {
         synthesize(withLibrary(srcEditor.text, lang), lang);
         runFlow();
@@ -2608,6 +2706,8 @@ function showHome(on: boolean) {
     homeEl.focus({ preventScroll: true });
   } else {
     boardPane.appendChild(boardEl);
+    if (heroLive && runner.running) stop();
+    heroLive = false;
     markSeen(lesson);
     maybeAutoTour();
     // the page changed under the keyboard: start again from the lesson, not from the hidden landing page
@@ -2638,7 +2738,16 @@ function runTour() {
         step("#board", t.board),
         step("#sec-exercise, #sec-try", t.check),
       ];
-  startTour(steps, { lang: uiLang, onDone: () => store.set("tour-done", "1") });
+  // the last step scrolls the lesson down to the exercise; the learner starts reading from where they were
+  const lessonEl = $("#lesson");
+  const top = lessonEl.scrollTop;
+  startTour(steps, {
+    lang: uiLang,
+    onDone: () => {
+      store.set("tour-done", "1");
+      lessonEl.scrollTop = top;
+    },
+  });
 }
 let tourTimer = 0;
 function maybeAutoTour() {

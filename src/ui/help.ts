@@ -15,7 +15,7 @@ export const HELP = {
     dlSrc: 'کد طرح',
     dlTb: 'Testbench',
     dlXdc: 'فایل قیود (.xdc)',
-    dlProject: 'پروژه‌ی Vivado (.zip)',
+    dlProject: 'پروژه‌ی Vivado برای برد واقعی…',
     report: 'گزارش مشکل',
     about: 'درباره‌ی FPGA Lab',
     close: 'بستن',
@@ -51,7 +51,7 @@ export const HELP = {
     dlSrc: 'Design source',
     dlTb: 'Testbench',
     dlXdc: 'Constraints (.xdc)',
-    dlProject: 'Vivado project (.zip)',
+    dlProject: 'Vivado project for a real board…',
     report: 'Report a problem',
     about: 'About FPGA Lab',
     close: 'Close',
@@ -89,7 +89,7 @@ export function helpMenu(lang: UiLang, where: string): string {
     <div class="lang-menu help-menu" id="help-menu-${where}" dir="${lang === 'fa' ? 'rtl' : 'ltr'}" role="menu" aria-label="${h.help}" hidden>
       ${item('tour', h.tour)}${item('search', `${h.search} <kbd dir="ltr">Ctrl+K</kbd>`)}${item('glossary', h.glossary)}${item('shortcuts', h.shortcuts)}${item('limits', h.limits)}
       <div class="menu-h" role="presentation">${h.downloads}</div>
-      ${item('download-src', h.dlSrc)}${item('download-tb', h.dlTb)}${item('download-xdc', h.dlXdc)}${item('download-project', h.dlProject)}
+      ${item('download-src', h.dlSrc)}${item('download-tb', h.dlTb)}${item('download-xdc', h.dlXdc)}${item('real-board', h.dlProject)}
       <hr role="separator"/>
       <a role="menuitem" tabindex="-1" href="${ISSUES_URL}" target="_blank" rel="noopener">${h.report}${icon('external', 13)}</a>
       ${item('about', h.about)}

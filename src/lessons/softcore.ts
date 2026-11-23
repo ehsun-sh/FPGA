@@ -429,5 +429,5 @@ ${ISA('fa')}
   vhdl: CPU_VHDL,
   xdc: { clk: true, reset: true, sw: true, led: true, seg: true },
   tryIt: `<p><span class="kbd">▶ Run</span> را بزنید و ${part('SW0')} را روشن کنید: هر ۰٫۲۵ ثانیه عدد روی LEDها و نمایشگر یکی زیاد می‌شود. با ${part('SW7..SW0')} گام شمارش را عوض کنید. ${part('CPU_RESET')} برنامه را از اول اجرا می‌کند.</p>
-<p>در شماتیک (RTL Analysis ← Schematic) نمونه‌ی <code>cpu</code> را انتخاب کنید تا مسیر داده‌ی پردازنده را ببینید: رجیستر PC، رجیستر دستور، انباره و RAM.</p>`,
+<p><button class="link-btn" data-act="schematic">Schematic</button> را بزنید (در نوار ابزار بالا هم هست) و نمونه‌ی <code>cpu</code> را انتخاب کنید تا مسیر داده‌ی پردازنده را ببینید: رجیستر PC، رجیستر دستور، انباره و RAM.</p>`,
 };
