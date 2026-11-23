@@ -717,7 +717,7 @@ ${TINY8_ISA('en')}
 <p>To give the processor a new job you do not change the circuit, only the program in the ROM. Real processors work the same way: the hardware stays fixed and the software changes.</p>
 <div class="note">In real Vivado, the program for big processors such as MicroBlaze is written in C, compiled and placed in BRAM. The idea is the same as here.</div>`,
     tryIt: `<p>Press <span class="kbd">▶ Run</span> and turn on ${part('SW0')}: every 0.25 s the number on the LEDs and the display goes up by one. Change the step with ${part('SW7..SW0')}. ${part('CPU_RESET')} starts the program again from the top.</p>
-<p>In the schematic (RTL Analysis → Schematic), choose the <code>cpu</code> instance to see the processor's datapath: the PC register, the instruction register, the accumulator and the RAM.</p>`,
+<p>Press <button class="link-btn" data-act="schematic">Schematic</button> (also in the toolbar at the top) and choose the <code>cpu</code> instance to see the processor's datapath: the PC register, the instruction register, the accumulator and the RAM.</p>`,
   },
   ...BEYOND_EN,
 };
@@ -738,7 +738,7 @@ export const LESSON_UI = {
     passed: 'آفرین! تمرین حل شد.',
     failed: 'هنوز کامل نیست. این موارد را ببینید:',
     solved: 'حل شده',
-    progress: (n: number, total: number) => `${n} از ${total} تمرین حل شده`,
+    progress: (n: string, total: string) => `${n} از ${total} درس تمام شده`,
     learn: 'آموزش',
     chapter: (n: number | string) => `فصل ${n}`,
     soon: 'به‌زودی',
@@ -761,7 +761,7 @@ export const LESSON_UI = {
     passed: 'Well done! The exercise is solved.',
     failed: 'Not there yet. Look at these:',
     solved: 'solved',
-    progress: (n: number, total: number) => `${n} of ${total} exercises solved`,
+    progress: (n: string, total: string) => `${n} of ${total} lessons done`,
     learn: 'Lessons',
     chapter: (n: number | string) => `Chapter ${n}`,
     soon: 'coming soon',

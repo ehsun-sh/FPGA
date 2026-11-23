@@ -5420,3 +5420,100 @@ abbr.term:focus-visible {
     padding: 3px 7px;
   }
 }
+
+/* ---------------------------------------------------------------- phase-1 UX fixes (2026-11) */
+/* toolbar items that a lesson does not use are hidden with the hidden attribute; .tb's display must not undo it */
+.toolbar [hidden],
+.board-tools label[hidden] {
+  display: none !important;
+}
+/* the lesson's own actions: check the exercise, take it to a real board */
+.tb.check-tb {
+  border-color: var(--ok-line);
+  color: var(--ok-ink);
+}
+.tb.check-tb:hover {
+  background: var(--ok-soft);
+  border-color: var(--ok);
+}
+.tb.real-tb {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.check-res {
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 260px;
+}
+.check-res:empty {
+  display: none;
+}
+.check-res.pass {
+  color: var(--ok-ink);
+}
+.check-res.fail {
+  color: var(--warn-ink);
+}
+@media (max-width: 1150px) and (min-width: 901px) {
+  /* the two lesson actions keep their words on small laptops; the other buttons fold to icons */
+  .tb.check-tb .lbl,
+  .tb.real-tb .lbl {
+    display: inline;
+  }
+}
+@media (max-width: 900px) {
+  .check-res {
+    max-width: 90px;
+  }
+}
+/* what is left after the exercise or the quick check, or the way on when the lesson is done */
+.next-step {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-inline-start: 4px solid var(--warn);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}
+.next-step p {
+  margin: 0 0 8px;
+}
+.next-step.done {
+  border-inline-start-color: var(--ok);
+  background: var(--ok-soft);
+}
+.next-step.done p {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ok-ink);
+}
+.next-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+[dir='rtl'] .i-arrow {
+  transform: scaleX(-1);
+}
+/* "Real board" in the toolbar jumps to the lesson's Vivado box and lights it up for a moment */
+#sec-vivado.flash {
+  animation: vv-flash 1.6s ease-out;
+}
+@keyframes vv-flash {
+  0%,
+  40% {
+    box-shadow: 0 0 0 3px var(--accent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+/* the section chips wrap instead of hiding the last ones (the quick check and the exercise) past the edge */
+.lesson-toc {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}

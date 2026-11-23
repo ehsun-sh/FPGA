@@ -71,6 +71,11 @@ const T = {
     connected: (v: string, r: string) => `وصل شد${v ? `: Vivado ${v}` : ''}. پوشه‌ی پروژه‌ها: ${iso(r)}`,
     notFound: 'helper پیدا نشد. پنجره‌ی start-helper باز است و نوشته «is running»؟ اگر مرورگر اجازه خواست، اجازه دادید؟',
     close: 'بستن',
+    // on a phone: Vivado needs a computer, so the box offers to send the lesson's link instead
+    phoneLead: 'ساختن روی برد واقعی با Vivado روی کامپیوتر (ویندوز یا لینوکس) انجام می‌شود، نه روی گوشی. لینک همین درس را برای خودتان بفرستید و بعداً روی کامپیوتر بازش کنید.',
+    share: 'فرستادن لینک این درس',
+    zipLater: 'دانلود zip برای بعد',
+    copied: 'لینک درس کپی شد.',
   },
   en: {
     head: 'Build it on a real board with Vivado',
@@ -119,6 +124,10 @@ const T = {
     connected: (v: string, r: string) => `Connected${v ? `: Vivado ${v}` : ''}. Projects folder: ${r}`,
     notFound: 'The helper did not answer. Is the start-helper window open and does it say "is running"? If the browser asked for permission, did you allow it?',
     close: 'Close',
+    phoneLead: "Building for a real board with Vivado happens on a computer (Windows or Linux), not on a phone. Send yourself this lesson's link and open it later on your computer.",
+    share: "Send me this lesson's link",
+    zipLater: 'Download .zip for later',
+    copied: 'Link copied.',
   },
 };
 
@@ -156,8 +165,16 @@ export function createVivado(d: VivadoDeps) {
     return `<section class="vv-card" id="sec-vivado" aria-labelledby="vv-h"><h2 id="vv-h">${icon('cpu', 18)}${t().head}</h2><div id="vv-body">${body()}</div></section>`;
   }
 
+  // a phone (touch screen, narrow): Vivado cannot run there
+  const onPhone = () => typeof matchMedia === 'function' && matchMedia('(max-width: 900px) and (pointer: coarse)').matches;
+
   function body(): string {
     const x = t();
+    if (onPhone()) {
+      const b = (act: string, label: string, ic: Parameters<typeof icon>[0], cls = '') =>
+        `<button type="button" class="vv-btn ${cls}" data-act="${act}">${icon(ic, 14)}<span>${label}</span></button>`;
+      return `<p class="vv-lead">${x.phoneLead}</p><div class="vv-actions">${b('vv-share', x.share, 'external', 'primary')}${b('vv-zip', x.zipLater, 'download', 'ghost')}</div>${note ? `<p class="vv-note ${note.level}" role="status">${esc(note.text)}</p>` : ''}`;
+    }
     const p = d.project();
     const fs = canPickFolder();
     const running = pending || (!!job && !job.done);
@@ -381,6 +398,21 @@ ${dlgNote ? `<p class="vv-note ${dlgNote.level}" role="status">${esc(dlgNote.tex
       case 'vv-setup':
         openDialog();
         return true;
+      case 'vv-share': {
+        const url = location.href;
+        try {
+          if (navigator.share) await navigator.share({ title: document.title, url });
+          else {
+            await navigator.clipboard.writeText(url);
+            note = { text: x.copied, level: 'ok' };
+          }
+        } catch (e) {
+          if ((e as Error).name === 'AbortError') return true;
+          note = { text: url, level: 'info' };
+        }
+        update();
+        return true;
+      }
       case 'vv-helper-zip':
         d.download('fpgalab-helper.zip', helperZip([location.origin]), 'application/zip');
         return true;
